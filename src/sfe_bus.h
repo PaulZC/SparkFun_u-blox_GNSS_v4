@@ -3,31 +3,18 @@
 
   SparkFun sells these at its website: www.sparkfun.com
   Do you like this library? Help support SparkFun. Buy a board!
-  https://www.sparkfun.com/products/15136
-  https://www.sparkfun.com/products/16481
-  https://www.sparkfun.com/products/16344
-  https://www.sparkfun.com/products/18037
-  https://www.sparkfun.com/products/18719
-  https://www.sparkfun.com/products/18774
-  https://www.sparkfun.com/products/19663
-  https://www.sparkfun.com/products/17722
+  https://www.sparkfun.com/sparkfun-allband-gnss-rtk-breakout-zed-x20p-qwiic.html
+  https://www.sparkfun.com/sparkfun-gps-rtk2-board-zed-f9p-qwiic-gps-15136.html
+  https://www.sparkfun.com/sparkfun-gps-rtk-sma-breakout-zed-f9p-qwiic.html
+  https://www.sparkfun.com/sparkfun-gnss-receiver-breakout-max-m10s-qwiic.html
+  https://www.sparkfun.com/sparkfun-gps-rtk-dead-reckoning-breakout-zed-f9r-qwiic-gps-22693.html
 
   Original version by Nathan Seidle @ SparkFun Electronics, September 6th, 2018
   v2.0 rework by Paul Clark @ SparkFun Electronics, December 31st, 2020
   v3.0 rework by Paul Clark @ SparkFun Electronics, December 8th, 2022
+  v4.0 rework by Claude, directed by Paul Clark @ SparkFun Electronics, September 2026
 
-  https://github.com/sparkfun/SparkFun_u-blox_GNSS_v3
-
-  This library is an updated version of the popular SparkFun u-blox GNSS Arduino Library.
-  v3 uses the u-blox Configuration Interface (VALSET and VALGET) to:
-  detect the module (during begin); configure message intervals; configure the base location; etc..
-
-  This version of the library will not work with older GNSS modules.
-  It is specifically written for newer modules like the ZED-F9P, ZED-F9R and MAX-M10S.
-  For older modules, please use v2 of the library: https://github.com/sparkfun/SparkFun_u-blox_GNSS_Arduino_Library
-
-  Development environment specifics:
-  Arduino IDE 1.8.19
+  https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4
 
   SparkFun code, firmware, and software is released under the MIT License(http://opensource.org/licenses/MIT).
   The MIT License (MIT)

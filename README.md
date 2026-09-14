@@ -1,4 +1,4 @@
-# SparkFun u-blox GNSS Arduino Library - v3
+# SparkFun u-blox GNSS Arduino Library - v4
 
 <table class="table table-hover table-striped table-bordered">
   <tr align="center">
