@@ -22,6 +22,35 @@
 
 #include "ubxMessage.h"
 #include "ubxNAVPVT.h"
+#include "ubxNAVPOSECEF.h"
+#include "ubxNAVPOSLLH.h"
+#include "ubxNAVSTATUS.h"
+#include "ubxNAVDOP.h"
+#include "ubxNAVATT.h"
+#include "ubxNAVODO.h"
+#include "ubxNAVVELECEF.h"
+#include "ubxNAVVELNED.h"
+#include "ubxNAVHPPOSECEF.h"
+#include "ubxNAVHPPOSLLH.h"
+#include "ubxNAVPVAT.h"
+#include "ubxNAVTIMEUTC.h"
+#include "ubxNAVCLOCK.h"
+#include "ubxNAVTIMELS.h"
+#include "ubxNAVSVIN.h"
+#include "ubxNAVRELPOSNED.h"
+#include "ubxNAVDAHEADING.h"
+#include "ubxNAVAOPSTATUS.h"
+#include "ubxNAVEOE.h"
+#include "ubxRXMCOR.h"
+#include "ubxMONHW.h"
+#include "ubxMONHW2.h"
+#include "ubxTIMTM2.h"
+#include "ubxTIMTP.h"
+#include "ubxESFALG.h"
+#include "ubxESFINS.h"
+#include "ubxHNRPVT.h"
+#include "ubxHNRATT.h"
+#include "ubxHNRINS.h"
 #include "u-blox_external_typedefs.h" // sfe_ublox_status_e
 #include "u-blox_config_keys.h"       // UBX_CFG_* type tags
 
@@ -37,6 +66,35 @@ public:
         // this prototype" there for the conditional-registration mechanism this still needs
         // (today, deleting a message header also requires removing its constructor call here).
         ubxMessageVectors.push_back(new ubxNAVPVT());
+        ubxMessageVectors.push_back(new ubxNAVPOSECEF());
+        ubxMessageVectors.push_back(new ubxNAVPOSLLH());
+        ubxMessageVectors.push_back(new ubxNAVSTATUS());
+        ubxMessageVectors.push_back(new ubxNAVDOP());
+        ubxMessageVectors.push_back(new ubxNAVATT());
+        ubxMessageVectors.push_back(new ubxNAVODO());
+        ubxMessageVectors.push_back(new ubxNAVVELECEF());
+        ubxMessageVectors.push_back(new ubxNAVVELNED());
+        ubxMessageVectors.push_back(new ubxNAVHPPOSECEF());
+        ubxMessageVectors.push_back(new ubxNAVHPPOSLLH());
+        ubxMessageVectors.push_back(new ubxNAVPVAT());
+        ubxMessageVectors.push_back(new ubxNAVTIMEUTC());
+        ubxMessageVectors.push_back(new ubxNAVCLOCK());
+        ubxMessageVectors.push_back(new ubxNAVTIMELS());
+        ubxMessageVectors.push_back(new ubxNAVSVIN());
+        ubxMessageVectors.push_back(new ubxNAVRELPOSNED());
+        ubxMessageVectors.push_back(new ubxNAVDAHEADING());
+        ubxMessageVectors.push_back(new ubxNAVAOPSTATUS());
+        ubxMessageVectors.push_back(new ubxNAVEOE());
+        ubxMessageVectors.push_back(new ubxRXMCOR());
+        ubxMessageVectors.push_back(new ubxMONHW());
+        ubxMessageVectors.push_back(new ubxMONHW2());
+        ubxMessageVectors.push_back(new ubxTIMTM2());
+        ubxMessageVectors.push_back(new ubxTIMTP());
+        ubxMessageVectors.push_back(new ubxESFALG());
+        ubxMessageVectors.push_back(new ubxESFINS());
+        ubxMessageVectors.push_back(new ubxHNRPVT());
+        ubxMessageVectors.push_back(new ubxHNRATT());
+        ubxMessageVectors.push_back(new ubxHNRINS());
     }
 
     ~ubxMessageVector(void)
