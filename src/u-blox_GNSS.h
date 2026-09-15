@@ -76,6 +76,7 @@
 #include "u-blox_external_typedefs.h"
 #include "u-blox_Class_and_ID.h"
 #include "sfe_bus.h"
+#include "ubxMessageVector.h" // v4 scaffolding - see AGENTS.md "Reference Scaffolding"
 
 // Define a digital pin to aid debugging
 // Leave set to -1 if not needed
@@ -775,6 +776,10 @@ public:
   void flushNAVATT();                                                                                                                                              // Mark all the data as read/stale
   void logNAVATT(bool enabled = true);                                                                                                                             // Log data to file buffer
 
+  // ***** v4 scaffolding - generic (Class, ID)-keyed message access. See AGENTS.md "Reference Scaffolding" *****
+  bool getUBX(uint8_t Class, uint8_t ID, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Generic poll-or-check-automatic, by Class/ID
+  bool getUBXfield(uint8_t Class, uint8_t ID, const char *field, ubxAnyType *value, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Generic field read, by Class/ID/name
+
   bool getPVT(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                                                                     // Query module for latest group of datums and load global vars: lat, long, alt, speed, SIV, accuracies, etc. If autoPVT is disabled, performs an explicit poll and waits, if enabled does not block. Returns true if new PVT is available.
   bool setAutoPVT(bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                // Enable/disable automatic PVT reports at the navigation frequency
   bool setAutoPVT(bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                           // Enable/disable automatic PVT reports at the navigation frequency, with implicitUpdate == false accessing stale data will not issue parsing of data in the rxbuffer of your interface, instead you have to call checkUblox when you want to perform an update
@@ -1400,6 +1405,8 @@ void logSECSIG(bool enabled = true);                                            
   UBX_NAV_DOP_t *packetUBXNAVDOP = nullptr;             // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_NAV_EOE_t *packetUBXNAVEOE = nullptr;             // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_NAV_ATT_t *packetUBXNAVATT = nullptr;             // Pointer to struct. RAM will be allocated for this if/when necessary
+  ubxMessageVector ubxMessages; // v4 scaffolding - the registry of per-message objects. See AGENTS.md "Reference Scaffolding"
+
   UBX_NAV_PVT_t *packetUBXNAVPVT = nullptr;             // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_NAV_ODO_t *packetUBXNAVODO = nullptr;             // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_NAV_TIMEUTC_t *packetUBXNAVTIMEUTC = nullptr;     // Pointer to struct. RAM will be allocated for this if/when necessary
