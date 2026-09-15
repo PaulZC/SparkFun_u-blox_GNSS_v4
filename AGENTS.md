@@ -451,6 +451,17 @@ The behaviour should be as follows:
 
 The code shared from `C:\Users\pc235\Documents\SparkX\SparkFun_u-blox_GNSS_v4` includes `numQueriedWords`. E.g. `const uint8_t numQueriedWords = 2;   // We need this many words (uint32_t) to hold the queried flags`. Again, do not use this approach. Use a single `bool` to indicate if the whole message is fresh or stale.
 
+## Callbacks
+
+The original v3 code included support for callbacks. The arrival of any Periodic messages could be set to trigger a callback.
+
+Using NAV-PVT as an example:
+
+* Calling `myGNSS.setAutoPVTcallbackPtr(&printPVTdata);` in `setup` would:
+    * Instruct the GNSS to output the NAV-PVT message periodically (performed by `setAutoPVT()`)
+    * Register a callback for the NAV-PVT message (by setting `packetUBXNAVPVT->callbackPointerPtr` to the callback reference)
+
+
 ## Test
 
 Compile the example code in examples/Example1\_PositionVelocityTime using the batch file compile\_example.bat.
