@@ -4,6 +4,9 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 ARG CORE_VERSION=3.3.11
 
+# The example to be compiled
+ARG EXAMPLE=Example1_PositionVelocityTime
+
 # arduino-cli warnings: none default more all
 ARG WARNINGS=default
 
@@ -71,15 +74,15 @@ COPY keywords.txt /root/Arduino/libraries/SparkFun_u-blox_GNSS_v4/keywords.txt
 COPY examples .
 
 # Compile Sketch
-RUN cd Example1_PositionVelocityTime \
+RUN cd ${EXAMPLE} \
     && arduino-cli compile --fqbn "esp32:esp32:esp32" \
     --warnings ${WARNINGS} \
-    Example1_PositionVelocityTime.ino \
+    ${EXAMPLE}.ino \
     --export-binaries
 
 # ===========================================================================================
 
 # Copy the compile output. List the files
 FROM deployment AS output
-COPY --from=deployment Example1_PositionVelocityTime/build/esp32.esp32.esp32 /
+COPY --from=deployment ${EXAMPLE}/build/esp32.esp32.esp32 /
 CMD echo $(ls /*.*)

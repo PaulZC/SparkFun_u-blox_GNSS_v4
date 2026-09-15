@@ -68,7 +68,7 @@ void setup()
   }
 
   // Enable the NAV HPPOSLLH Message on I2C at the navigation rate
-  myGNSS.setCfgValset(UBLOX_CFG_MSGOUT_UBX_NAV_POSLLH_I2C, 1);
+  myGNSS.setCfgValset(UBLOX_CFG_MSGOUT_UBX_NAV_HPPOSLLH_I2C, 1);
 
   // Enable automatic NAV HPPOSLLH messages with callback to printPVTdata
   myGNSS.setAutoCallbackPtr("NAV", "HPPOSLLH", &printPVTdata);

@@ -460,6 +460,133 @@ Using NAV-PVT as an example:
 * Calling `myGNSS.setAutoPVTcallbackPtr(&printPVTdata);` in `setup` would:
     * Instruct the GNSS to output the NAV-PVT message periodically (performed by `setAutoPVT()`)
     * Register a callback for the NAV-PVT message (by setting `packetUBXNAVPVT->callbackPointerPtr` to the callback reference)
+* The callback would be defined as:
+
+```
+// Callback: printPVTdata will be called when new NAV PVT data arrives
+// See u-blox_structs.h for the full definition of UBX_NAV_PVT_data_t
+//         _____  You can use any name you like for the callback. Use the same name when you call setAutoPVTcallback
+//        /                  _____  This _must_ be UBX_NAV_PVT_data_t
+//        |                 /               _____ You can use any name you like for the struct
+//        |                 |              /
+//        |                 |              |
+void printPVTdata(UBX_NAV_PVT_data_t *ubxDataStruct)
+```
+
+Using a different type for the parameter for each callback (`UBX_NAV_PVT_data_t`, `UBX_NAV_HPPOSLLH_data_t`, etc.) is undesirable.
+It would be much better to use a single common type for the callback parameter.
+
+In v4, the callback parameter should be a new type: `ubxCallbackDataCommon_t`
+
+Please see the new example `examples\CallbackExample1_NAVHPPOSLLH\CallbackExample1_NAVHPPOSLLH.ino`
+
+The callback is to be defined as:
+
+```void printPVTdata(ubxCallbackDataCommon_t *theData)```
+
+Create `ubxCallbackDataCommon_t`. It will need to be a new `struct` which includes - for example - the message Class and ID, an emum representing the type of data structure (`UBX_NAV_PVT_data_t`, `UBX_NAV_HPPOSLLH_data_t`, etc.).
+
+`ubxMessage` currently defines `_callbackPtr` as `void (*_callbackPtr)(uint8_t *)`. This will need to be changed to `void (*_callbackPtr)(ubxCallbackDataCommon_t *)`
+
+### getCallbackDataStruct Factory design pattern
+
+Add whatever code is necessary to make it possible to do the following in the callback:
+
+```
+void printPVTdata(ubxCallbackDataCommon_t *theData)
+{
+    auto theDataStruct = getCallbackDataStruct(theData);
+
+    auto timeOfWeek = getFieldFromCallbackDataStruct(theDataStruct, "iTOW");
+    Serial.print(F("TimeOfWeek: "));
+    Serial.print(timeOfWeek); // Print the Time Of Week
+    Serial.print(F(" (ms)"));
+}
+```
+
+I envisage `getCallbackDataStruct` as being a Factory method / design pattern which returns enough information to make `auto timeOfWeek = getFieldFromCallbackDataStruct(theDataStruct, "iTOW");` possible. The return type of `getCallbackDataStruct` will need to contain enough information so that `getFieldFromCallbackDataStruct` can navigate to the `_storage` of the `ubxNAVHPPOSLLH` and extract the "iTOW" as `UBX_CFG_U4` (`uint32_t`).
+
+`getFieldFromCallbackDataStruct` will need to:
+- Step through each registered message type
+- Compare the `_Class` and `_ID` of the message type to the class and ID stored in return type of `getCallbackDataStruct`
+- If a match is found:
+    - The code should step through the `const ubxField ubxFields[]` for that message
+    - Use `extractValue()` to extract the value for the selected Class, ID and `fieldName`, returning it in a `ubxAnyType`
+    - Copy the value from `ubxAnyType` into the return type
+
+I envisage `getFieldFromCallbackDataStruct` will also need to use a Factory method / design pattern to handle the different return types
+
+If this is not possible, identify the nearest alternative strategy which is possible.
+
+### setCfgValset
+
+src\u-blox_GNSS.h contains a template method: `template <typename T> bool addCfgValset(uint32_t key, T value)`
+
+Add a new template method named `setCfgValset`:
+
+```
+  template <typename T>
+  bool setCfgValset(uint32_t key, T value, uint8_t layer = VAL_LAYER_RAM_BBR) // Set the single key to the given value using CFG-VALSET
+  {
+    newCfgValset(layer);
+    addCfgValset(key, value);
+    return sendCfgValset();
+  }
+```
+
+### class ubxMessage needs separate callback storage
+
+`class ubxMessage` defines `_storage`: `uint8_t *_storage = nullptr;    // Raw payload storage - nullptr until initStorage() is called`
+
+It needs separate storage for the callback copy / copies
+
+Add the following to `ubxMessage`:
+- `uint8_t *_callbackStorage = nullptr; // Storage for the callback copy / copies - nullptr until initCallbackStorage() is called`
+- `initCallbackStorage()`
+
+The code for `initCallbackStorage()` will be:
+
+```
+    // Lazily allocate _callbackStorage - only when the message is actually used. This is how "delete the
+    // header, save the RAM" (AGENTS.md) is meant to work for a message that is never instantiated
+    // at all - see ubxMessageVector.h.
+    bool initCallbackStorage(void)
+    {
+        if (_callbackStorage == nullptr)
+        {
+            _callbackStorage = new uint8_t[_messageLength * _numCallbackCopies];
+            if (_callbackStorage != nullptr)
+                memset(_callbackStorage, 0, _messageLength * _numCallbackCopies);
+        }
+        return (_callbackStorage != nullptr);
+    }
+```
+
+`_numCallbackCopies` is usually 1, but RXM-SFRBX and ESF-MEAS will require multiple callback copies. We are not yet ready to add RXM-SFRBX and ESF-MEAS to the `ubxMessage` `class`. This will be added at a future date.
+
+### setAutoCallbackPtr
+
+The v3 library contains a setAuto-callbackPtr method for individual messages: `setAutoPVTcallbackPtr`, `setAutoNAVHPPOSECEFcallbackPtr`.
+It would be much better to be able to use a single method named `setAutoCallbackPtr`.
+Add the code for `void (*callbackPointerPtr)(ubxCallbackDataCommon_t *), const char *classStr, const char *idStr, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait)`.
+
+The code will:
+- Steps through each registered message type
+- Look for a match for `classStr` and `idStr`
+- If a match is found:
+    - `callbackPointerPtr` is copied into the `ubxMessage` `_callbackPtr`
+    - call `initStorage`
+    - call `initCallbackStorage`
+
+After `setAutoCallbackPtr` has been added, the individual setAuto-callbackPtr methods should be removed.
+
+### Future work
+
+If the message is periodic, and has a callback defined (`_callbackPtr` is not `nullptr`):
+- `_storage` will be enlarged to hold both the current message and a copy of that message for the callback
+- `processUBXpacket` should also copy the message contents into that callback copy
+
+This is future work and will need to be added when callbacks are properly integrated into `ubxMessage`
 
 
 ## Test

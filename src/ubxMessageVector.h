@@ -113,6 +113,20 @@ public:
         return nullptr;
     }
 
+    // Look up a registered message by its classStr/idStr names (e.g. "NAV", "HPPOSLLH") rather
+    // than its numeric Class/ID - backs DevUBLOXGNSS::setAutoCallbackPtr(), which takes names
+    // because that's what a user calling it from a sketch has to hand, per AGENTS.md
+    // "setAutoCallbackPtr" and CallbackExample1_NAVHPPOSLLH.ino.
+    ubxMessage *findByName(const char *classStr, const char *idStr)
+    {
+        for (auto msg : ubxMessageVectors)
+        {
+            if ((strcmp(msg->_classStr, classStr) == 0) && (strcmp(msg->_idStr, idStr) == 0))
+                return msg;
+        }
+        return nullptr;
+    }
+
     sfe_ublox_status_e initStorage(uint8_t Class, uint8_t ID)
     {
         ubxMessage *msg = find(Class, ID);
@@ -183,7 +197,7 @@ public:
         return SFE_UBLOX_STATUS_SUCCESS;
     }
 
-    sfe_ublox_status_e setCallback(uint8_t Class, uint8_t ID, void (*callbackPtr)(uint8_t *))
+    sfe_ublox_status_e setCallback(uint8_t Class, uint8_t ID, void (*callbackPtr)(ubxCallbackDataCommon_t *))
     {
         ubxMessage *msg = find(Class, ID);
         if (msg == nullptr)
@@ -194,8 +208,8 @@ public:
 
     // Copy 'len' freshly-received payload bytes into this message's storage and mark it fresh.
     // This is the receive-side hook that AGENTS.md flags as "the largest remaining piece of
-    // design work" for v3 messages in general; it is wired up for NAV-PVT only so far - see
-    // DevUBLOXGNSS::processUBXpacket() in u-blox_GNSS.cpp.
+    // design work" for v3 messages in general; it is wired up for the messages migrated so far -
+    // see DevUBLOXGNSS::processUBXpacket() in u-blox_GNSS.cpp.
     sfe_ublox_status_e storePayload(uint8_t Class, uint8_t ID, const uint8_t *payload, uint16_t len)
     {
         ubxMessage *msg = find(Class, ID);
@@ -207,32 +221,31 @@ public:
             len = msg->_messageLength;
         memcpy(msg->_storage, payload, len);
         msg->_moduleQueried = true;
+
+        // v4 scaffolding: if a callback has been registered (see DevUBLOXGNSS::setAutoCallbackPtr()
+        // / AGENTS.md "setAutoCallbackPtr"), also freeze this payload into the message's separate
+        // _callbackStorage and mark it pending, so DevUBLOXGNSS::checkCallbacks() has a stable copy
+        // to hand the user's callback even if _storage gets overwritten by the next message before
+        // checkCallbacks() next runs - see AGENTS.md "class ubxMessage needs separate callback
+        // storage" and "Future work". Only a single callback copy is kept (matches
+        // _numCallbackCopies == 1 for every currently-registered message); ring-buffered multi-copy
+        // support for RXM-SFRBX/ESF-MEAS is still future work, per AGENTS.md.
+        if (msg->_callbackPtr != nullptr)
+        {
+            if (msg->initCallbackStorage())
+            {
+                memcpy(msg->_callbackStorage, payload, len);
+                msg->_callbackDataValid = true;
+            }
+        }
+
         return SFE_UBLOX_STATUS_SUCCESS;
     }
 
-    // Extract 'width' (1, 2, 4 or 8) little-endian bytes starting at byte offset 'offset' as an
-    // unsigned value.
-    static uint64_t extractUnsignedBytes(const uint8_t *storage, uint16_t offset, uint8_t width)
-    {
-        uint64_t val = 0;
-        for (uint8_t i = 0; i < width; i++)
-            val |= ((uint64_t)storage[offset + i]) << (8 * i);
-        return val;
-    }
-
-    // Extract 'bitWidth' bits (<= 32) starting at bit 'startBit' within the byte at 'offset'.
-    static uint32_t extractBits(const uint8_t *storage, uint16_t offset, uint8_t startBit, uint8_t bitWidth)
-    {
-        uint32_t acc = 0;
-        uint8_t bytesNeeded = (uint8_t)((startBit + bitWidth + 7) / 8);
-        for (uint8_t i = 0; i < bytesNeeded; i++)
-            acc |= ((uint32_t)storage[offset + i]) << (8 * i);
-        uint32_t mask = (bitWidth >= 32) ? 0xFFFFFFFFu : (uint32_t)((1UL << bitWidth) - 1UL);
-        return (acc >> startBit) & mask;
-    }
-
     // Look up one field of one message by name and fill in 'value'. Backs
-    // DevUBLOXGNSS::getUBXfield() in u-blox_GNSS.cpp.
+    // DevUBLOXGNSS::getUBXfield() in u-blox_GNSS.cpp. The actual field-table walk and byte/bit
+    // extraction now live once, on ubxMessage itself (extractFieldFrom()), so the same code also
+    // backs the callback read path (getFieldFromCallbackDataStruct()) - see ubxMessage.h.
     sfe_ublox_status_e extractValue(uint8_t Class, uint8_t ID, const char *field, ubxAnyType *value)
     {
         ubxMessage *msg = find(Class, ID);
@@ -241,72 +254,6 @@ public:
         if (msg->_storage == nullptr)
             return SFE_UBLOX_STATUS_MEM_ERR; // No data has arrived for this message yet
 
-        const ubxMessage::ubxField *fields = (const ubxMessage::ubxField *)msg->_fields;
-        for (uint8_t i = 0; i < msg->_numFields; i++)
-        {
-            if (strncmp(fields[i].fieldName, field, sizeof(fields[i].fieldName)) != 0)
-                continue;
-
-            value->ubxDataType = fields[i].ubxDataType;
-
-            if (fields[i].startBit >= 0) // A sub-field: always extracted as an unsigned value
-            {
-                value->U4 = extractBits(msg->_storage, fields[i].startByte, (uint8_t)fields[i].startBit, (uint8_t)fields[i].bitWidth);
-                return SFE_UBLOX_STATUS_SUCCESS;
-            }
-
-            switch (fields[i].ubxDataType)
-            {
-            case ubxDataType8bit(UBX_CFG_L):
-                value->L = (bool)msg->_storage[fields[i].startByte];
-                return SFE_UBLOX_STATUS_SUCCESS;
-            case ubxDataType8bit(UBX_CFG_U1):
-            case ubxDataType8bit(UBX_CFG_E1):
-            case ubxDataType8bit(UBX_CFG_X1):
-                value->U1 = (uint8_t)extractUnsignedBytes(msg->_storage, fields[i].startByte, 1);
-                return SFE_UBLOX_STATUS_SUCCESS;
-            case ubxDataType8bit(UBX_CFG_I1):
-                value->I1 = (int8_t)extractUnsignedBytes(msg->_storage, fields[i].startByte, 1);
-                return SFE_UBLOX_STATUS_SUCCESS;
-            case ubxDataType8bit(UBX_CFG_U2):
-            case ubxDataType8bit(UBX_CFG_E2):
-            case ubxDataType8bit(UBX_CFG_X2):
-                value->U2 = (uint16_t)extractUnsignedBytes(msg->_storage, fields[i].startByte, 2);
-                return SFE_UBLOX_STATUS_SUCCESS;
-            case ubxDataType8bit(UBX_CFG_I2):
-                value->I2 = (int16_t)extractUnsignedBytes(msg->_storage, fields[i].startByte, 2);
-                return SFE_UBLOX_STATUS_SUCCESS;
-            case ubxDataType8bit(UBX_CFG_U4):
-            case ubxDataType8bit(UBX_CFG_E4):
-            case ubxDataType8bit(UBX_CFG_X4):
-                value->U4 = (uint32_t)extractUnsignedBytes(msg->_storage, fields[i].startByte, 4);
-                return SFE_UBLOX_STATUS_SUCCESS;
-            case ubxDataType8bit(UBX_CFG_I4):
-                value->I4 = (int32_t)extractUnsignedBytes(msg->_storage, fields[i].startByte, 4);
-                return SFE_UBLOX_STATUS_SUCCESS;
-            case ubxDataType8bit(UBX_CFG_R4):
-            {
-                uint32_t bits = (uint32_t)extractUnsignedBytes(msg->_storage, fields[i].startByte, 4);
-                memcpy(&value->R4, &bits, sizeof(float));
-                return SFE_UBLOX_STATUS_SUCCESS;
-            }
-            case ubxDataType8bit(UBX_CFG_U8):
-            case ubxDataType8bit(UBX_CFG_X8):
-                value->U8 = extractUnsignedBytes(msg->_storage, fields[i].startByte, 8);
-                return SFE_UBLOX_STATUS_SUCCESS;
-            case ubxDataType8bit(UBX_CFG_I8):
-                value->I8 = (int64_t)extractUnsignedBytes(msg->_storage, fields[i].startByte, 8);
-                return SFE_UBLOX_STATUS_SUCCESS;
-            case ubxDataType8bit(UBX_CFG_R8):
-            {
-                uint64_t bits = extractUnsignedBytes(msg->_storage, fields[i].startByte, 8);
-                memcpy(&value->R8, &bits, sizeof(double));
-                return SFE_UBLOX_STATUS_SUCCESS;
-            }
-            default:
-                return SFE_UBLOX_STATUS_FAIL; // Unknown ubxDataType
-            }
-        }
-        return SFE_UBLOX_STATUS_INVALID_ARG; // Field name not found
+        return msg->extractFieldFrom(msg->_storage, field, value) ? SFE_UBLOX_STATUS_SUCCESS : SFE_UBLOX_STATUS_INVALID_ARG;
     }
 };
