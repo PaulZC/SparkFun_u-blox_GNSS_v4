@@ -588,6 +588,35 @@ If the message is periodic, and has a callback defined (`_callbackPtr` is not `n
 
 This is future work and will need to be added when callbacks are properly integrated into `ubxMessage`
 
+### Registry-first dispatch in `autoLookup` and `processUBXpacket`
+
+The "Future work" above has been superseded by a broader change: `autoLookup()` and `processUBXpacket()` now both check the new registry *first*, before falling back to the old per-message code.
+
+`autoLookup(Class, ID, maxSize)`:
+- Calls `ubxMessages.find(Class, ID)`. If the message is registered, `maxSize` is set from `ubxMessagePtr->_messageLength` and the function returns `(ubxMessagePtr->_storage != nullptr)` immediately.
+- Only messages *not yet* in the registry fall through to the old per-message `switch`/`if` chain below (unchanged, and still needed for those).
+
+`processUBXpacket(msg)`:
+- Calls `ubxMessages.find(msg->cls, msg->id)`. If the message is registered:
+  - Marks `_moduleQueried = true`
+  - Copies the payload into `_storage` (if allocated)
+  - Copies the payload into `_callbackStorage` and sets `_callbackDataValid` (if a callback is registered - see "class ubxMessage needs separate callback storage" above)
+  - Copies into the file buffer if `_addToFileBuffer` is set
+  - **This is exclusive** - the old per-message `switch (msg->cls) { ... }` chain below only runs in the `else` branch, i.e. only for messages *not* in the registry.
+
+**Consequence - accepted, deliberate migration debt:** every message registered in `ubxMessageVector` (all 30, as of this writing - the NAV-PVT proof-of-concept plus the 26 "full parity" messages plus RXM-COR/MON-HW/MON-HW2) now has its old per-message parsing code permanently unreachable. That code used to be the *only* thing populating the old `packetUBXxxx->data` struct and its `moduleQueried` bitmask. Individual legacy field-level getters that still read `->data` directly (e.g. `getGeometricDOP()`, `getLatitude()`, `getRoll()`, `getYear()` - i.e. almost every named getter that isn't `getUBXfield()`/the callback path) will now return stale/default (typically zero) values, and any of their "wait for fresh data" logic will spin to `maxWait` every call, since the freshness bit is never set again after allocation.
+
+This was a deliberate choice, not an oversight: the registry (`_storage` + `getUBXfield()`/`getUbxMessageField()` + the generic callback mechanism) is now the single source of truth going forward. The old individual per-field getters are considered **deprecated until each is rewritten to read through `getUBXfield()`** - that rewrite is separate future work, message by message. Only the top-level `get<X>()` wrapper functions and the callback/`getUBXfield()` path are guaranteed to reflect live data today.
+
+**Redundant code removed from `processUBXpacket()`:** the old per-message parsing blocks for the "standard pattern" registered messages - a single `msg->len == X_LEN` check, unconditional field extraction into `->data`, a `moduleQueried` bitmask set, an old-style callback-copy check, and a file-buffer check, with no other internal branching - were deleted as dead code: NAV\_POSECEF, NAV\_STATUS, NAV\_DOP, NAV\_ATT, NAV\_PVT, NAV\_ODO, NAV\_VELECEF, NAV\_VELNED, NAV\_HPPOSECEF, NAV\_HPPOSLLH, NAV\_PVAT, NAV\_TIMEUTC, NAV\_CLOCK, NAV\_TIMELS, NAV\_SVIN, NAV\_AOPSTATUS, NAV\_EOE, TIM\_TM2, TIM\_TP, MON\_HW, ESF\_ALG, ESF\_INS, HNR\_PVT, HNR\_ATT, HNR\_INS (25 messages). Where deleting the first ("head") block in an `if`/`else if` chain left a later `else if` as the new first clause, that clause was changed to a plain `if` (e.g. `NAV_SAT` now heads the `NAV` case, `ESF_MEAS` now heads the `ESF` case). Two `case` blocks (`TIM`, `HNR`) became empty (just `break;`) since every message in them was removed.
+
+**Deliberately left alone, even though also now dead code**, because they don't match the simple "standard pattern" above and need a closer look before deleting:
+- `NAV_RELPOSNED` - dual message-length handling (M8 vs F9) with internal branching.
+- `NAV_DAHEADING` - version-byte-gated internal branching (v0x01 vs v0x02 layout).
+- `RXM_COR` - no `msg->len` check, writes into the *old* `callbackData`/`callbackPointerPtr` fields (not `->data`), which is itself already orphaned now that the individual `setAuto*callbackPtr` functions were removed (see "setAutoCallbackPtr" above).
+
+**Not yet cleaned up:** `autoLookup()`'s own old per-message `switch` chain is *also* fully dead code now for every registered message (the same "registry found -> early return" logic makes it unreachable), but it was left untouched this pass since only `processUBXpacket()`'s redundant code was in scope.
+
 
 ## Test
 
