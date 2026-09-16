@@ -245,7 +245,7 @@ public:
     // Look up one field of one message by name and fill in 'value'. Backs
     // DevUBLOXGNSS::getUBXfield() in u-blox_GNSS.cpp. The actual field-table walk and byte/bit
     // extraction now live once, on ubxMessage itself (extractFieldFrom()), so the same code also
-    // backs the callback read path (getFieldFromCallbackDataStruct()) - see ubxMessage.h.
+    // backs the callback read path (getUbxMessageField()) - see ubxMessage.h.
     sfe_ublox_status_e extractValue(uint8_t Class, uint8_t ID, const char *field, ubxAnyType *value)
     {
         ubxMessage *msg = find(Class, ID);

@@ -1338,6 +1338,14 @@ bool DevUBLOXGNSS::autoLookup(uint8_t Class, uint8_t ID, uint16_t *maxSize)
   if (maxSize != nullptr)
     *maxSize = 0;
 
+  ubxMessage *ubxMessagePtr = ubxMessages.find(Class, ID);
+  if (ubxMessagePtr)
+  {
+    if (maxSize != nullptr)
+        *maxSize = ubxMessagePtr->_messageLength;
+    return (ubxMessagePtr->_storage != nullptr);
+  }
+
   switch (Class)
   {
   case UBX_CLASS_NAV:
@@ -3504,1690 +3512,1715 @@ void DevUBLOXGNSS::processUBX(uint8_t incoming, ubxPacket *incomingUBX, uint8_t 
 void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
 {
   bool addedToFileBuffer = false;
-  switch (msg->cls)
+
+  ubxMessage *ubxMessagePtr = ubxMessages.find(msg->cls, msg->id);
+  if (ubxMessagePtr)
   {
-  case UBX_CLASS_NAV:
-    if (msg->id == UBX_NAV_POSECEF && msg->len == UBX_NAV_POSECEF_LEN)
+    // Mark as fresh (not read before)
+    ubxMessagePtr->_moduleQueried = true;
+
+    // Copy the payload into storage - but only if we have memory allocated for it
+    if (ubxMessagePtr->_storage)
+      memcpy(ubxMessagePtr->_storage, msg->payload, ubxMessagePtr->_messageLength);
+
+    // Check if we need to copy the data for the callback
+    if (ubxMessagePtr->_callbackStorage)
     {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVPOSECEF != nullptr)
-      {
-        packetUBXNAVPOSECEF->data.iTOW = extractLong(msg, 0);
-        packetUBXNAVPOSECEF->data.ecefX = extractSignedLong(msg, 4);
-        packetUBXNAVPOSECEF->data.ecefY = extractSignedLong(msg, 8);
-        packetUBXNAVPOSECEF->data.ecefZ = extractSignedLong(msg, 12);
-        packetUBXNAVPOSECEF->data.pAcc = extractLong(msg, 16);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVPOSECEF->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVPOSECEF->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVPOSECEF->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVPOSECEF->callbackData->iTOW, &packetUBXNAVPOSECEF->data.iTOW, sizeof(UBX_NAV_POSECEF_data_t));
-          packetUBXNAVPOSECEF->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVPOSECEF->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
+      memcpy(ubxMessagePtr->_callbackStorage, msg->payload, ubxMessagePtr->_messageLength);
+      ubxMessagePtr->_callbackDataValid = true;
     }
-    else if (msg->id == UBX_NAV_STATUS && msg->len == UBX_NAV_STATUS_LEN)
+
+    // Check if we need to copy the data into the file buffer
+    if (ubxMessagePtr->_addToFileBuffer)
+      addedToFileBuffer = storePacket(msg);
+  }
+  else
+  {
+    switch (msg->cls)
     {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVSTATUS != nullptr)
+    case UBX_CLASS_NAV:
+      if (msg->id == UBX_NAV_POSECEF && msg->len == UBX_NAV_POSECEF_LEN)
       {
-        packetUBXNAVSTATUS->data.iTOW = extractLong(msg, 0);
-        packetUBXNAVSTATUS->data.gpsFix = extractByte(msg, 4);
-        packetUBXNAVSTATUS->data.flags.all = extractByte(msg, 5);
-        packetUBXNAVSTATUS->data.fixStat.all = extractByte(msg, 6);
-        packetUBXNAVSTATUS->data.flags2.all = extractByte(msg, 7);
-        packetUBXNAVSTATUS->data.ttff = extractLong(msg, 8);
-        packetUBXNAVSTATUS->data.msss = extractLong(msg, 12);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVSTATUS->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVSTATUS->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVSTATUS->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVPOSECEF != nullptr)
         {
-          memcpy(&packetUBXNAVSTATUS->callbackData->iTOW, &packetUBXNAVSTATUS->data.iTOW, sizeof(UBX_NAV_STATUS_data_t));
-          packetUBXNAVSTATUS->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVSTATUS->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_DOP && msg->len == UBX_NAV_DOP_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVDOP != nullptr)
-      {
-        packetUBXNAVDOP->data.iTOW = extractLong(msg, 0);
-        packetUBXNAVDOP->data.gDOP = extractInt(msg, 4);
-        packetUBXNAVDOP->data.pDOP = extractInt(msg, 6);
-        packetUBXNAVDOP->data.tDOP = extractInt(msg, 8);
-        packetUBXNAVDOP->data.vDOP = extractInt(msg, 10);
-        packetUBXNAVDOP->data.hDOP = extractInt(msg, 12);
-        packetUBXNAVDOP->data.nDOP = extractInt(msg, 14);
-        packetUBXNAVDOP->data.eDOP = extractInt(msg, 16);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVDOP->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVDOP->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVDOP->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVDOP->callbackData->iTOW, &packetUBXNAVDOP->data.iTOW, sizeof(UBX_NAV_DOP_data_t));
-          packetUBXNAVDOP->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVDOP->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_ATT && msg->len == UBX_NAV_ATT_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVATT != nullptr)
-      {
-        packetUBXNAVATT->data.iTOW = extractLong(msg, 0);
-        packetUBXNAVATT->data.version = extractByte(msg, 4);
-        packetUBXNAVATT->data.roll = extractSignedLong(msg, 8);
-        packetUBXNAVATT->data.pitch = extractSignedLong(msg, 12);
-        packetUBXNAVATT->data.heading = extractSignedLong(msg, 16);
-        packetUBXNAVATT->data.accRoll = extractLong(msg, 20);
-        packetUBXNAVATT->data.accPitch = extractLong(msg, 24);
-        packetUBXNAVATT->data.accHeading = extractLong(msg, 28);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVATT->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVATT->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVATT->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVATT->callbackData->iTOW, &packetUBXNAVATT->data.iTOW, sizeof(UBX_NAV_ATT_data_t));
-          packetUBXNAVATT->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVATT->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_PVT && msg->len == UBX_NAV_PVT_LEN)
-    {
-      // v4 scaffolding: mirror the payload into the new generic per-message registry, regardless of
-      // whether the old packetUBXNAVPVT struct below has been allocated. The new registry allocates
-      // its own storage lazily (via ubxMessages.initStorage(), called by getUBX()/getUBXfield()) and
-      // is not tied to the old struct's lifecycle. See AGENTS.md "Reference Scaffolding" ("the largest
-      // remaining piece of design work") - this is wired up for NAV-PVT only, as the proof of concept.
-      ubxMessages.storePayload(UBX_CLASS_NAV, UBX_NAV_PVT, msg->payload, UBX_NAV_PVT_LEN);
-
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVPVT != nullptr)
-      {
-        packetUBXNAVPVT->data.iTOW = extractLong(msg, 0);
-        packetUBXNAVPVT->data.year = extractInt(msg, 4);
-        packetUBXNAVPVT->data.month = extractByte(msg, 6);
-        packetUBXNAVPVT->data.day = extractByte(msg, 7);
-        packetUBXNAVPVT->data.hour = extractByte(msg, 8);
-        packetUBXNAVPVT->data.min = extractByte(msg, 9);
-        packetUBXNAVPVT->data.sec = extractByte(msg, 10);
-        packetUBXNAVPVT->data.valid.all = extractByte(msg, 11);
-        packetUBXNAVPVT->data.tAcc = extractLong(msg, 12);
-        packetUBXNAVPVT->data.nano = extractSignedLong(msg, 16); // Includes milliseconds
-        packetUBXNAVPVT->data.fixType = extractByte(msg, 20);
-        packetUBXNAVPVT->data.flags.all = extractByte(msg, 21);
-        packetUBXNAVPVT->data.flags2.all = extractByte(msg, 22);
-        packetUBXNAVPVT->data.numSV = extractByte(msg, 23);
-        packetUBXNAVPVT->data.lon = extractSignedLong(msg, 24);
-        packetUBXNAVPVT->data.lat = extractSignedLong(msg, 28);
-        packetUBXNAVPVT->data.height = extractSignedLong(msg, 32);
-        packetUBXNAVPVT->data.hMSL = extractSignedLong(msg, 36);
-        packetUBXNAVPVT->data.hAcc = extractLong(msg, 40);
-        packetUBXNAVPVT->data.vAcc = extractLong(msg, 44);
-        packetUBXNAVPVT->data.velN = extractSignedLong(msg, 48);
-        packetUBXNAVPVT->data.velE = extractSignedLong(msg, 52);
-        packetUBXNAVPVT->data.velD = extractSignedLong(msg, 56);
-        packetUBXNAVPVT->data.gSpeed = extractSignedLong(msg, 60);
-        packetUBXNAVPVT->data.headMot = extractSignedLong(msg, 64);
-        packetUBXNAVPVT->data.sAcc = extractLong(msg, 68);
-        packetUBXNAVPVT->data.headAcc = extractLong(msg, 72);
-        packetUBXNAVPVT->data.pDOP = extractInt(msg, 76);
-        packetUBXNAVPVT->data.flags3.all = extractInt(msg, 78);
-        packetUBXNAVPVT->data.headVeh = extractSignedLong(msg, 84);
-        packetUBXNAVPVT->data.magDec = extractSignedInt(msg, 88);
-        packetUBXNAVPVT->data.magAcc = extractInt(msg, 90);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVPVT->moduleQueried.moduleQueried1.all = 0xFFFFFFFF;
-        packetUBXNAVPVT->moduleQueried.moduleQueried2.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVPVT->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVPVT->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVPVT->callbackData->iTOW, &packetUBXNAVPVT->data.iTOW, sizeof(UBX_NAV_PVT_data_t));
-          packetUBXNAVPVT->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVPVT->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_ODO && msg->len == UBX_NAV_ODO_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVODO != nullptr)
-      {
-        packetUBXNAVODO->data.version = extractByte(msg, 0);
-        packetUBXNAVODO->data.iTOW = extractLong(msg, 4);
-        packetUBXNAVODO->data.distance = extractLong(msg, 8);
-        packetUBXNAVODO->data.totalDistance = extractLong(msg, 12);
-        packetUBXNAVODO->data.distanceStd = extractLong(msg, 16);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVODO->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVODO->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVODO->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVODO->callbackData->version, &packetUBXNAVODO->data.version, sizeof(UBX_NAV_ODO_data_t));
-          packetUBXNAVODO->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVODO->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_VELECEF && msg->len == UBX_NAV_VELECEF_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVVELECEF != nullptr)
-      {
-        packetUBXNAVVELECEF->data.iTOW = extractLong(msg, 0);
-        packetUBXNAVVELECEF->data.ecefVX = extractSignedLong(msg, 4);
-        packetUBXNAVVELECEF->data.ecefVY = extractSignedLong(msg, 8);
-        packetUBXNAVVELECEF->data.ecefVZ = extractSignedLong(msg, 12);
-        packetUBXNAVVELECEF->data.sAcc = extractLong(msg, 16);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVVELECEF->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVVELECEF->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVVELECEF->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVVELECEF->callbackData->iTOW, &packetUBXNAVVELECEF->data.iTOW, sizeof(UBX_NAV_VELECEF_data_t));
-          packetUBXNAVVELECEF->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVVELECEF->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_VELNED && msg->len == UBX_NAV_VELNED_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVVELNED != nullptr)
-      {
-        packetUBXNAVVELNED->data.iTOW = extractLong(msg, 0);
-        packetUBXNAVVELNED->data.velN = extractSignedLong(msg, 4);
-        packetUBXNAVVELNED->data.velE = extractSignedLong(msg, 8);
-        packetUBXNAVVELNED->data.velD = extractSignedLong(msg, 12);
-        packetUBXNAVVELNED->data.speed = extractLong(msg, 16);
-        packetUBXNAVVELNED->data.gSpeed = extractLong(msg, 20);
-        packetUBXNAVVELNED->data.heading = extractSignedLong(msg, 24);
-        packetUBXNAVVELNED->data.sAcc = extractLong(msg, 28);
-        packetUBXNAVVELNED->data.cAcc = extractLong(msg, 32);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVVELNED->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVVELNED->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVVELNED->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVVELNED->callbackData->iTOW, &packetUBXNAVVELNED->data.iTOW, sizeof(UBX_NAV_VELNED_data_t));
-          packetUBXNAVVELNED->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVVELNED->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_HPPOSECEF && msg->len == UBX_NAV_HPPOSECEF_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVHPPOSECEF != nullptr)
-      {
-        packetUBXNAVHPPOSECEF->data.version = extractByte(msg, 0);
-        packetUBXNAVHPPOSECEF->data.iTOW = extractLong(msg, 4);
-        packetUBXNAVHPPOSECEF->data.ecefX = extractSignedLong(msg, 8);
-        packetUBXNAVHPPOSECEF->data.ecefY = extractSignedLong(msg, 12);
-        packetUBXNAVHPPOSECEF->data.ecefZ = extractSignedLong(msg, 16);
-        packetUBXNAVHPPOSECEF->data.ecefXHp = extractSignedChar(msg, 20);
-        packetUBXNAVHPPOSECEF->data.ecefYHp = extractSignedChar(msg, 21);
-        packetUBXNAVHPPOSECEF->data.ecefZHp = extractSignedChar(msg, 22);
-        packetUBXNAVHPPOSECEF->data.flags.all = extractByte(msg, 23);
-        packetUBXNAVHPPOSECEF->data.pAcc = extractLong(msg, 24);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVHPPOSECEF->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVHPPOSECEF->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVHPPOSECEF->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVHPPOSECEF->callbackData->version, &packetUBXNAVHPPOSECEF->data.version, sizeof(UBX_NAV_HPPOSECEF_data_t));
-          packetUBXNAVHPPOSECEF->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVHPPOSECEF->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_HPPOSLLH && msg->len == UBX_NAV_HPPOSLLH_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVHPPOSLLH != nullptr)
-      {
-        packetUBXNAVHPPOSLLH->data.version = extractByte(msg, 0);
-        packetUBXNAVHPPOSLLH->data.flags.all = extractByte(msg, 3);
-        packetUBXNAVHPPOSLLH->data.iTOW = extractLong(msg, 4);
-        packetUBXNAVHPPOSLLH->data.lon = extractSignedLong(msg, 8);
-        packetUBXNAVHPPOSLLH->data.lat = extractSignedLong(msg, 12);
-        packetUBXNAVHPPOSLLH->data.height = extractSignedLong(msg, 16);
-        packetUBXNAVHPPOSLLH->data.hMSL = extractSignedLong(msg, 20);
-        packetUBXNAVHPPOSLLH->data.lonHp = extractSignedChar(msg, 24);
-        packetUBXNAVHPPOSLLH->data.latHp = extractSignedChar(msg, 25);
-        packetUBXNAVHPPOSLLH->data.heightHp = extractSignedChar(msg, 26);
-        packetUBXNAVHPPOSLLH->data.hMSLHp = extractSignedChar(msg, 27);
-        packetUBXNAVHPPOSLLH->data.hAcc = extractLong(msg, 28);
-        packetUBXNAVHPPOSLLH->data.vAcc = extractLong(msg, 32);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVHPPOSLLH->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVHPPOSLLH->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVHPPOSLLH->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVHPPOSLLH->callbackData->version, &packetUBXNAVHPPOSLLH->data.version, sizeof(UBX_NAV_HPPOSLLH_data_t));
-          packetUBXNAVHPPOSLLH->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVHPPOSLLH->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_PVAT && msg->len == UBX_NAV_PVAT_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVPVAT != nullptr)
-      {
-        packetUBXNAVPVAT->data.iTOW = extractLong(msg, 0);
-        packetUBXNAVPVAT->data.version = extractByte(msg, 4);
-        packetUBXNAVPVAT->data.valid.all = extractByte(msg, 5);
-        packetUBXNAVPVAT->data.year = extractInt(msg, 6);
-        packetUBXNAVPVAT->data.month = extractByte(msg, 8);
-        packetUBXNAVPVAT->data.day = extractByte(msg, 9);
-        packetUBXNAVPVAT->data.hour = extractByte(msg, 10);
-        packetUBXNAVPVAT->data.min = extractByte(msg, 11);
-        packetUBXNAVPVAT->data.sec = extractByte(msg, 12);
-        packetUBXNAVPVAT->data.tAcc = extractLong(msg, 16);
-        packetUBXNAVPVAT->data.nano = extractSignedLong(msg, 20); // Includes milliseconds
-        packetUBXNAVPVAT->data.fixType = extractByte(msg, 24);
-        packetUBXNAVPVAT->data.flags.all = extractByte(msg, 25);
-        packetUBXNAVPVAT->data.flags2.all = extractByte(msg, 26);
-        packetUBXNAVPVAT->data.numSV = extractByte(msg, 27);
-        packetUBXNAVPVAT->data.lon = extractSignedLong(msg, 28);
-        packetUBXNAVPVAT->data.lat = extractSignedLong(msg, 32);
-        packetUBXNAVPVAT->data.height = extractSignedLong(msg, 36);
-        packetUBXNAVPVAT->data.hMSL = extractSignedLong(msg, 40);
-        packetUBXNAVPVAT->data.hAcc = extractLong(msg, 44);
-        packetUBXNAVPVAT->data.vAcc = extractLong(msg, 48);
-        packetUBXNAVPVAT->data.velN = extractSignedLong(msg, 52);
-        packetUBXNAVPVAT->data.velE = extractSignedLong(msg, 56);
-        packetUBXNAVPVAT->data.velD = extractSignedLong(msg, 60);
-        packetUBXNAVPVAT->data.gSpeed = extractSignedLong(msg, 64);
-        packetUBXNAVPVAT->data.sAcc = extractLong(msg, 68);
-        packetUBXNAVPVAT->data.vehRoll = extractSignedLong(msg, 72);
-        packetUBXNAVPVAT->data.vehPitch = extractSignedLong(msg, 76);
-        packetUBXNAVPVAT->data.vehHeading = extractSignedLong(msg, 80);
-        packetUBXNAVPVAT->data.motHeading = extractSignedLong(msg, 84);
-        packetUBXNAVPVAT->data.accRoll = extractInt(msg, 88);
-        packetUBXNAVPVAT->data.accPitch = extractInt(msg, 90);
-        packetUBXNAVPVAT->data.accHeading = extractInt(msg, 92);
-        packetUBXNAVPVAT->data.magDec = extractSignedInt(msg, 94);
-        packetUBXNAVPVAT->data.magAcc = extractInt(msg, 96);
-        packetUBXNAVPVAT->data.errEllipseOrient = extractInt(msg, 98);
-        packetUBXNAVPVAT->data.errEllipseMajor = extractLong(msg, 100);
-        packetUBXNAVPVAT->data.errEllipseMinor = extractLong(msg, 104);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVPVAT->moduleQueried.moduleQueried1.all = 0xFFFFFFFF;
-        packetUBXNAVPVAT->moduleQueried.moduleQueried2.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVPVAT->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVPVAT->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVPVAT->callbackData->iTOW, &packetUBXNAVPVAT->data.iTOW, sizeof(UBX_NAV_PVAT_data_t));
-          packetUBXNAVPVAT->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVPVAT->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_TIMEUTC && msg->len == UBX_NAV_TIMEUTC_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVTIMEUTC != nullptr)
-      {
-        packetUBXNAVTIMEUTC->data.iTOW = extractLong(msg, 0);
-        packetUBXNAVTIMEUTC->data.tAcc = extractLong(msg, 4);
-        packetUBXNAVTIMEUTC->data.nano = extractSignedLong(msg, 8);
-        packetUBXNAVTIMEUTC->data.year = extractInt(msg, 12);
-        packetUBXNAVTIMEUTC->data.month = extractByte(msg, 14);
-        packetUBXNAVTIMEUTC->data.day = extractByte(msg, 15);
-        packetUBXNAVTIMEUTC->data.hour = extractByte(msg, 16);
-        packetUBXNAVTIMEUTC->data.min = extractByte(msg, 17);
-        packetUBXNAVTIMEUTC->data.sec = extractByte(msg, 18);
-        packetUBXNAVTIMEUTC->data.valid.all = extractByte(msg, 19);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVTIMEUTC->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVTIMEUTC->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVTIMEUTC->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVTIMEUTC->callbackData->iTOW, &packetUBXNAVTIMEUTC->data.iTOW, sizeof(UBX_NAV_TIMEUTC_data_t));
-          packetUBXNAVTIMEUTC->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVTIMEUTC->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_CLOCK && msg->len == UBX_NAV_CLOCK_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVCLOCK != nullptr)
-      {
-        packetUBXNAVCLOCK->data.iTOW = extractLong(msg, 0);
-        packetUBXNAVCLOCK->data.clkB = extractSignedLong(msg, 4);
-        packetUBXNAVCLOCK->data.clkD = extractSignedLong(msg, 8);
-        packetUBXNAVCLOCK->data.tAcc = extractLong(msg, 12);
-        packetUBXNAVCLOCK->data.fAcc = extractLong(msg, 16);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVCLOCK->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVCLOCK->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVCLOCK->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVCLOCK->callbackData->iTOW, &packetUBXNAVCLOCK->data.iTOW, sizeof(UBX_NAV_CLOCK_data_t));
-          packetUBXNAVCLOCK->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVCLOCK->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_TIMELS && msg->len == UBX_NAV_TIMELS_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVTIMELS != nullptr)
-      {
-        packetUBXNAVTIMELS->data.iTOW = extractLong(msg, 0);
-        packetUBXNAVTIMELS->data.version = extractByte(msg, 4);
-        packetUBXNAVTIMELS->data.srcOfCurrLs = extractByte(msg, 8);
-        packetUBXNAVTIMELS->data.currLs = extractSignedChar(msg, 9);
-        packetUBXNAVTIMELS->data.srcOfLsChange = extractByte(msg, 10);
-        packetUBXNAVTIMELS->data.lsChange = extractSignedChar(msg, 11);
-        packetUBXNAVTIMELS->data.timeToLsEvent = extractSignedLong(msg, 12);
-        packetUBXNAVTIMELS->data.dateOfLsGpsWn = extractInt(msg, 16);
-        packetUBXNAVTIMELS->data.dateOfLsGpsDn = extractInt(msg, 18);
-        packetUBXNAVTIMELS->data.valid.all = extractSignedChar(msg, 23);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVTIMELS->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-      }
-    }
-    else if (msg->id == UBX_NAV_SVIN && msg->len == UBX_NAV_SVIN_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVSVIN != nullptr)
-      {
-        packetUBXNAVSVIN->data.version = extractByte(msg, 0);
-        packetUBXNAVSVIN->data.iTOW = extractLong(msg, 4);
-        packetUBXNAVSVIN->data.dur = extractLong(msg, 8);
-        packetUBXNAVSVIN->data.meanX = extractSignedLong(msg, 12);
-        packetUBXNAVSVIN->data.meanY = extractSignedLong(msg, 16);
-        packetUBXNAVSVIN->data.meanZ = extractSignedLong(msg, 20);
-        packetUBXNAVSVIN->data.meanXHP = extractSignedChar(msg, 24);
-        packetUBXNAVSVIN->data.meanYHP = extractSignedChar(msg, 25);
-        packetUBXNAVSVIN->data.meanZHP = extractSignedChar(msg, 26);
-        packetUBXNAVSVIN->data.meanAcc = extractLong(msg, 28);
-        packetUBXNAVSVIN->data.obs = extractLong(msg, 32);
-        packetUBXNAVSVIN->data.valid = extractSignedChar(msg, 36);
-        packetUBXNAVSVIN->data.active = extractSignedChar(msg, 37);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVSVIN->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVSVIN->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVSVIN->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVSVIN->callbackData->version, &packetUBXNAVSVIN->data.version, sizeof(UBX_NAV_SVIN_data_t));
-          packetUBXNAVSVIN->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVSVIN->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-#ifndef SFE_UBLOX_DISABLE_RAWX_SFRBX_PMP_QZSS_SAT
-    else if (msg->id == UBX_NAV_SAT) // Note: length is variable
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVSAT != nullptr)
-      {
-        packetUBXNAVSAT->data.header.iTOW = extractLong(msg, 0);
-        packetUBXNAVSAT->data.header.version = extractByte(msg, 4);
-        packetUBXNAVSAT->data.header.numSvs = extractByte(msg, 5);
-
-        // The NAV SAT message could contain data for 255 SVs max. (numSvs is uint8_t. UBX_NAV_SAT_MAX_BLOCKS is 255)
-        for (uint16_t i = 0; (i < UBX_NAV_SAT_MAX_BLOCKS) && (i < ((uint16_t)packetUBXNAVSAT->data.header.numSvs)) && ((i * 12) < (msg->len - 8)); i++)
-        {
-          uint16_t offset = (i * 12) + 8;
-          packetUBXNAVSAT->data.blocks[i].gnssId = extractByte(msg, offset + 0);
-          packetUBXNAVSAT->data.blocks[i].svId = extractByte(msg, offset + 1);
-          packetUBXNAVSAT->data.blocks[i].cno = extractByte(msg, offset + 2);
-          packetUBXNAVSAT->data.blocks[i].elev = extractSignedChar(msg, offset + 3);
-          packetUBXNAVSAT->data.blocks[i].azim = extractSignedInt(msg, offset + 4);
-          packetUBXNAVSAT->data.blocks[i].prRes = extractSignedInt(msg, offset + 6);
-          packetUBXNAVSAT->data.blocks[i].flags.all = extractLong(msg, offset + 8);
-        }
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVSAT->moduleQueried = true;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVSAT->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVSAT->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVSAT->callbackData->header.iTOW, &packetUBXNAVSAT->data.header.iTOW, sizeof(UBX_NAV_SAT_data_t));
-          packetUBXNAVSAT->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVSAT->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_SIG) // Note: length is variable
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVSIG != nullptr)
-      {
-        packetUBXNAVSIG->data.header.iTOW = extractLong(msg, 0);
-        packetUBXNAVSIG->data.header.version = extractByte(msg, 4);
-        packetUBXNAVSIG->data.header.numSigs = extractByte(msg, 5);
-
-        // The NAV SIG message could potentially contain data for 255 signals. (numSigs is uint8_t. UBX_NAV_SIG_MAX_BLOCKS is 92)
-        for (uint16_t i = 0; (i < UBX_NAV_SIG_MAX_BLOCKS) && (i < ((uint16_t)packetUBXNAVSIG->data.header.numSigs)) && ((i * 16) < (msg->len - 8)); i++)
-        {
-          uint16_t offset = (i * 16) + 8;
-          packetUBXNAVSIG->data.blocks[i].gnssId = extractByte(msg, offset + 0);
-          packetUBXNAVSIG->data.blocks[i].svId = extractByte(msg, offset + 1);
-          packetUBXNAVSIG->data.blocks[i].sigId = extractByte(msg, offset + 2);
-          packetUBXNAVSIG->data.blocks[i].freqId = extractByte(msg, offset + 3);
-          packetUBXNAVSIG->data.blocks[i].prRes = extractSignedInt(msg, offset + 4);
-          packetUBXNAVSIG->data.blocks[i].cno = extractByte(msg, offset + 6);
-          packetUBXNAVSIG->data.blocks[i].qualityInd = extractByte(msg, offset + 7);
-          packetUBXNAVSIG->data.blocks[i].corrSource = extractByte(msg, offset + 8);
-          packetUBXNAVSIG->data.blocks[i].ionoModel = extractByte(msg, offset + 9);
-          packetUBXNAVSIG->data.blocks[i].sigFlags.all = extractInt(msg, offset + 10);
-        }
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVSIG->moduleQueried = true;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVSIG->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVSIG->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVSIG->callbackData->header.iTOW, &packetUBXNAVSIG->data.header.iTOW, sizeof(UBX_NAV_SIG_data_t));
-          packetUBXNAVSIG->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVSIG->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-#endif
-    else if (msg->id == UBX_NAV_RELPOSNED && ((msg->len == UBX_NAV_RELPOSNED_LEN) || (msg->len == UBX_NAV_RELPOSNED_LEN_F9)))
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVRELPOSNED != nullptr)
-      {
-        // Note:
-        //   RELPOSNED on the M8 is only 40 bytes long
-        //   RELPOSNED on the F9 is 64 bytes long and contains much more information
-
-        packetUBXNAVRELPOSNED->data.version = extractByte(msg, 0);
-        packetUBXNAVRELPOSNED->data.refStationId = extractInt(msg, 2);
-        packetUBXNAVRELPOSNED->data.iTOW = extractLong(msg, 4);
-        packetUBXNAVRELPOSNED->data.relPosN = extractSignedLong(msg, 8);
-        packetUBXNAVRELPOSNED->data.relPosE = extractSignedLong(msg, 12);
-        packetUBXNAVRELPOSNED->data.relPosD = extractSignedLong(msg, 16);
-
-        if (msg->len == UBX_NAV_RELPOSNED_LEN)
-        {
-          // The M8 version does not contain relPosLength or relPosHeading
-          packetUBXNAVRELPOSNED->data.relPosLength = 0;
-          packetUBXNAVRELPOSNED->data.relPosHeading = 0;
-          packetUBXNAVRELPOSNED->data.relPosHPN = extractSignedChar(msg, 20);
-          packetUBXNAVRELPOSNED->data.relPosHPE = extractSignedChar(msg, 21);
-          packetUBXNAVRELPOSNED->data.relPosHPD = extractSignedChar(msg, 22);
-          packetUBXNAVRELPOSNED->data.relPosHPLength = 0; // The M8 version does not contain relPosHPLength
-          packetUBXNAVRELPOSNED->data.accN = extractLong(msg, 24);
-          packetUBXNAVRELPOSNED->data.accE = extractLong(msg, 28);
-          packetUBXNAVRELPOSNED->data.accD = extractLong(msg, 32);
-          // The M8 version does not contain accLength or accHeading
-          packetUBXNAVRELPOSNED->data.accLength = 0;
-          packetUBXNAVRELPOSNED->data.accHeading = 0;
-          packetUBXNAVRELPOSNED->data.flags.all = extractLong(msg, 36);
-        }
-        else
-        {
-          packetUBXNAVRELPOSNED->data.relPosLength = extractSignedLong(msg, 20);
-          packetUBXNAVRELPOSNED->data.relPosHeading = extractSignedLong(msg, 24);
-          packetUBXNAVRELPOSNED->data.relPosHPN = extractSignedChar(msg, 32);
-          packetUBXNAVRELPOSNED->data.relPosHPE = extractSignedChar(msg, 33);
-          packetUBXNAVRELPOSNED->data.relPosHPD = extractSignedChar(msg, 34);
-          packetUBXNAVRELPOSNED->data.relPosHPLength = extractSignedChar(msg, 35);
-          packetUBXNAVRELPOSNED->data.accN = extractLong(msg, 36);
-          packetUBXNAVRELPOSNED->data.accE = extractLong(msg, 40);
-          packetUBXNAVRELPOSNED->data.accD = extractLong(msg, 44);
-          packetUBXNAVRELPOSNED->data.accLength = extractLong(msg, 48);
-          packetUBXNAVRELPOSNED->data.accHeading = extractLong(msg, 52);
-          packetUBXNAVRELPOSNED->data.flags.all = extractLong(msg, 60);
-        }
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVRELPOSNED->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVRELPOSNED->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVRELPOSNED->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVRELPOSNED->callbackData->version, &packetUBXNAVRELPOSNED->data.version, sizeof(UBX_NAV_RELPOSNED_data_t));
-          packetUBXNAVRELPOSNED->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVRELPOSNED->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_AOPSTATUS && msg->len == UBX_NAV_AOPSTATUS_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVAOPSTATUS != nullptr)
-      {
-        packetUBXNAVAOPSTATUS->data.iTOW = extractLong(msg, 0);
-        packetUBXNAVAOPSTATUS->data.aopCfg.all = extractByte(msg, 4);
-        packetUBXNAVAOPSTATUS->data.status = extractByte(msg, 5);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVAOPSTATUS->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVAOPSTATUS->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVAOPSTATUS->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVAOPSTATUS->callbackData->iTOW, &packetUBXNAVAOPSTATUS->data.iTOW, sizeof(UBX_NAV_AOPSTATUS_data_t));
-          packetUBXNAVAOPSTATUS->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVAOPSTATUS->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_EOE && msg->len == UBX_NAV_EOE_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXNAVEOE != nullptr)
-      {
-        packetUBXNAVEOE->data.iTOW = extractLong(msg, 0);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVEOE->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVEOE->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVEOE->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVEOE->callbackData->iTOW, &packetUBXNAVEOE->data.iTOW, sizeof(UBX_NAV_EOE_data_t));
-          packetUBXNAVEOE->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVEOE->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_NAV_DAHEADING && msg->len <= UBX_NAV_DAHEADING_MAX_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      // Version 0x01 is 64 bytes and uses cm + 0.1mm
-      // Version 0x02 is 60 bytes and uses mm
-      if (packetUBXNAVDAHEADING != nullptr)
-      {
-        packetUBXNAVDAHEADING->data.version = extractByte(msg, 0);
-        if (packetUBXNAVDAHEADING->data.version == 0x02)
-        {
-          packetUBXNAVDAHEADING->data.iTOW = extractLong(msg, 4);
-          packetUBXNAVDAHEADING->data.relPosN = extractSignedLong(msg, 8);
-          packetUBXNAVDAHEADING->data.relPosE = extractSignedLong(msg, 12);
-          packetUBXNAVDAHEADING->data.relPosD = extractSignedLong(msg, 16);
-          packetUBXNAVDAHEADING->data.relPosLength = extractSignedLong(msg, 20);
-          packetUBXNAVDAHEADING->data.relPosHeading = extractSignedLong(msg, 24);
-          packetUBXNAVDAHEADING->data.accN = extractLong(msg, 32);
-          packetUBXNAVDAHEADING->data.accE = extractLong(msg, 36);
-          packetUBXNAVDAHEADING->data.accD = extractLong(msg, 40);
-          packetUBXNAVDAHEADING->data.accLength = extractLong(msg, 44);
-          packetUBXNAVDAHEADING->data.accHeading = extractLong(msg, 48);
-          packetUBXNAVDAHEADING->data.flags.all = extractLong(msg, 56);
-        }
-        else
-        {
-          // Assume version 0x01
-          packetUBXNAVDAHEADING->data.iTOW = extractLong(msg, 4);
-          packetUBXNAVDAHEADING->data.relPosN = extractSignedLong(msg, 8) * 10; // Convert cm to mm
-          packetUBXNAVDAHEADING->data.relPosN += extractSignedChar(msg, 32) / 10; // Convert 0.1mm to mm
-          packetUBXNAVDAHEADING->data.relPosE = extractSignedLong(msg, 12) * 10;
-          packetUBXNAVDAHEADING->data.relPosE += extractSignedChar(msg, 33) / 10;
-          packetUBXNAVDAHEADING->data.relPosD = extractSignedLong(msg, 16) * 10;
-          packetUBXNAVDAHEADING->data.relPosD += extractSignedChar(msg, 34) / 10;
-          packetUBXNAVDAHEADING->data.relPosLength = extractSignedLong(msg, 20) * 10;
-          packetUBXNAVDAHEADING->data.relPosLength += extractSignedChar(msg, 35) / 10;
-          packetUBXNAVDAHEADING->data.relPosHeading = extractSignedLong(msg, 24);
-          packetUBXNAVDAHEADING->data.accN = extractLong(msg, 36) / 10; // Convert 0.1mm to mm
-          packetUBXNAVDAHEADING->data.accE = extractLong(msg, 40) / 10;
-          packetUBXNAVDAHEADING->data.accD = extractLong(msg, 44) / 10;
-          packetUBXNAVDAHEADING->data.accLength = extractLong(msg, 48) / 10;
-          packetUBXNAVDAHEADING->data.accHeading = extractLong(msg, 52);
-          packetUBXNAVDAHEADING->data.flags.all = extractLong(msg, 60);
-          bool relPosHeadingValid = packetUBXNAVDAHEADING->data.flags.all & 0x00000100;
-          packetUBXNAVDAHEADING->data.flags.all &= 0x0000001F;
-          if (relPosHeadingValid)
-            packetUBXNAVDAHEADING->data.flags.all |= 0x00000040;
-        }
-
-        // Mark all datums as fresh (not read before)
-        packetUBXNAVDAHEADING->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXNAVDAHEADING->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXNAVDAHEADING->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXNAVDAHEADING->callbackData->version, &packetUBXNAVDAHEADING->data.version, sizeof(UBX_NAV_DAHEADING_data_t));
-          packetUBXNAVDAHEADING->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXNAVDAHEADING->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    break;
-#ifndef SFE_UBLOX_DISABLE_RAWX_SFRBX_PMP_QZSS_SAT
-  case UBX_CLASS_RXM:
-    if (msg->id == UBX_RXM_PMP)
-    // Note: length is variable with version 0x01
-    // Note: the field positions depend on the version
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it.
-      // By default, new PMP data will always overwrite 'old' data (data which is valid but which has not yet been read by the callback).
-      // To prevent this, uncomment the line two lines below
-      if ((packetUBXRXMPMP != nullptr) && (packetUBXRXMPMP->callbackData != nullptr)
-          //&& (packetUBXRXMPMP->automaticFlags.flags.bits.callbackCopyValid == false) // <=== Uncomment this line to prevent new data from overwriting 'old'
-      )
-      {
-        packetUBXRXMPMP->callbackData->version = extractByte(msg, 0);
-        packetUBXRXMPMP->callbackData->numBytesUserData = extractInt(msg, 2);
-        packetUBXRXMPMP->callbackData->timeTag = extractLong(msg, 4);
-        packetUBXRXMPMP->callbackData->uniqueWord[0] = extractLong(msg, 8);
-        packetUBXRXMPMP->callbackData->uniqueWord[1] = extractLong(msg, 12);
-        packetUBXRXMPMP->callbackData->serviceIdentifier = extractInt(msg, 16);
-        packetUBXRXMPMP->callbackData->spare = extractByte(msg, 18);
-        packetUBXRXMPMP->callbackData->uniqueWordBitErrors = extractByte(msg, 19);
-
-        if (packetUBXRXMPMP->callbackData->version == 0x00)
-        {
-          packetUBXRXMPMP->callbackData->fecBits = extractInt(msg, 524);
-          packetUBXRXMPMP->callbackData->ebno = extractByte(msg, 526);
-        }
-        else // if (packetUBXRXMPMP->data.version == 0x01)
-        {
-          packetUBXRXMPMP->callbackData->fecBits = extractInt(msg, 20);
-          packetUBXRXMPMP->callbackData->ebno = extractByte(msg, 22);
-        }
-
-        uint16_t userDataStart = (packetUBXRXMPMP->callbackData->version == 0x00) ? 20 : 24;
-        uint16_t userDataLength = (packetUBXRXMPMP->callbackData->version == 0x00) ? 504 : (packetUBXRXMPMP->callbackData->numBytesUserData);
-        for (uint16_t i = 0; (i < userDataLength) && (i < 504); i++)
-        {
-          packetUBXRXMPMP->callbackData->userData[i] = extractByte(msg, i + userDataStart);
-        }
-
-        packetUBXRXMPMP->automaticFlags.flags.bits.callbackCopyValid = true; // Mark the data as valid
-      }
-
-      // Full PMP message, including Class, ID and checksum
-      // By default, new PMP data will always overwrite 'old' data (data which is valid but which has not yet been read by the callback).
-      // To prevent this, uncomment the line two lines below
-      if ((packetUBXRXMPMPmessage != nullptr) && (packetUBXRXMPMPmessage->callbackData != nullptr)
-          //&& (packetUBXRXMPMPmessage->automaticFlags.flags.bits.callbackCopyValid == false) // <=== Uncomment this line to prevent new data from overwriting 'old'
-      )
-      {
-        packetUBXRXMPMPmessage->callbackData->sync1 = UBX_SYNCH_1;
-        packetUBXRXMPMPmessage->callbackData->sync2 = UBX_SYNCH_2;
-        packetUBXRXMPMPmessage->callbackData->cls = UBX_CLASS_RXM;
-        packetUBXRXMPMPmessage->callbackData->ID = UBX_RXM_PMP;
-        packetUBXRXMPMPmessage->callbackData->lengthLSB = msg->len & 0xFF;
-        packetUBXRXMPMPmessage->callbackData->lengthMSB = msg->len >> 8;
-
-        memcpy(packetUBXRXMPMPmessage->callbackData->payload, msg->payload, msg->len);
-
-        packetUBXRXMPMPmessage->callbackData->checksumA = msg->checksumA;
-        packetUBXRXMPMPmessage->callbackData->checksumB = msg->checksumB;
-
-        packetUBXRXMPMPmessage->automaticFlags.flags.bits.callbackCopyValid = true; // Mark the data as valid
-      }
-    }
-    else if (msg->id == UBX_RXM_QZSSL6)
-    // Note: length is variable with version 0x01
-    // Note: the field positions depend on the version
-    {
-      // Full QZSSL6 message, including Class, ID and checksum
-      for (int ch = 0; ch < UBX_RXM_QZSSL6_NUM_CHANNELS; ch++)
-      {
-        if (0 == (packetUBXRXMQZSSL6message->automaticFlags.flags.bits.callbackCopyValid & (1 << ch)))
-        {
-
-          packetUBXRXMQZSSL6message->callbackData[ch].sync1 = UBX_SYNCH_1;
-          packetUBXRXMQZSSL6message->callbackData[ch].sync2 = UBX_SYNCH_2;
-          packetUBXRXMQZSSL6message->callbackData[ch].cls = UBX_CLASS_RXM;
-          packetUBXRXMQZSSL6message->callbackData[ch].ID = UBX_RXM_QZSSL6;
-          packetUBXRXMQZSSL6message->callbackData[ch].lengthLSB = msg->len & 0xFF;
-          packetUBXRXMQZSSL6message->callbackData[ch].lengthMSB = msg->len >> 8;
-
-          memcpy(packetUBXRXMQZSSL6message->callbackData[ch].payload, msg->payload, msg->len);
-
-          packetUBXRXMQZSSL6message->callbackData[ch].checksumA = msg->checksumA;
-          packetUBXRXMQZSSL6message->callbackData[ch].checksumB = msg->checksumB;
-
-          packetUBXRXMQZSSL6message->automaticFlags.flags.bits.callbackCopyValid |= (1 << ch);
-          break; // abort when added
-        }
-      }
-    }
-    else if (msg->id == UBX_RXM_COR)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if ((packetUBXRXMCOR != nullptr) && (packetUBXRXMCOR->callbackData != nullptr)
-          //&& (packetUBXRXMCOR->automaticFlags.flags.bits.callbackCopyValid == false) // <=== Uncomment this line to prevent new data from overwriting 'old'
-      )
-      {
-        packetUBXRXMCOR->callbackData->version = extractByte(msg, 0);
-        packetUBXRXMCOR->callbackData->ebno = extractByte(msg, 1);
-        packetUBXRXMCOR->callbackData->statusInfo.all = extractLong(msg, 4);
-        packetUBXRXMCOR->callbackData->msgType = extractInt(msg, 8);
-        packetUBXRXMCOR->callbackData->msgSubType = extractInt(msg, 10);
-
-        packetUBXRXMCOR->automaticFlags.flags.bits.callbackCopyValid = true; // Mark the data as valid
-      }
-    }
-    else if (msg->id == UBX_RXM_SFRBX)
-    // Note: length is variable
-    // Note: on protocol version 17: numWords is (0..16)
-    //       on protocol version 18+: numWords is (0..10)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXRXMSFRBX != nullptr)
-      {
-        packetUBXRXMSFRBX->data.gnssId = extractByte(msg, 0);
-        packetUBXRXMSFRBX->data.svId = extractByte(msg, 1);
-        packetUBXRXMSFRBX->data.freqId = extractByte(msg, 3);
-        packetUBXRXMSFRBX->data.numWords = extractByte(msg, 4);
-        packetUBXRXMSFRBX->data.chn = extractByte(msg, 5);
-        packetUBXRXMSFRBX->data.version = extractByte(msg, 6);
-
-        for (uint8_t i = 0; (i < UBX_RXM_SFRBX_MAX_WORDS) && (i < packetUBXRXMSFRBX->data.numWords) && ((i * 4) < (msg->len - 8)); i++)
-        {
-          packetUBXRXMSFRBX->data.dwrd[i] = extractLong(msg, 8 + (i * 4));
-        }
-
-        // Mark all datums as fresh (not read before)
-        packetUBXRXMSFRBX->moduleQueried = true;
-
-        // Check if we need to copy the data for the callback
-        if (packetUBXRXMSFRBX->callbackData != nullptr) // If RAM has been allocated for the copies of the data
-        {
-          for (uint32_t i = 0; i < UBX_RXM_SFRBX_CALLBACK_BUFFERS; i++) // Check all available buffers
+          packetUBXNAVPOSECEF->data.iTOW = extractLong(msg, 0);
+          packetUBXNAVPOSECEF->data.ecefX = extractSignedLong(msg, 4);
+          packetUBXNAVPOSECEF->data.ecefY = extractSignedLong(msg, 8);
+          packetUBXNAVPOSECEF->data.ecefZ = extractSignedLong(msg, 12);
+          packetUBXNAVPOSECEF->data.pAcc = extractLong(msg, 16);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVPOSECEF->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVPOSECEF->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVPOSECEF->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
           {
-            if ((packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackCopyValid & (1 << i)) == 0) // AND the buffer is empty
+            memcpy(&packetUBXNAVPOSECEF->callbackData->iTOW, &packetUBXNAVPOSECEF->data.iTOW, sizeof(UBX_NAV_POSECEF_data_t));
+            packetUBXNAVPOSECEF->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVPOSECEF->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_STATUS && msg->len == UBX_NAV_STATUS_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVSTATUS != nullptr)
+        {
+          packetUBXNAVSTATUS->data.iTOW = extractLong(msg, 0);
+          packetUBXNAVSTATUS->data.gpsFix = extractByte(msg, 4);
+          packetUBXNAVSTATUS->data.flags.all = extractByte(msg, 5);
+          packetUBXNAVSTATUS->data.fixStat.all = extractByte(msg, 6);
+          packetUBXNAVSTATUS->data.flags2.all = extractByte(msg, 7);
+          packetUBXNAVSTATUS->data.ttff = extractLong(msg, 8);
+          packetUBXNAVSTATUS->data.msss = extractLong(msg, 12);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVSTATUS->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVSTATUS->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVSTATUS->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVSTATUS->callbackData->iTOW, &packetUBXNAVSTATUS->data.iTOW, sizeof(UBX_NAV_STATUS_data_t));
+            packetUBXNAVSTATUS->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVSTATUS->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_DOP && msg->len == UBX_NAV_DOP_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVDOP != nullptr)
+        {
+          packetUBXNAVDOP->data.iTOW = extractLong(msg, 0);
+          packetUBXNAVDOP->data.gDOP = extractInt(msg, 4);
+          packetUBXNAVDOP->data.pDOP = extractInt(msg, 6);
+          packetUBXNAVDOP->data.tDOP = extractInt(msg, 8);
+          packetUBXNAVDOP->data.vDOP = extractInt(msg, 10);
+          packetUBXNAVDOP->data.hDOP = extractInt(msg, 12);
+          packetUBXNAVDOP->data.nDOP = extractInt(msg, 14);
+          packetUBXNAVDOP->data.eDOP = extractInt(msg, 16);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVDOP->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVDOP->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVDOP->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVDOP->callbackData->iTOW, &packetUBXNAVDOP->data.iTOW, sizeof(UBX_NAV_DOP_data_t));
+            packetUBXNAVDOP->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVDOP->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_ATT && msg->len == UBX_NAV_ATT_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVATT != nullptr)
+        {
+          packetUBXNAVATT->data.iTOW = extractLong(msg, 0);
+          packetUBXNAVATT->data.version = extractByte(msg, 4);
+          packetUBXNAVATT->data.roll = extractSignedLong(msg, 8);
+          packetUBXNAVATT->data.pitch = extractSignedLong(msg, 12);
+          packetUBXNAVATT->data.heading = extractSignedLong(msg, 16);
+          packetUBXNAVATT->data.accRoll = extractLong(msg, 20);
+          packetUBXNAVATT->data.accPitch = extractLong(msg, 24);
+          packetUBXNAVATT->data.accHeading = extractLong(msg, 28);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVATT->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVATT->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVATT->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVATT->callbackData->iTOW, &packetUBXNAVATT->data.iTOW, sizeof(UBX_NAV_ATT_data_t));
+            packetUBXNAVATT->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVATT->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_PVT && msg->len == UBX_NAV_PVT_LEN)
+      {
+        // v4 scaffolding: mirror the payload into the new generic per-message registry, regardless of
+        // whether the old packetUBXNAVPVT struct below has been allocated. The new registry allocates
+        // its own storage lazily (via ubxMessages.initStorage(), called by getUBX()/getUBXfield()) and
+        // is not tied to the old struct's lifecycle. See AGENTS.md "Reference Scaffolding" ("the largest
+        // remaining piece of design work") - this is wired up for NAV-PVT only, as the proof of concept.
+        ubxMessages.storePayload(UBX_CLASS_NAV, UBX_NAV_PVT, msg->payload, UBX_NAV_PVT_LEN);
+
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVPVT != nullptr)
+        {
+          packetUBXNAVPVT->data.iTOW = extractLong(msg, 0);
+          packetUBXNAVPVT->data.year = extractInt(msg, 4);
+          packetUBXNAVPVT->data.month = extractByte(msg, 6);
+          packetUBXNAVPVT->data.day = extractByte(msg, 7);
+          packetUBXNAVPVT->data.hour = extractByte(msg, 8);
+          packetUBXNAVPVT->data.min = extractByte(msg, 9);
+          packetUBXNAVPVT->data.sec = extractByte(msg, 10);
+          packetUBXNAVPVT->data.valid.all = extractByte(msg, 11);
+          packetUBXNAVPVT->data.tAcc = extractLong(msg, 12);
+          packetUBXNAVPVT->data.nano = extractSignedLong(msg, 16); // Includes milliseconds
+          packetUBXNAVPVT->data.fixType = extractByte(msg, 20);
+          packetUBXNAVPVT->data.flags.all = extractByte(msg, 21);
+          packetUBXNAVPVT->data.flags2.all = extractByte(msg, 22);
+          packetUBXNAVPVT->data.numSV = extractByte(msg, 23);
+          packetUBXNAVPVT->data.lon = extractSignedLong(msg, 24);
+          packetUBXNAVPVT->data.lat = extractSignedLong(msg, 28);
+          packetUBXNAVPVT->data.height = extractSignedLong(msg, 32);
+          packetUBXNAVPVT->data.hMSL = extractSignedLong(msg, 36);
+          packetUBXNAVPVT->data.hAcc = extractLong(msg, 40);
+          packetUBXNAVPVT->data.vAcc = extractLong(msg, 44);
+          packetUBXNAVPVT->data.velN = extractSignedLong(msg, 48);
+          packetUBXNAVPVT->data.velE = extractSignedLong(msg, 52);
+          packetUBXNAVPVT->data.velD = extractSignedLong(msg, 56);
+          packetUBXNAVPVT->data.gSpeed = extractSignedLong(msg, 60);
+          packetUBXNAVPVT->data.headMot = extractSignedLong(msg, 64);
+          packetUBXNAVPVT->data.sAcc = extractLong(msg, 68);
+          packetUBXNAVPVT->data.headAcc = extractLong(msg, 72);
+          packetUBXNAVPVT->data.pDOP = extractInt(msg, 76);
+          packetUBXNAVPVT->data.flags3.all = extractInt(msg, 78);
+          packetUBXNAVPVT->data.headVeh = extractSignedLong(msg, 84);
+          packetUBXNAVPVT->data.magDec = extractSignedInt(msg, 88);
+          packetUBXNAVPVT->data.magAcc = extractInt(msg, 90);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVPVT->moduleQueried.moduleQueried1.all = 0xFFFFFFFF;
+          packetUBXNAVPVT->moduleQueried.moduleQueried2.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVPVT->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVPVT->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVPVT->callbackData->iTOW, &packetUBXNAVPVT->data.iTOW, sizeof(UBX_NAV_PVT_data_t));
+            packetUBXNAVPVT->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVPVT->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_ODO && msg->len == UBX_NAV_ODO_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVODO != nullptr)
+        {
+          packetUBXNAVODO->data.version = extractByte(msg, 0);
+          packetUBXNAVODO->data.iTOW = extractLong(msg, 4);
+          packetUBXNAVODO->data.distance = extractLong(msg, 8);
+          packetUBXNAVODO->data.totalDistance = extractLong(msg, 12);
+          packetUBXNAVODO->data.distanceStd = extractLong(msg, 16);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVODO->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVODO->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVODO->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVODO->callbackData->version, &packetUBXNAVODO->data.version, sizeof(UBX_NAV_ODO_data_t));
+            packetUBXNAVODO->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVODO->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_VELECEF && msg->len == UBX_NAV_VELECEF_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVVELECEF != nullptr)
+        {
+          packetUBXNAVVELECEF->data.iTOW = extractLong(msg, 0);
+          packetUBXNAVVELECEF->data.ecefVX = extractSignedLong(msg, 4);
+          packetUBXNAVVELECEF->data.ecefVY = extractSignedLong(msg, 8);
+          packetUBXNAVVELECEF->data.ecefVZ = extractSignedLong(msg, 12);
+          packetUBXNAVVELECEF->data.sAcc = extractLong(msg, 16);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVVELECEF->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVVELECEF->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVVELECEF->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVVELECEF->callbackData->iTOW, &packetUBXNAVVELECEF->data.iTOW, sizeof(UBX_NAV_VELECEF_data_t));
+            packetUBXNAVVELECEF->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVVELECEF->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_VELNED && msg->len == UBX_NAV_VELNED_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVVELNED != nullptr)
+        {
+          packetUBXNAVVELNED->data.iTOW = extractLong(msg, 0);
+          packetUBXNAVVELNED->data.velN = extractSignedLong(msg, 4);
+          packetUBXNAVVELNED->data.velE = extractSignedLong(msg, 8);
+          packetUBXNAVVELNED->data.velD = extractSignedLong(msg, 12);
+          packetUBXNAVVELNED->data.speed = extractLong(msg, 16);
+          packetUBXNAVVELNED->data.gSpeed = extractLong(msg, 20);
+          packetUBXNAVVELNED->data.heading = extractSignedLong(msg, 24);
+          packetUBXNAVVELNED->data.sAcc = extractLong(msg, 28);
+          packetUBXNAVVELNED->data.cAcc = extractLong(msg, 32);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVVELNED->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVVELNED->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVVELNED->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVVELNED->callbackData->iTOW, &packetUBXNAVVELNED->data.iTOW, sizeof(UBX_NAV_VELNED_data_t));
+            packetUBXNAVVELNED->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVVELNED->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_HPPOSECEF && msg->len == UBX_NAV_HPPOSECEF_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVHPPOSECEF != nullptr)
+        {
+          packetUBXNAVHPPOSECEF->data.version = extractByte(msg, 0);
+          packetUBXNAVHPPOSECEF->data.iTOW = extractLong(msg, 4);
+          packetUBXNAVHPPOSECEF->data.ecefX = extractSignedLong(msg, 8);
+          packetUBXNAVHPPOSECEF->data.ecefY = extractSignedLong(msg, 12);
+          packetUBXNAVHPPOSECEF->data.ecefZ = extractSignedLong(msg, 16);
+          packetUBXNAVHPPOSECEF->data.ecefXHp = extractSignedChar(msg, 20);
+          packetUBXNAVHPPOSECEF->data.ecefYHp = extractSignedChar(msg, 21);
+          packetUBXNAVHPPOSECEF->data.ecefZHp = extractSignedChar(msg, 22);
+          packetUBXNAVHPPOSECEF->data.flags.all = extractByte(msg, 23);
+          packetUBXNAVHPPOSECEF->data.pAcc = extractLong(msg, 24);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVHPPOSECEF->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVHPPOSECEF->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVHPPOSECEF->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVHPPOSECEF->callbackData->version, &packetUBXNAVHPPOSECEF->data.version, sizeof(UBX_NAV_HPPOSECEF_data_t));
+            packetUBXNAVHPPOSECEF->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVHPPOSECEF->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_HPPOSLLH && msg->len == UBX_NAV_HPPOSLLH_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVHPPOSLLH != nullptr)
+        {
+          packetUBXNAVHPPOSLLH->data.version = extractByte(msg, 0);
+          packetUBXNAVHPPOSLLH->data.flags.all = extractByte(msg, 3);
+          packetUBXNAVHPPOSLLH->data.iTOW = extractLong(msg, 4);
+          packetUBXNAVHPPOSLLH->data.lon = extractSignedLong(msg, 8);
+          packetUBXNAVHPPOSLLH->data.lat = extractSignedLong(msg, 12);
+          packetUBXNAVHPPOSLLH->data.height = extractSignedLong(msg, 16);
+          packetUBXNAVHPPOSLLH->data.hMSL = extractSignedLong(msg, 20);
+          packetUBXNAVHPPOSLLH->data.lonHp = extractSignedChar(msg, 24);
+          packetUBXNAVHPPOSLLH->data.latHp = extractSignedChar(msg, 25);
+          packetUBXNAVHPPOSLLH->data.heightHp = extractSignedChar(msg, 26);
+          packetUBXNAVHPPOSLLH->data.hMSLHp = extractSignedChar(msg, 27);
+          packetUBXNAVHPPOSLLH->data.hAcc = extractLong(msg, 28);
+          packetUBXNAVHPPOSLLH->data.vAcc = extractLong(msg, 32);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVHPPOSLLH->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVHPPOSLLH->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVHPPOSLLH->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVHPPOSLLH->callbackData->version, &packetUBXNAVHPPOSLLH->data.version, sizeof(UBX_NAV_HPPOSLLH_data_t));
+            packetUBXNAVHPPOSLLH->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVHPPOSLLH->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_PVAT && msg->len == UBX_NAV_PVAT_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVPVAT != nullptr)
+        {
+          packetUBXNAVPVAT->data.iTOW = extractLong(msg, 0);
+          packetUBXNAVPVAT->data.version = extractByte(msg, 4);
+          packetUBXNAVPVAT->data.valid.all = extractByte(msg, 5);
+          packetUBXNAVPVAT->data.year = extractInt(msg, 6);
+          packetUBXNAVPVAT->data.month = extractByte(msg, 8);
+          packetUBXNAVPVAT->data.day = extractByte(msg, 9);
+          packetUBXNAVPVAT->data.hour = extractByte(msg, 10);
+          packetUBXNAVPVAT->data.min = extractByte(msg, 11);
+          packetUBXNAVPVAT->data.sec = extractByte(msg, 12);
+          packetUBXNAVPVAT->data.tAcc = extractLong(msg, 16);
+          packetUBXNAVPVAT->data.nano = extractSignedLong(msg, 20); // Includes milliseconds
+          packetUBXNAVPVAT->data.fixType = extractByte(msg, 24);
+          packetUBXNAVPVAT->data.flags.all = extractByte(msg, 25);
+          packetUBXNAVPVAT->data.flags2.all = extractByte(msg, 26);
+          packetUBXNAVPVAT->data.numSV = extractByte(msg, 27);
+          packetUBXNAVPVAT->data.lon = extractSignedLong(msg, 28);
+          packetUBXNAVPVAT->data.lat = extractSignedLong(msg, 32);
+          packetUBXNAVPVAT->data.height = extractSignedLong(msg, 36);
+          packetUBXNAVPVAT->data.hMSL = extractSignedLong(msg, 40);
+          packetUBXNAVPVAT->data.hAcc = extractLong(msg, 44);
+          packetUBXNAVPVAT->data.vAcc = extractLong(msg, 48);
+          packetUBXNAVPVAT->data.velN = extractSignedLong(msg, 52);
+          packetUBXNAVPVAT->data.velE = extractSignedLong(msg, 56);
+          packetUBXNAVPVAT->data.velD = extractSignedLong(msg, 60);
+          packetUBXNAVPVAT->data.gSpeed = extractSignedLong(msg, 64);
+          packetUBXNAVPVAT->data.sAcc = extractLong(msg, 68);
+          packetUBXNAVPVAT->data.vehRoll = extractSignedLong(msg, 72);
+          packetUBXNAVPVAT->data.vehPitch = extractSignedLong(msg, 76);
+          packetUBXNAVPVAT->data.vehHeading = extractSignedLong(msg, 80);
+          packetUBXNAVPVAT->data.motHeading = extractSignedLong(msg, 84);
+          packetUBXNAVPVAT->data.accRoll = extractInt(msg, 88);
+          packetUBXNAVPVAT->data.accPitch = extractInt(msg, 90);
+          packetUBXNAVPVAT->data.accHeading = extractInt(msg, 92);
+          packetUBXNAVPVAT->data.magDec = extractSignedInt(msg, 94);
+          packetUBXNAVPVAT->data.magAcc = extractInt(msg, 96);
+          packetUBXNAVPVAT->data.errEllipseOrient = extractInt(msg, 98);
+          packetUBXNAVPVAT->data.errEllipseMajor = extractLong(msg, 100);
+          packetUBXNAVPVAT->data.errEllipseMinor = extractLong(msg, 104);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVPVAT->moduleQueried.moduleQueried1.all = 0xFFFFFFFF;
+          packetUBXNAVPVAT->moduleQueried.moduleQueried2.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVPVAT->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVPVAT->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVPVAT->callbackData->iTOW, &packetUBXNAVPVAT->data.iTOW, sizeof(UBX_NAV_PVAT_data_t));
+            packetUBXNAVPVAT->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVPVAT->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_TIMEUTC && msg->len == UBX_NAV_TIMEUTC_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVTIMEUTC != nullptr)
+        {
+          packetUBXNAVTIMEUTC->data.iTOW = extractLong(msg, 0);
+          packetUBXNAVTIMEUTC->data.tAcc = extractLong(msg, 4);
+          packetUBXNAVTIMEUTC->data.nano = extractSignedLong(msg, 8);
+          packetUBXNAVTIMEUTC->data.year = extractInt(msg, 12);
+          packetUBXNAVTIMEUTC->data.month = extractByte(msg, 14);
+          packetUBXNAVTIMEUTC->data.day = extractByte(msg, 15);
+          packetUBXNAVTIMEUTC->data.hour = extractByte(msg, 16);
+          packetUBXNAVTIMEUTC->data.min = extractByte(msg, 17);
+          packetUBXNAVTIMEUTC->data.sec = extractByte(msg, 18);
+          packetUBXNAVTIMEUTC->data.valid.all = extractByte(msg, 19);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVTIMEUTC->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVTIMEUTC->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVTIMEUTC->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVTIMEUTC->callbackData->iTOW, &packetUBXNAVTIMEUTC->data.iTOW, sizeof(UBX_NAV_TIMEUTC_data_t));
+            packetUBXNAVTIMEUTC->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVTIMEUTC->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_CLOCK && msg->len == UBX_NAV_CLOCK_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVCLOCK != nullptr)
+        {
+          packetUBXNAVCLOCK->data.iTOW = extractLong(msg, 0);
+          packetUBXNAVCLOCK->data.clkB = extractSignedLong(msg, 4);
+          packetUBXNAVCLOCK->data.clkD = extractSignedLong(msg, 8);
+          packetUBXNAVCLOCK->data.tAcc = extractLong(msg, 12);
+          packetUBXNAVCLOCK->data.fAcc = extractLong(msg, 16);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVCLOCK->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVCLOCK->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVCLOCK->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVCLOCK->callbackData->iTOW, &packetUBXNAVCLOCK->data.iTOW, sizeof(UBX_NAV_CLOCK_data_t));
+            packetUBXNAVCLOCK->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVCLOCK->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_TIMELS && msg->len == UBX_NAV_TIMELS_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVTIMELS != nullptr)
+        {
+          packetUBXNAVTIMELS->data.iTOW = extractLong(msg, 0);
+          packetUBXNAVTIMELS->data.version = extractByte(msg, 4);
+          packetUBXNAVTIMELS->data.srcOfCurrLs = extractByte(msg, 8);
+          packetUBXNAVTIMELS->data.currLs = extractSignedChar(msg, 9);
+          packetUBXNAVTIMELS->data.srcOfLsChange = extractByte(msg, 10);
+          packetUBXNAVTIMELS->data.lsChange = extractSignedChar(msg, 11);
+          packetUBXNAVTIMELS->data.timeToLsEvent = extractSignedLong(msg, 12);
+          packetUBXNAVTIMELS->data.dateOfLsGpsWn = extractInt(msg, 16);
+          packetUBXNAVTIMELS->data.dateOfLsGpsDn = extractInt(msg, 18);
+          packetUBXNAVTIMELS->data.valid.all = extractSignedChar(msg, 23);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVTIMELS->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+        }
+      }
+      else if (msg->id == UBX_NAV_SVIN && msg->len == UBX_NAV_SVIN_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVSVIN != nullptr)
+        {
+          packetUBXNAVSVIN->data.version = extractByte(msg, 0);
+          packetUBXNAVSVIN->data.iTOW = extractLong(msg, 4);
+          packetUBXNAVSVIN->data.dur = extractLong(msg, 8);
+          packetUBXNAVSVIN->data.meanX = extractSignedLong(msg, 12);
+          packetUBXNAVSVIN->data.meanY = extractSignedLong(msg, 16);
+          packetUBXNAVSVIN->data.meanZ = extractSignedLong(msg, 20);
+          packetUBXNAVSVIN->data.meanXHP = extractSignedChar(msg, 24);
+          packetUBXNAVSVIN->data.meanYHP = extractSignedChar(msg, 25);
+          packetUBXNAVSVIN->data.meanZHP = extractSignedChar(msg, 26);
+          packetUBXNAVSVIN->data.meanAcc = extractLong(msg, 28);
+          packetUBXNAVSVIN->data.obs = extractLong(msg, 32);
+          packetUBXNAVSVIN->data.valid = extractSignedChar(msg, 36);
+          packetUBXNAVSVIN->data.active = extractSignedChar(msg, 37);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVSVIN->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVSVIN->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVSVIN->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVSVIN->callbackData->version, &packetUBXNAVSVIN->data.version, sizeof(UBX_NAV_SVIN_data_t));
+            packetUBXNAVSVIN->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVSVIN->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+  #ifndef SFE_UBLOX_DISABLE_RAWX_SFRBX_PMP_QZSS_SAT
+      else if (msg->id == UBX_NAV_SAT) // Note: length is variable
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVSAT != nullptr)
+        {
+          packetUBXNAVSAT->data.header.iTOW = extractLong(msg, 0);
+          packetUBXNAVSAT->data.header.version = extractByte(msg, 4);
+          packetUBXNAVSAT->data.header.numSvs = extractByte(msg, 5);
+
+          // The NAV SAT message could contain data for 255 SVs max. (numSvs is uint8_t. UBX_NAV_SAT_MAX_BLOCKS is 255)
+          for (uint16_t i = 0; (i < UBX_NAV_SAT_MAX_BLOCKS) && (i < ((uint16_t)packetUBXNAVSAT->data.header.numSvs)) && ((i * 12) < (msg->len - 8)); i++)
+          {
+            uint16_t offset = (i * 12) + 8;
+            packetUBXNAVSAT->data.blocks[i].gnssId = extractByte(msg, offset + 0);
+            packetUBXNAVSAT->data.blocks[i].svId = extractByte(msg, offset + 1);
+            packetUBXNAVSAT->data.blocks[i].cno = extractByte(msg, offset + 2);
+            packetUBXNAVSAT->data.blocks[i].elev = extractSignedChar(msg, offset + 3);
+            packetUBXNAVSAT->data.blocks[i].azim = extractSignedInt(msg, offset + 4);
+            packetUBXNAVSAT->data.blocks[i].prRes = extractSignedInt(msg, offset + 6);
+            packetUBXNAVSAT->data.blocks[i].flags.all = extractLong(msg, offset + 8);
+          }
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVSAT->moduleQueried = true;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVSAT->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVSAT->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVSAT->callbackData->header.iTOW, &packetUBXNAVSAT->data.header.iTOW, sizeof(UBX_NAV_SAT_data_t));
+            packetUBXNAVSAT->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVSAT->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_SIG) // Note: length is variable
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVSIG != nullptr)
+        {
+          packetUBXNAVSIG->data.header.iTOW = extractLong(msg, 0);
+          packetUBXNAVSIG->data.header.version = extractByte(msg, 4);
+          packetUBXNAVSIG->data.header.numSigs = extractByte(msg, 5);
+
+          // The NAV SIG message could potentially contain data for 255 signals. (numSigs is uint8_t. UBX_NAV_SIG_MAX_BLOCKS is 92)
+          for (uint16_t i = 0; (i < UBX_NAV_SIG_MAX_BLOCKS) && (i < ((uint16_t)packetUBXNAVSIG->data.header.numSigs)) && ((i * 16) < (msg->len - 8)); i++)
+          {
+            uint16_t offset = (i * 16) + 8;
+            packetUBXNAVSIG->data.blocks[i].gnssId = extractByte(msg, offset + 0);
+            packetUBXNAVSIG->data.blocks[i].svId = extractByte(msg, offset + 1);
+            packetUBXNAVSIG->data.blocks[i].sigId = extractByte(msg, offset + 2);
+            packetUBXNAVSIG->data.blocks[i].freqId = extractByte(msg, offset + 3);
+            packetUBXNAVSIG->data.blocks[i].prRes = extractSignedInt(msg, offset + 4);
+            packetUBXNAVSIG->data.blocks[i].cno = extractByte(msg, offset + 6);
+            packetUBXNAVSIG->data.blocks[i].qualityInd = extractByte(msg, offset + 7);
+            packetUBXNAVSIG->data.blocks[i].corrSource = extractByte(msg, offset + 8);
+            packetUBXNAVSIG->data.blocks[i].ionoModel = extractByte(msg, offset + 9);
+            packetUBXNAVSIG->data.blocks[i].sigFlags.all = extractInt(msg, offset + 10);
+          }
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVSIG->moduleQueried = true;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVSIG->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVSIG->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVSIG->callbackData->header.iTOW, &packetUBXNAVSIG->data.header.iTOW, sizeof(UBX_NAV_SIG_data_t));
+            packetUBXNAVSIG->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVSIG->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+  #endif
+      else if (msg->id == UBX_NAV_RELPOSNED && ((msg->len == UBX_NAV_RELPOSNED_LEN) || (msg->len == UBX_NAV_RELPOSNED_LEN_F9)))
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVRELPOSNED != nullptr)
+        {
+          // Note:
+          //   RELPOSNED on the M8 is only 40 bytes long
+          //   RELPOSNED on the F9 is 64 bytes long and contains much more information
+
+          packetUBXNAVRELPOSNED->data.version = extractByte(msg, 0);
+          packetUBXNAVRELPOSNED->data.refStationId = extractInt(msg, 2);
+          packetUBXNAVRELPOSNED->data.iTOW = extractLong(msg, 4);
+          packetUBXNAVRELPOSNED->data.relPosN = extractSignedLong(msg, 8);
+          packetUBXNAVRELPOSNED->data.relPosE = extractSignedLong(msg, 12);
+          packetUBXNAVRELPOSNED->data.relPosD = extractSignedLong(msg, 16);
+
+          if (msg->len == UBX_NAV_RELPOSNED_LEN)
+          {
+            // The M8 version does not contain relPosLength or relPosHeading
+            packetUBXNAVRELPOSNED->data.relPosLength = 0;
+            packetUBXNAVRELPOSNED->data.relPosHeading = 0;
+            packetUBXNAVRELPOSNED->data.relPosHPN = extractSignedChar(msg, 20);
+            packetUBXNAVRELPOSNED->data.relPosHPE = extractSignedChar(msg, 21);
+            packetUBXNAVRELPOSNED->data.relPosHPD = extractSignedChar(msg, 22);
+            packetUBXNAVRELPOSNED->data.relPosHPLength = 0; // The M8 version does not contain relPosHPLength
+            packetUBXNAVRELPOSNED->data.accN = extractLong(msg, 24);
+            packetUBXNAVRELPOSNED->data.accE = extractLong(msg, 28);
+            packetUBXNAVRELPOSNED->data.accD = extractLong(msg, 32);
+            // The M8 version does not contain accLength or accHeading
+            packetUBXNAVRELPOSNED->data.accLength = 0;
+            packetUBXNAVRELPOSNED->data.accHeading = 0;
+            packetUBXNAVRELPOSNED->data.flags.all = extractLong(msg, 36);
+          }
+          else
+          {
+            packetUBXNAVRELPOSNED->data.relPosLength = extractSignedLong(msg, 20);
+            packetUBXNAVRELPOSNED->data.relPosHeading = extractSignedLong(msg, 24);
+            packetUBXNAVRELPOSNED->data.relPosHPN = extractSignedChar(msg, 32);
+            packetUBXNAVRELPOSNED->data.relPosHPE = extractSignedChar(msg, 33);
+            packetUBXNAVRELPOSNED->data.relPosHPD = extractSignedChar(msg, 34);
+            packetUBXNAVRELPOSNED->data.relPosHPLength = extractSignedChar(msg, 35);
+            packetUBXNAVRELPOSNED->data.accN = extractLong(msg, 36);
+            packetUBXNAVRELPOSNED->data.accE = extractLong(msg, 40);
+            packetUBXNAVRELPOSNED->data.accD = extractLong(msg, 44);
+            packetUBXNAVRELPOSNED->data.accLength = extractLong(msg, 48);
+            packetUBXNAVRELPOSNED->data.accHeading = extractLong(msg, 52);
+            packetUBXNAVRELPOSNED->data.flags.all = extractLong(msg, 60);
+          }
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVRELPOSNED->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVRELPOSNED->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVRELPOSNED->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVRELPOSNED->callbackData->version, &packetUBXNAVRELPOSNED->data.version, sizeof(UBX_NAV_RELPOSNED_data_t));
+            packetUBXNAVRELPOSNED->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVRELPOSNED->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_AOPSTATUS && msg->len == UBX_NAV_AOPSTATUS_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVAOPSTATUS != nullptr)
+        {
+          packetUBXNAVAOPSTATUS->data.iTOW = extractLong(msg, 0);
+          packetUBXNAVAOPSTATUS->data.aopCfg.all = extractByte(msg, 4);
+          packetUBXNAVAOPSTATUS->data.status = extractByte(msg, 5);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVAOPSTATUS->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVAOPSTATUS->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVAOPSTATUS->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVAOPSTATUS->callbackData->iTOW, &packetUBXNAVAOPSTATUS->data.iTOW, sizeof(UBX_NAV_AOPSTATUS_data_t));
+            packetUBXNAVAOPSTATUS->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVAOPSTATUS->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_EOE && msg->len == UBX_NAV_EOE_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXNAVEOE != nullptr)
+        {
+          packetUBXNAVEOE->data.iTOW = extractLong(msg, 0);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVEOE->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVEOE->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVEOE->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVEOE->callbackData->iTOW, &packetUBXNAVEOE->data.iTOW, sizeof(UBX_NAV_EOE_data_t));
+            packetUBXNAVEOE->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVEOE->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_NAV_DAHEADING && msg->len <= UBX_NAV_DAHEADING_MAX_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        // Version 0x01 is 64 bytes and uses cm + 0.1mm
+        // Version 0x02 is 60 bytes and uses mm
+        if (packetUBXNAVDAHEADING != nullptr)
+        {
+          packetUBXNAVDAHEADING->data.version = extractByte(msg, 0);
+          if (packetUBXNAVDAHEADING->data.version == 0x02)
+          {
+            packetUBXNAVDAHEADING->data.iTOW = extractLong(msg, 4);
+            packetUBXNAVDAHEADING->data.relPosN = extractSignedLong(msg, 8);
+            packetUBXNAVDAHEADING->data.relPosE = extractSignedLong(msg, 12);
+            packetUBXNAVDAHEADING->data.relPosD = extractSignedLong(msg, 16);
+            packetUBXNAVDAHEADING->data.relPosLength = extractSignedLong(msg, 20);
+            packetUBXNAVDAHEADING->data.relPosHeading = extractSignedLong(msg, 24);
+            packetUBXNAVDAHEADING->data.accN = extractLong(msg, 32);
+            packetUBXNAVDAHEADING->data.accE = extractLong(msg, 36);
+            packetUBXNAVDAHEADING->data.accD = extractLong(msg, 40);
+            packetUBXNAVDAHEADING->data.accLength = extractLong(msg, 44);
+            packetUBXNAVDAHEADING->data.accHeading = extractLong(msg, 48);
+            packetUBXNAVDAHEADING->data.flags.all = extractLong(msg, 56);
+          }
+          else
+          {
+            // Assume version 0x01
+            packetUBXNAVDAHEADING->data.iTOW = extractLong(msg, 4);
+            packetUBXNAVDAHEADING->data.relPosN = extractSignedLong(msg, 8) * 10; // Convert cm to mm
+            packetUBXNAVDAHEADING->data.relPosN += extractSignedChar(msg, 32) / 10; // Convert 0.1mm to mm
+            packetUBXNAVDAHEADING->data.relPosE = extractSignedLong(msg, 12) * 10;
+            packetUBXNAVDAHEADING->data.relPosE += extractSignedChar(msg, 33) / 10;
+            packetUBXNAVDAHEADING->data.relPosD = extractSignedLong(msg, 16) * 10;
+            packetUBXNAVDAHEADING->data.relPosD += extractSignedChar(msg, 34) / 10;
+            packetUBXNAVDAHEADING->data.relPosLength = extractSignedLong(msg, 20) * 10;
+            packetUBXNAVDAHEADING->data.relPosLength += extractSignedChar(msg, 35) / 10;
+            packetUBXNAVDAHEADING->data.relPosHeading = extractSignedLong(msg, 24);
+            packetUBXNAVDAHEADING->data.accN = extractLong(msg, 36) / 10; // Convert 0.1mm to mm
+            packetUBXNAVDAHEADING->data.accE = extractLong(msg, 40) / 10;
+            packetUBXNAVDAHEADING->data.accD = extractLong(msg, 44) / 10;
+            packetUBXNAVDAHEADING->data.accLength = extractLong(msg, 48) / 10;
+            packetUBXNAVDAHEADING->data.accHeading = extractLong(msg, 52);
+            packetUBXNAVDAHEADING->data.flags.all = extractLong(msg, 60);
+            bool relPosHeadingValid = packetUBXNAVDAHEADING->data.flags.all & 0x00000100;
+            packetUBXNAVDAHEADING->data.flags.all &= 0x0000001F;
+            if (relPosHeadingValid)
+              packetUBXNAVDAHEADING->data.flags.all |= 0x00000040;
+          }
+
+          // Mark all datums as fresh (not read before)
+          packetUBXNAVDAHEADING->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXNAVDAHEADING->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXNAVDAHEADING->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXNAVDAHEADING->callbackData->version, &packetUBXNAVDAHEADING->data.version, sizeof(UBX_NAV_DAHEADING_data_t));
+            packetUBXNAVDAHEADING->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXNAVDAHEADING->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      break;
+  #ifndef SFE_UBLOX_DISABLE_RAWX_SFRBX_PMP_QZSS_SAT
+    case UBX_CLASS_RXM:
+      if (msg->id == UBX_RXM_PMP)
+      // Note: length is variable with version 0x01
+      // Note: the field positions depend on the version
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it.
+        // By default, new PMP data will always overwrite 'old' data (data which is valid but which has not yet been read by the callback).
+        // To prevent this, uncomment the line two lines below
+        if ((packetUBXRXMPMP != nullptr) && (packetUBXRXMPMP->callbackData != nullptr)
+            //&& (packetUBXRXMPMP->automaticFlags.flags.bits.callbackCopyValid == false) // <=== Uncomment this line to prevent new data from overwriting 'old'
+        )
+        {
+          packetUBXRXMPMP->callbackData->version = extractByte(msg, 0);
+          packetUBXRXMPMP->callbackData->numBytesUserData = extractInt(msg, 2);
+          packetUBXRXMPMP->callbackData->timeTag = extractLong(msg, 4);
+          packetUBXRXMPMP->callbackData->uniqueWord[0] = extractLong(msg, 8);
+          packetUBXRXMPMP->callbackData->uniqueWord[1] = extractLong(msg, 12);
+          packetUBXRXMPMP->callbackData->serviceIdentifier = extractInt(msg, 16);
+          packetUBXRXMPMP->callbackData->spare = extractByte(msg, 18);
+          packetUBXRXMPMP->callbackData->uniqueWordBitErrors = extractByte(msg, 19);
+
+          if (packetUBXRXMPMP->callbackData->version == 0x00)
+          {
+            packetUBXRXMPMP->callbackData->fecBits = extractInt(msg, 524);
+            packetUBXRXMPMP->callbackData->ebno = extractByte(msg, 526);
+          }
+          else // if (packetUBXRXMPMP->data.version == 0x01)
+          {
+            packetUBXRXMPMP->callbackData->fecBits = extractInt(msg, 20);
+            packetUBXRXMPMP->callbackData->ebno = extractByte(msg, 22);
+          }
+
+          uint16_t userDataStart = (packetUBXRXMPMP->callbackData->version == 0x00) ? 20 : 24;
+          uint16_t userDataLength = (packetUBXRXMPMP->callbackData->version == 0x00) ? 504 : (packetUBXRXMPMP->callbackData->numBytesUserData);
+          for (uint16_t i = 0; (i < userDataLength) && (i < 504); i++)
+          {
+            packetUBXRXMPMP->callbackData->userData[i] = extractByte(msg, i + userDataStart);
+          }
+
+          packetUBXRXMPMP->automaticFlags.flags.bits.callbackCopyValid = true; // Mark the data as valid
+        }
+
+        // Full PMP message, including Class, ID and checksum
+        // By default, new PMP data will always overwrite 'old' data (data which is valid but which has not yet been read by the callback).
+        // To prevent this, uncomment the line two lines below
+        if ((packetUBXRXMPMPmessage != nullptr) && (packetUBXRXMPMPmessage->callbackData != nullptr)
+            //&& (packetUBXRXMPMPmessage->automaticFlags.flags.bits.callbackCopyValid == false) // <=== Uncomment this line to prevent new data from overwriting 'old'
+        )
+        {
+          packetUBXRXMPMPmessage->callbackData->sync1 = UBX_SYNCH_1;
+          packetUBXRXMPMPmessage->callbackData->sync2 = UBX_SYNCH_2;
+          packetUBXRXMPMPmessage->callbackData->cls = UBX_CLASS_RXM;
+          packetUBXRXMPMPmessage->callbackData->ID = UBX_RXM_PMP;
+          packetUBXRXMPMPmessage->callbackData->lengthLSB = msg->len & 0xFF;
+          packetUBXRXMPMPmessage->callbackData->lengthMSB = msg->len >> 8;
+
+          memcpy(packetUBXRXMPMPmessage->callbackData->payload, msg->payload, msg->len);
+
+          packetUBXRXMPMPmessage->callbackData->checksumA = msg->checksumA;
+          packetUBXRXMPMPmessage->callbackData->checksumB = msg->checksumB;
+
+          packetUBXRXMPMPmessage->automaticFlags.flags.bits.callbackCopyValid = true; // Mark the data as valid
+        }
+      }
+      else if (msg->id == UBX_RXM_QZSSL6)
+      // Note: length is variable with version 0x01
+      // Note: the field positions depend on the version
+      {
+        // Full QZSSL6 message, including Class, ID and checksum
+        for (int ch = 0; ch < UBX_RXM_QZSSL6_NUM_CHANNELS; ch++)
+        {
+          if (0 == (packetUBXRXMQZSSL6message->automaticFlags.flags.bits.callbackCopyValid & (1 << ch)))
+          {
+
+            packetUBXRXMQZSSL6message->callbackData[ch].sync1 = UBX_SYNCH_1;
+            packetUBXRXMQZSSL6message->callbackData[ch].sync2 = UBX_SYNCH_2;
+            packetUBXRXMQZSSL6message->callbackData[ch].cls = UBX_CLASS_RXM;
+            packetUBXRXMQZSSL6message->callbackData[ch].ID = UBX_RXM_QZSSL6;
+            packetUBXRXMQZSSL6message->callbackData[ch].lengthLSB = msg->len & 0xFF;
+            packetUBXRXMQZSSL6message->callbackData[ch].lengthMSB = msg->len >> 8;
+
+            memcpy(packetUBXRXMQZSSL6message->callbackData[ch].payload, msg->payload, msg->len);
+
+            packetUBXRXMQZSSL6message->callbackData[ch].checksumA = msg->checksumA;
+            packetUBXRXMQZSSL6message->callbackData[ch].checksumB = msg->checksumB;
+
+            packetUBXRXMQZSSL6message->automaticFlags.flags.bits.callbackCopyValid |= (1 << ch);
+            break; // abort when added
+          }
+        }
+      }
+      else if (msg->id == UBX_RXM_COR)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if ((packetUBXRXMCOR != nullptr) && (packetUBXRXMCOR->callbackData != nullptr)
+            //&& (packetUBXRXMCOR->automaticFlags.flags.bits.callbackCopyValid == false) // <=== Uncomment this line to prevent new data from overwriting 'old'
+        )
+        {
+          packetUBXRXMCOR->callbackData->version = extractByte(msg, 0);
+          packetUBXRXMCOR->callbackData->ebno = extractByte(msg, 1);
+          packetUBXRXMCOR->callbackData->statusInfo.all = extractLong(msg, 4);
+          packetUBXRXMCOR->callbackData->msgType = extractInt(msg, 8);
+          packetUBXRXMCOR->callbackData->msgSubType = extractInt(msg, 10);
+
+          packetUBXRXMCOR->automaticFlags.flags.bits.callbackCopyValid = true; // Mark the data as valid
+        }
+      }
+      else if (msg->id == UBX_RXM_SFRBX)
+      // Note: length is variable
+      // Note: on protocol version 17: numWords is (0..16)
+      //       on protocol version 18+: numWords is (0..10)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXRXMSFRBX != nullptr)
+        {
+          packetUBXRXMSFRBX->data.gnssId = extractByte(msg, 0);
+          packetUBXRXMSFRBX->data.svId = extractByte(msg, 1);
+          packetUBXRXMSFRBX->data.freqId = extractByte(msg, 3);
+          packetUBXRXMSFRBX->data.numWords = extractByte(msg, 4);
+          packetUBXRXMSFRBX->data.chn = extractByte(msg, 5);
+          packetUBXRXMSFRBX->data.version = extractByte(msg, 6);
+
+          for (uint8_t i = 0; (i < UBX_RXM_SFRBX_MAX_WORDS) && (i < packetUBXRXMSFRBX->data.numWords) && ((i * 4) < (msg->len - 8)); i++)
+          {
+            packetUBXRXMSFRBX->data.dwrd[i] = extractLong(msg, 8 + (i * 4));
+          }
+
+          // Mark all datums as fresh (not read before)
+          packetUBXRXMSFRBX->moduleQueried = true;
+
+          // Check if we need to copy the data for the callback
+          if (packetUBXRXMSFRBX->callbackData != nullptr) // If RAM has been allocated for the copies of the data
+          {
+            for (uint32_t i = 0; i < UBX_RXM_SFRBX_CALLBACK_BUFFERS; i++) // Check all available buffers
             {
-              memcpy(&packetUBXRXMSFRBX->callbackData[i].gnssId, &packetUBXRXMSFRBX->data.gnssId, sizeof(UBX_RXM_SFRBX_data_t));
-              packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackCopyValid |= (1 << i);
-              break; // Only copy once - into first available buffer
+              if ((packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackCopyValid & (1 << i)) == 0) // AND the buffer is empty
+              {
+                memcpy(&packetUBXRXMSFRBX->callbackData[i].gnssId, &packetUBXRXMSFRBX->data.gnssId, sizeof(UBX_RXM_SFRBX_data_t));
+                packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackCopyValid |= (1 << i);
+                break; // Only copy once - into first available buffer
+              }
             }
           }
-        }
 
-        // Check if we need to copy the data for the message callbacks
-        if (packetUBXRXMSFRBX->callbackMessageData != nullptr) // If RAM has been allocated for the copies of the data
-        {
-          for (uint32_t i = 0; i < UBX_RXM_SFRBX_CALLBACK_BUFFERS; i++) // Check all available buffers
+          // Check if we need to copy the data for the message callbacks
+          if (packetUBXRXMSFRBX->callbackMessageData != nullptr) // If RAM has been allocated for the copies of the data
           {
-            if ((packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackMessageCopyValid & (1 << i)) == 0) // AND the buffer is empty
+            for (uint32_t i = 0; i < UBX_RXM_SFRBX_CALLBACK_BUFFERS; i++) // Check all available buffers
             {
-              packetUBXRXMSFRBX->callbackMessageData[i].sync1 = UBX_SYNCH_1;
-              packetUBXRXMSFRBX->callbackMessageData[i].sync2 = UBX_SYNCH_2;
-              packetUBXRXMSFRBX->callbackMessageData[i].cls = UBX_CLASS_RXM;
-              packetUBXRXMSFRBX->callbackMessageData[i].ID = UBX_RXM_SFRBX;
-              packetUBXRXMSFRBX->callbackMessageData[i].lengthLSB = msg->len & 0xFF;
-              packetUBXRXMSFRBX->callbackMessageData[i].lengthMSB = msg->len >> 8;
+              if ((packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackMessageCopyValid & (1 << i)) == 0) // AND the buffer is empty
+              {
+                packetUBXRXMSFRBX->callbackMessageData[i].sync1 = UBX_SYNCH_1;
+                packetUBXRXMSFRBX->callbackMessageData[i].sync2 = UBX_SYNCH_2;
+                packetUBXRXMSFRBX->callbackMessageData[i].cls = UBX_CLASS_RXM;
+                packetUBXRXMSFRBX->callbackMessageData[i].ID = UBX_RXM_SFRBX;
+                packetUBXRXMSFRBX->callbackMessageData[i].lengthLSB = msg->len & 0xFF;
+                packetUBXRXMSFRBX->callbackMessageData[i].lengthMSB = msg->len >> 8;
 
-              memcpy(&packetUBXRXMSFRBX->callbackMessageData[i].payload, msg->payload, msg->len);
+                memcpy(&packetUBXRXMSFRBX->callbackMessageData[i].payload, msg->payload, msg->len);
 
-              packetUBXRXMSFRBX->callbackMessageData[i].checksumA = msg->checksumA;
-              packetUBXRXMSFRBX->callbackMessageData[i].checksumB = msg->checksumB;
+                packetUBXRXMSFRBX->callbackMessageData[i].checksumA = msg->checksumA;
+                packetUBXRXMSFRBX->callbackMessageData[i].checksumB = msg->checksumB;
 
-              packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackMessageCopyValid |= (1 << i);
-              break; // Only copy once - into first available buffer
+                packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackMessageCopyValid |= (1 << i);
+                break; // Only copy once - into first available buffer
+              }
             }
           }
-        }
 
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXRXMSFRBX->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_RXM_RAWX)
-    // Note: length is variable
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXRXMRAWX != nullptr)
-      {
-        for (uint8_t i = 0; i < 8; i++)
-        {
-          packetUBXRXMRAWX->data.header.rcvTow[i] = extractByte(msg, i);
-        }
-        packetUBXRXMRAWX->data.header.week = extractInt(msg, 8);
-        packetUBXRXMRAWX->data.header.leapS = extractSignedChar(msg, 10);
-        packetUBXRXMRAWX->data.header.numMeas = extractByte(msg, 11);
-        packetUBXRXMRAWX->data.header.recStat.all = extractByte(msg, 12);
-        packetUBXRXMRAWX->data.header.version = extractByte(msg, 13);
-
-        for (uint8_t i = 0; (i < UBX_RXM_RAWX_MAX_BLOCKS) && (i < packetUBXRXMRAWX->data.header.numMeas) && ((((uint16_t)i) * 32) < (msg->len - 16)); i++)
-        {
-          uint16_t offset = (((uint16_t)i) * 32) + 16;
-          for (uint8_t j = 0; j < 8; j++)
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXRXMSFRBX->automaticFlags.flags.bits.addToFileBuffer)
           {
-            packetUBXRXMRAWX->data.blocks[i].prMes[j] = extractByte(msg, offset + j);
-            packetUBXRXMRAWX->data.blocks[i].cpMes[j] = extractByte(msg, offset + 8 + j);
-            if (j < 4)
-              packetUBXRXMRAWX->data.blocks[i].doMes[j] = extractByte(msg, offset + 16 + j);
+            addedToFileBuffer = storePacket(msg);
           }
-          packetUBXRXMRAWX->data.blocks[i].gnssId = extractByte(msg, offset + 20);
-          packetUBXRXMRAWX->data.blocks[i].svId = extractByte(msg, offset + 21);
-          packetUBXRXMRAWX->data.blocks[i].sigId = extractByte(msg, offset + 22);
-          packetUBXRXMRAWX->data.blocks[i].freqId = extractByte(msg, offset + 23);
-          packetUBXRXMRAWX->data.blocks[i].lockTime = extractInt(msg, offset + 24);
-          packetUBXRXMRAWX->data.blocks[i].cno = extractByte(msg, offset + 26);
-          packetUBXRXMRAWX->data.blocks[i].prStdev = extractByte(msg, offset + 27);
-          packetUBXRXMRAWX->data.blocks[i].cpStdev = extractByte(msg, offset + 28);
-          packetUBXRXMRAWX->data.blocks[i].doStdev = extractByte(msg, offset + 29);
-          packetUBXRXMRAWX->data.blocks[i].trkStat.all = extractByte(msg, offset + 30);
-        }
-
-        // Mark all datums as fresh (not read before)
-        packetUBXRXMRAWX->moduleQueried = true;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXRXMRAWX->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXRXMRAWX->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXRXMRAWX->callbackData->header.rcvTow[0], &packetUBXRXMRAWX->data.header.rcvTow[0], sizeof(UBX_RXM_RAWX_data_t));
-          packetUBXRXMRAWX->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXRXMRAWX->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
         }
       }
-    }
-    else if (msg->id == UBX_RXM_MEASX)
-    // Note: length is variable
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXRXMMEASX != nullptr)
+      else if (msg->id == UBX_RXM_RAWX)
+      // Note: length is variable
       {
-        packetUBXRXMMEASX->data.header.version = extractByte(msg, 0);
-        packetUBXRXMMEASX->data.header.gpsTOW = extractLong(msg, 4);
-        packetUBXRXMMEASX->data.header.gloTOW = extractLong(msg, 8);
-        packetUBXRXMMEASX->data.header.bdsTOW = extractLong(msg, 12);
-        packetUBXRXMMEASX->data.header.qzssTOW = extractLong(msg, 20);
-        packetUBXRXMMEASX->data.header.gpsTOWacc = extractInt(msg, 24);
-        packetUBXRXMMEASX->data.header.gloTOWacc = extractInt(msg, 26);
-        packetUBXRXMMEASX->data.header.bdsTOWacc = extractInt(msg, 28);
-        packetUBXRXMMEASX->data.header.qzssTOWacc = extractInt(msg, 32);
-        packetUBXRXMMEASX->data.header.numSV = extractByte(msg, 34);
-        packetUBXRXMMEASX->data.header.flags.all = extractByte(msg, 35);
-
-        for (uint8_t i = 0; (i < UBX_RXM_MEASX_MAX_BLOCKS) && (i < packetUBXRXMMEASX->data.header.numSV) && ((((uint16_t)i) * 24) < (msg->len - 44)); i++)
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXRXMRAWX != nullptr)
         {
-          uint16_t offset = (((uint16_t)i) * 24) + 44;
-          packetUBXRXMMEASX->data.blocks[i].gnssId = extractByte(msg, offset + 0);
-          packetUBXRXMMEASX->data.blocks[i].svId = extractByte(msg, offset + 1);
-          packetUBXRXMMEASX->data.blocks[i].cNo = extractByte(msg, offset + 2);
-          packetUBXRXMMEASX->data.blocks[i].mpathIndic = extractByte(msg, offset + 3);
-          packetUBXRXMMEASX->data.blocks[i].dopplerMS = extractSignedLong(msg, offset + 4);
-          packetUBXRXMMEASX->data.blocks[i].dopplerHz = extractSignedLong(msg, offset + 8);
-          packetUBXRXMMEASX->data.blocks[i].wholeChips = extractInt(msg, offset + 12);
-          packetUBXRXMMEASX->data.blocks[i].fracChips = extractInt(msg, offset + 14);
-          packetUBXRXMMEASX->data.blocks[i].codePhase = extractLong(msg, offset + 16);
-          packetUBXRXMMEASX->data.blocks[i].intCodePhase = extractByte(msg, offset + 20);
-          packetUBXRXMMEASX->data.blocks[i].pseuRangeRMSErr = extractByte(msg, offset + 21);
-        }
-
-        // Mark all datums as fresh (not read before)
-        packetUBXRXMMEASX->moduleQueried = true;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXRXMMEASX->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXRXMMEASX->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXRXMMEASX->callbackData->header.version, &packetUBXRXMMEASX->data.header.version, sizeof(UBX_RXM_MEASX_data_t));
-          packetUBXRXMMEASX->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXRXMMEASX->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    break;
-    break;
-#endif
-  case UBX_CLASS_TIM:
-    if (msg->id == UBX_TIM_TM2 && msg->len == UBX_TIM_TM2_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXTIMTM2 != nullptr)
-      {
-        packetUBXTIMTM2->data.ch = extractByte(msg, 0);
-        packetUBXTIMTM2->data.flags.all = extractByte(msg, 1);
-        packetUBXTIMTM2->data.count = extractInt(msg, 2);
-        packetUBXTIMTM2->data.wnR = extractInt(msg, 4);
-        packetUBXTIMTM2->data.wnF = extractInt(msg, 6);
-        packetUBXTIMTM2->data.towMsR = extractLong(msg, 8);
-        packetUBXTIMTM2->data.towSubMsR = extractLong(msg, 12);
-        packetUBXTIMTM2->data.towMsF = extractLong(msg, 16);
-        packetUBXTIMTM2->data.towSubMsF = extractLong(msg, 20);
-        packetUBXTIMTM2->data.accEst = extractLong(msg, 24);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXTIMTM2->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXTIMTM2->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXTIMTM2->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXTIMTM2->callbackData->ch, &packetUBXTIMTM2->data.ch, sizeof(UBX_TIM_TM2_data_t));
-          packetUBXTIMTM2->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXTIMTM2->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_TIM_TP && msg->len == UBX_TIM_TP_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXTIMTP != nullptr)
-      {
-        packetUBXTIMTP->data.towMS = extractLong(msg, 0);
-        packetUBXTIMTP->data.towSubMS = extractLong(msg, 4);
-        packetUBXTIMTP->data.qErr = extractSignedLong(msg, 8);
-        packetUBXTIMTP->data.week = extractInt(msg, 12);
-        packetUBXTIMTP->data.flags.all = extractByte(msg, 14);
-        packetUBXTIMTP->data.refInfo.all = extractByte(msg, 15);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXTIMTP->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXTIMTP->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXTIMTP->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXTIMTP->callbackData->towMS, &packetUBXTIMTP->data.towMS, sizeof(UBX_TIM_TP_data_t));
-          packetUBXTIMTP->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXTIMTP->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    break;
-  case UBX_CLASS_MON:
-    if (msg->id == UBX_MON_COMMS && msg->len <= UBX_MON_COMMS_MAX_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXMONCOMMS != nullptr)
-      {
-        packetUBXMONCOMMS->data.header.version = extractByte(msg, 0);
-        packetUBXMONCOMMS->data.header.nPorts = extractByte(msg, 1);
-        packetUBXMONCOMMS->data.header.txErrors.all = extractByte(msg, 2);
-        for (uint16_t i = 0; i < 4; i++)
-          packetUBXMONCOMMS->data.header.protIds[i] = extractByte(msg, 4 + i);
-
-        for (uint16_t i = 0; (i < UBX_MON_COMMS_MAX_PORTS) && (i < packetUBXMONCOMMS->data.header.nPorts) && ((i * 40) < (msg->len - 8)); i++)
-        {
-          packetUBXMONCOMMS->data.port[i].portId = extractInt(msg, 8 + (i * 40) + 0);
-          packetUBXMONCOMMS->data.port[i].txPending = extractInt(msg, 8 + (i * 40) + 2);
-          packetUBXMONCOMMS->data.port[i].txBytes = extractLong(msg, 8 + (i * 40) + 4);
-          packetUBXMONCOMMS->data.port[i].txUsage = extractByte(msg, 8 + (i * 40) + 8);
-          packetUBXMONCOMMS->data.port[i].txPeakUsage = extractByte(msg, 8 + (i * 40) + 9);
-          packetUBXMONCOMMS->data.port[i].rxPending = extractInt(msg, 8 + (i * 40) + 10);
-          packetUBXMONCOMMS->data.port[i].rxBytes = extractLong(msg, 8 + (i * 40) + 12);
-          packetUBXMONCOMMS->data.port[i].rxUsage = extractByte(msg, 8 + (i * 40) + 16);
-          packetUBXMONCOMMS->data.port[i].rxPeakUsage = extractByte(msg, 8 + (i * 40) + 17);
-          packetUBXMONCOMMS->data.port[i].overrunErrs = extractInt(msg, 8 + (i * 40) + 18);
-          for (uint16_t j = 0; j < 4; j++)
-            packetUBXMONCOMMS->data.port[i].msgs[j] = extractInt(msg, 8 + (i * 40) + 20 + (j * 2));
-          packetUBXMONCOMMS->data.port[i].skipped = extractLong(msg, 8 + (i * 40) + 36);
-        }
-
-        // Mark all datums as fresh (not read before)
-        packetUBXMONCOMMS->moduleQueried = true;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXMONCOMMS->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXMONCOMMS->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXMONCOMMS->callbackData->header.version, &packetUBXMONCOMMS->data.header.version, sizeof(UBX_MON_COMMS_data_t));
-          packetUBXMONCOMMS->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXMONCOMMS->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_MON_HW && msg->len == UBX_MON_HW_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXMONHW != nullptr)
-      {
-        packetUBXMONHW->data.pinSel = extractLong(msg, 0);
-        packetUBXMONHW->data.pinBank = extractLong(msg, 4);
-        packetUBXMONHW->data.pinDir = extractLong(msg, 8);
-        packetUBXMONHW->data.pinVal = extractLong(msg, 12);
-        packetUBXMONHW->data.noisePerMS = extractInt(msg, 16);
-        packetUBXMONHW->data.agcCnt = extractInt(msg, 18);
-        packetUBXMONHW->data.aStatus = extractByte(msg, 20);
-        packetUBXMONHW->data.aPower = extractByte(msg, 21);
-        packetUBXMONHW->data.flags.all = extractByte(msg, 22);
-        packetUBXMONHW->data.usedMask = extractLong(msg, 24);
-        for (uint8_t i = 0; i < 17; i++)
-          packetUBXMONHW->data.VP[i] = extractByte(msg, 28 + i);
-        packetUBXMONHW->data.jamInd = extractByte(msg, 45);
-        packetUBXMONHW->data.pinIrq = extractLong(msg, 48);
-        packetUBXMONHW->data.pullH = extractLong(msg, 52);
-        packetUBXMONHW->data.pullL = extractLong(msg, 56);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXMONHW->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXMONHW->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXMONHW->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXMONHW->callbackData->pinSel, &packetUBXMONHW->data.pinSel, sizeof(UBX_MON_HW_data_t));
-          packetUBXMONHW->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXMONHW->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    break;
-#ifndef SFE_UBLOX_DISABLE_ESF
-  case UBX_CLASS_ESF:
-    if (msg->id == UBX_ESF_ALG && msg->len == UBX_ESF_ALG_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXESFALG != nullptr)
-      {
-        packetUBXESFALG->data.iTOW = extractLong(msg, 0);
-        packetUBXESFALG->data.version = extractByte(msg, 4);
-        packetUBXESFALG->data.flags.all = extractByte(msg, 5);
-        packetUBXESFALG->data.error.all = extractByte(msg, 6);
-        packetUBXESFALG->data.yaw = extractLong(msg, 8);
-        packetUBXESFALG->data.pitch = extractSignedInt(msg, 12);
-        packetUBXESFALG->data.roll = extractSignedInt(msg, 14);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXESFALG->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXESFALG->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXESFALG->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXESFALG->callbackData->iTOW, &packetUBXESFALG->data.iTOW, sizeof(UBX_ESF_ALG_data_t));
-          packetUBXESFALG->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXESFALG->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_ESF_INS && msg->len == UBX_ESF_INS_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXESFINS != nullptr)
-      {
-        packetUBXESFINS->data.bitfield0.all = extractLong(msg, 0);
-        packetUBXESFINS->data.iTOW = extractLong(msg, 8);
-        packetUBXESFINS->data.xAngRate = extractSignedLong(msg, 12);
-        packetUBXESFINS->data.yAngRate = extractSignedLong(msg, 16);
-        packetUBXESFINS->data.zAngRate = extractSignedLong(msg, 20);
-        packetUBXESFINS->data.xAccel = extractSignedLong(msg, 24);
-        packetUBXESFINS->data.yAccel = extractSignedLong(msg, 28);
-        packetUBXESFINS->data.zAccel = extractSignedLong(msg, 32);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXESFINS->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXESFINS->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXESFINS->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXESFINS->callbackData->bitfield0.all, &packetUBXESFINS->data.bitfield0.all, sizeof(UBX_ESF_INS_data_t));
-          packetUBXESFINS->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXESFINS->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_ESF_MEAS)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXESFMEAS != nullptr)
-      {
-        packetUBXESFMEAS->data.timeTag = extractLong(msg, 0);
-        packetUBXESFMEAS->data.flags.all = extractInt(msg, 4);
-        packetUBXESFMEAS->data.id = extractInt(msg, 6);
-        for (uint16_t i = 0; (i < DEF_MAX_NUM_ESF_MEAS) && (i < packetUBXESFMEAS->data.flags.bits.numMeas) && ((i * 4) < (msg->len - 8)); i++)
-        {
-          packetUBXESFMEAS->data.data[i].data.all = extractLong(msg, 8 + (i * 4));
-        }
-        if ((uint16_t)msg->len > (uint16_t)(8 + (packetUBXESFMEAS->data.flags.bits.numMeas * 4)))
-          packetUBXESFMEAS->data.calibTtag = extractLong(msg, 8 + (packetUBXESFMEAS->data.flags.bits.numMeas * 4));
-
-        // Check if we need to copy the data for the callback
-        if (packetUBXESFMEAS->callbackData != nullptr) // If RAM has been allocated for the copy of the data
-        {
-          for (uint16_t i = 0; i < UBX_ESF_MEAS_CALLBACK_BUFFERS; i++)
+          for (uint8_t i = 0; i < 8; i++)
           {
-            if ((packetUBXESFMEAS->automaticFlags.flags.bits.callbackCopyValid & (1 << i)) == 0) // AND the data is stale
+            packetUBXRXMRAWX->data.header.rcvTow[i] = extractByte(msg, i);
+          }
+          packetUBXRXMRAWX->data.header.week = extractInt(msg, 8);
+          packetUBXRXMRAWX->data.header.leapS = extractSignedChar(msg, 10);
+          packetUBXRXMRAWX->data.header.numMeas = extractByte(msg, 11);
+          packetUBXRXMRAWX->data.header.recStat.all = extractByte(msg, 12);
+          packetUBXRXMRAWX->data.header.version = extractByte(msg, 13);
+
+          for (uint8_t i = 0; (i < UBX_RXM_RAWX_MAX_BLOCKS) && (i < packetUBXRXMRAWX->data.header.numMeas) && ((((uint16_t)i) * 32) < (msg->len - 16)); i++)
+          {
+            uint16_t offset = (((uint16_t)i) * 32) + 16;
+            for (uint8_t j = 0; j < 8; j++)
             {
-              memcpy(&packetUBXESFMEAS->callbackData[i].timeTag, &packetUBXESFMEAS->data.timeTag, sizeof(UBX_ESF_MEAS_data_t));
-              packetUBXESFMEAS->automaticFlags.flags.bits.callbackCopyValid |= (1 << i);
-              break; // Only copy once
+              packetUBXRXMRAWX->data.blocks[i].prMes[j] = extractByte(msg, offset + j);
+              packetUBXRXMRAWX->data.blocks[i].cpMes[j] = extractByte(msg, offset + 8 + j);
+              if (j < 4)
+                packetUBXRXMRAWX->data.blocks[i].doMes[j] = extractByte(msg, offset + 16 + j);
+            }
+            packetUBXRXMRAWX->data.blocks[i].gnssId = extractByte(msg, offset + 20);
+            packetUBXRXMRAWX->data.blocks[i].svId = extractByte(msg, offset + 21);
+            packetUBXRXMRAWX->data.blocks[i].sigId = extractByte(msg, offset + 22);
+            packetUBXRXMRAWX->data.blocks[i].freqId = extractByte(msg, offset + 23);
+            packetUBXRXMRAWX->data.blocks[i].lockTime = extractInt(msg, offset + 24);
+            packetUBXRXMRAWX->data.blocks[i].cno = extractByte(msg, offset + 26);
+            packetUBXRXMRAWX->data.blocks[i].prStdev = extractByte(msg, offset + 27);
+            packetUBXRXMRAWX->data.blocks[i].cpStdev = extractByte(msg, offset + 28);
+            packetUBXRXMRAWX->data.blocks[i].doStdev = extractByte(msg, offset + 29);
+            packetUBXRXMRAWX->data.blocks[i].trkStat.all = extractByte(msg, offset + 30);
+          }
+
+          // Mark all datums as fresh (not read before)
+          packetUBXRXMRAWX->moduleQueried = true;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXRXMRAWX->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXRXMRAWX->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXRXMRAWX->callbackData->header.rcvTow[0], &packetUBXRXMRAWX->data.header.rcvTow[0], sizeof(UBX_RXM_RAWX_data_t));
+            packetUBXRXMRAWX->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXRXMRAWX->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_RXM_MEASX)
+      // Note: length is variable
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXRXMMEASX != nullptr)
+        {
+          packetUBXRXMMEASX->data.header.version = extractByte(msg, 0);
+          packetUBXRXMMEASX->data.header.gpsTOW = extractLong(msg, 4);
+          packetUBXRXMMEASX->data.header.gloTOW = extractLong(msg, 8);
+          packetUBXRXMMEASX->data.header.bdsTOW = extractLong(msg, 12);
+          packetUBXRXMMEASX->data.header.qzssTOW = extractLong(msg, 20);
+          packetUBXRXMMEASX->data.header.gpsTOWacc = extractInt(msg, 24);
+          packetUBXRXMMEASX->data.header.gloTOWacc = extractInt(msg, 26);
+          packetUBXRXMMEASX->data.header.bdsTOWacc = extractInt(msg, 28);
+          packetUBXRXMMEASX->data.header.qzssTOWacc = extractInt(msg, 32);
+          packetUBXRXMMEASX->data.header.numSV = extractByte(msg, 34);
+          packetUBXRXMMEASX->data.header.flags.all = extractByte(msg, 35);
+
+          for (uint8_t i = 0; (i < UBX_RXM_MEASX_MAX_BLOCKS) && (i < packetUBXRXMMEASX->data.header.numSV) && ((((uint16_t)i) * 24) < (msg->len - 44)); i++)
+          {
+            uint16_t offset = (((uint16_t)i) * 24) + 44;
+            packetUBXRXMMEASX->data.blocks[i].gnssId = extractByte(msg, offset + 0);
+            packetUBXRXMMEASX->data.blocks[i].svId = extractByte(msg, offset + 1);
+            packetUBXRXMMEASX->data.blocks[i].cNo = extractByte(msg, offset + 2);
+            packetUBXRXMMEASX->data.blocks[i].mpathIndic = extractByte(msg, offset + 3);
+            packetUBXRXMMEASX->data.blocks[i].dopplerMS = extractSignedLong(msg, offset + 4);
+            packetUBXRXMMEASX->data.blocks[i].dopplerHz = extractSignedLong(msg, offset + 8);
+            packetUBXRXMMEASX->data.blocks[i].wholeChips = extractInt(msg, offset + 12);
+            packetUBXRXMMEASX->data.blocks[i].fracChips = extractInt(msg, offset + 14);
+            packetUBXRXMMEASX->data.blocks[i].codePhase = extractLong(msg, offset + 16);
+            packetUBXRXMMEASX->data.blocks[i].intCodePhase = extractByte(msg, offset + 20);
+            packetUBXRXMMEASX->data.blocks[i].pseuRangeRMSErr = extractByte(msg, offset + 21);
+          }
+
+          // Mark all datums as fresh (not read before)
+          packetUBXRXMMEASX->moduleQueried = true;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXRXMMEASX->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXRXMMEASX->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXRXMMEASX->callbackData->header.version, &packetUBXRXMMEASX->data.header.version, sizeof(UBX_RXM_MEASX_data_t));
+            packetUBXRXMMEASX->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXRXMMEASX->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      break;
+      break;
+  #endif
+    case UBX_CLASS_TIM:
+      if (msg->id == UBX_TIM_TM2 && msg->len == UBX_TIM_TM2_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXTIMTM2 != nullptr)
+        {
+          packetUBXTIMTM2->data.ch = extractByte(msg, 0);
+          packetUBXTIMTM2->data.flags.all = extractByte(msg, 1);
+          packetUBXTIMTM2->data.count = extractInt(msg, 2);
+          packetUBXTIMTM2->data.wnR = extractInt(msg, 4);
+          packetUBXTIMTM2->data.wnF = extractInt(msg, 6);
+          packetUBXTIMTM2->data.towMsR = extractLong(msg, 8);
+          packetUBXTIMTM2->data.towSubMsR = extractLong(msg, 12);
+          packetUBXTIMTM2->data.towMsF = extractLong(msg, 16);
+          packetUBXTIMTM2->data.towSubMsF = extractLong(msg, 20);
+          packetUBXTIMTM2->data.accEst = extractLong(msg, 24);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXTIMTM2->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXTIMTM2->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXTIMTM2->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXTIMTM2->callbackData->ch, &packetUBXTIMTM2->data.ch, sizeof(UBX_TIM_TM2_data_t));
+            packetUBXTIMTM2->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXTIMTM2->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_TIM_TP && msg->len == UBX_TIM_TP_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXTIMTP != nullptr)
+        {
+          packetUBXTIMTP->data.towMS = extractLong(msg, 0);
+          packetUBXTIMTP->data.towSubMS = extractLong(msg, 4);
+          packetUBXTIMTP->data.qErr = extractSignedLong(msg, 8);
+          packetUBXTIMTP->data.week = extractInt(msg, 12);
+          packetUBXTIMTP->data.flags.all = extractByte(msg, 14);
+          packetUBXTIMTP->data.refInfo.all = extractByte(msg, 15);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXTIMTP->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXTIMTP->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXTIMTP->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXTIMTP->callbackData->towMS, &packetUBXTIMTP->data.towMS, sizeof(UBX_TIM_TP_data_t));
+            packetUBXTIMTP->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXTIMTP->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      break;
+    case UBX_CLASS_MON:
+      if (msg->id == UBX_MON_COMMS && msg->len <= UBX_MON_COMMS_MAX_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXMONCOMMS != nullptr)
+        {
+          packetUBXMONCOMMS->data.header.version = extractByte(msg, 0);
+          packetUBXMONCOMMS->data.header.nPorts = extractByte(msg, 1);
+          packetUBXMONCOMMS->data.header.txErrors.all = extractByte(msg, 2);
+          for (uint16_t i = 0; i < 4; i++)
+            packetUBXMONCOMMS->data.header.protIds[i] = extractByte(msg, 4 + i);
+
+          for (uint16_t i = 0; (i < UBX_MON_COMMS_MAX_PORTS) && (i < packetUBXMONCOMMS->data.header.nPorts) && ((i * 40) < (msg->len - 8)); i++)
+          {
+            packetUBXMONCOMMS->data.port[i].portId = extractInt(msg, 8 + (i * 40) + 0);
+            packetUBXMONCOMMS->data.port[i].txPending = extractInt(msg, 8 + (i * 40) + 2);
+            packetUBXMONCOMMS->data.port[i].txBytes = extractLong(msg, 8 + (i * 40) + 4);
+            packetUBXMONCOMMS->data.port[i].txUsage = extractByte(msg, 8 + (i * 40) + 8);
+            packetUBXMONCOMMS->data.port[i].txPeakUsage = extractByte(msg, 8 + (i * 40) + 9);
+            packetUBXMONCOMMS->data.port[i].rxPending = extractInt(msg, 8 + (i * 40) + 10);
+            packetUBXMONCOMMS->data.port[i].rxBytes = extractLong(msg, 8 + (i * 40) + 12);
+            packetUBXMONCOMMS->data.port[i].rxUsage = extractByte(msg, 8 + (i * 40) + 16);
+            packetUBXMONCOMMS->data.port[i].rxPeakUsage = extractByte(msg, 8 + (i * 40) + 17);
+            packetUBXMONCOMMS->data.port[i].overrunErrs = extractInt(msg, 8 + (i * 40) + 18);
+            for (uint16_t j = 0; j < 4; j++)
+              packetUBXMONCOMMS->data.port[i].msgs[j] = extractInt(msg, 8 + (i * 40) + 20 + (j * 2));
+            packetUBXMONCOMMS->data.port[i].skipped = extractLong(msg, 8 + (i * 40) + 36);
+          }
+
+          // Mark all datums as fresh (not read before)
+          packetUBXMONCOMMS->moduleQueried = true;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXMONCOMMS->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXMONCOMMS->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXMONCOMMS->callbackData->header.version, &packetUBXMONCOMMS->data.header.version, sizeof(UBX_MON_COMMS_data_t));
+            packetUBXMONCOMMS->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXMONCOMMS->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_MON_HW && msg->len == UBX_MON_HW_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXMONHW != nullptr)
+        {
+          packetUBXMONHW->data.pinSel = extractLong(msg, 0);
+          packetUBXMONHW->data.pinBank = extractLong(msg, 4);
+          packetUBXMONHW->data.pinDir = extractLong(msg, 8);
+          packetUBXMONHW->data.pinVal = extractLong(msg, 12);
+          packetUBXMONHW->data.noisePerMS = extractInt(msg, 16);
+          packetUBXMONHW->data.agcCnt = extractInt(msg, 18);
+          packetUBXMONHW->data.aStatus = extractByte(msg, 20);
+          packetUBXMONHW->data.aPower = extractByte(msg, 21);
+          packetUBXMONHW->data.flags.all = extractByte(msg, 22);
+          packetUBXMONHW->data.usedMask = extractLong(msg, 24);
+          for (uint8_t i = 0; i < 17; i++)
+            packetUBXMONHW->data.VP[i] = extractByte(msg, 28 + i);
+          packetUBXMONHW->data.jamInd = extractByte(msg, 45);
+          packetUBXMONHW->data.pinIrq = extractLong(msg, 48);
+          packetUBXMONHW->data.pullH = extractLong(msg, 52);
+          packetUBXMONHW->data.pullL = extractLong(msg, 56);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXMONHW->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXMONHW->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXMONHW->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXMONHW->callbackData->pinSel, &packetUBXMONHW->data.pinSel, sizeof(UBX_MON_HW_data_t));
+            packetUBXMONHW->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXMONHW->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      break;
+  #ifndef SFE_UBLOX_DISABLE_ESF
+    case UBX_CLASS_ESF:
+      if (msg->id == UBX_ESF_ALG && msg->len == UBX_ESF_ALG_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXESFALG != nullptr)
+        {
+          packetUBXESFALG->data.iTOW = extractLong(msg, 0);
+          packetUBXESFALG->data.version = extractByte(msg, 4);
+          packetUBXESFALG->data.flags.all = extractByte(msg, 5);
+          packetUBXESFALG->data.error.all = extractByte(msg, 6);
+          packetUBXESFALG->data.yaw = extractLong(msg, 8);
+          packetUBXESFALG->data.pitch = extractSignedInt(msg, 12);
+          packetUBXESFALG->data.roll = extractSignedInt(msg, 14);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXESFALG->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXESFALG->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXESFALG->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXESFALG->callbackData->iTOW, &packetUBXESFALG->data.iTOW, sizeof(UBX_ESF_ALG_data_t));
+            packetUBXESFALG->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXESFALG->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_ESF_INS && msg->len == UBX_ESF_INS_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXESFINS != nullptr)
+        {
+          packetUBXESFINS->data.bitfield0.all = extractLong(msg, 0);
+          packetUBXESFINS->data.iTOW = extractLong(msg, 8);
+          packetUBXESFINS->data.xAngRate = extractSignedLong(msg, 12);
+          packetUBXESFINS->data.yAngRate = extractSignedLong(msg, 16);
+          packetUBXESFINS->data.zAngRate = extractSignedLong(msg, 20);
+          packetUBXESFINS->data.xAccel = extractSignedLong(msg, 24);
+          packetUBXESFINS->data.yAccel = extractSignedLong(msg, 28);
+          packetUBXESFINS->data.zAccel = extractSignedLong(msg, 32);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXESFINS->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXESFINS->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXESFINS->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXESFINS->callbackData->bitfield0.all, &packetUBXESFINS->data.bitfield0.all, sizeof(UBX_ESF_INS_data_t));
+            packetUBXESFINS->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXESFINS->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_ESF_MEAS)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXESFMEAS != nullptr)
+        {
+          packetUBXESFMEAS->data.timeTag = extractLong(msg, 0);
+          packetUBXESFMEAS->data.flags.all = extractInt(msg, 4);
+          packetUBXESFMEAS->data.id = extractInt(msg, 6);
+          for (uint16_t i = 0; (i < DEF_MAX_NUM_ESF_MEAS) && (i < packetUBXESFMEAS->data.flags.bits.numMeas) && ((i * 4) < (msg->len - 8)); i++)
+          {
+            packetUBXESFMEAS->data.data[i].data.all = extractLong(msg, 8 + (i * 4));
+          }
+          if ((uint16_t)msg->len > (uint16_t)(8 + (packetUBXESFMEAS->data.flags.bits.numMeas * 4)))
+            packetUBXESFMEAS->data.calibTtag = extractLong(msg, 8 + (packetUBXESFMEAS->data.flags.bits.numMeas * 4));
+
+          // Check if we need to copy the data for the callback
+          if (packetUBXESFMEAS->callbackData != nullptr) // If RAM has been allocated for the copy of the data
+          {
+            for (uint16_t i = 0; i < UBX_ESF_MEAS_CALLBACK_BUFFERS; i++)
+            {
+              if ((packetUBXESFMEAS->automaticFlags.flags.bits.callbackCopyValid & (1 << i)) == 0) // AND the data is stale
+              {
+                memcpy(&packetUBXESFMEAS->callbackData[i].timeTag, &packetUBXESFMEAS->data.timeTag, sizeof(UBX_ESF_MEAS_data_t));
+                packetUBXESFMEAS->automaticFlags.flags.bits.callbackCopyValid |= (1 << i);
+                break; // Only copy once
+              }
             }
           }
-        }
 
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXESFMEAS->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_ESF_RAW)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXESFRAW != nullptr)
-      {
-        packetUBXESFRAW->data.numEsfRawBlocks = (msg->len - 4) / 8; // Record how many blocks were received. Could be 7 or 70 (ZED-F9R vs. NEO-M8U)
-        for (uint16_t i = 0; (i < (DEF_NUM_SENS * DEF_MAX_NUM_ESF_RAW_REPEATS)) && ((i * 8) < (msg->len - 4)); i++)
-        {
-          packetUBXESFRAW->data.data[i].data.all = extractLong(msg, 4 + (i * 8));
-          packetUBXESFRAW->data.data[i].sTag = extractLong(msg, 8 + (i * 8));
-        }
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXESFRAW->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXESFRAW->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXESFRAW->callbackData->data[0].data.all, &packetUBXESFRAW->data.data[0].data.all, sizeof(UBX_ESF_RAW_data_t));
-          packetUBXESFRAW->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXESFRAW->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_ESF_STATUS)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXESFSTATUS != nullptr)
-      {
-        packetUBXESFSTATUS->data.iTOW = extractLong(msg, 0);
-        packetUBXESFSTATUS->data.version = extractByte(msg, 4);
-        packetUBXESFSTATUS->data.fusionMode = extractByte(msg, 12);
-        packetUBXESFSTATUS->data.numSens = extractByte(msg, 15);
-        for (uint16_t i = 0; (i < DEF_NUM_SENS) && (i < packetUBXESFSTATUS->data.numSens) && ((i * 4) < (msg->len - 16)); i++)
-        {
-          packetUBXESFSTATUS->data.status[i].sensStatus1.all = extractByte(msg, 16 + (i * 4) + 0);
-          packetUBXESFSTATUS->data.status[i].sensStatus2.all = extractByte(msg, 16 + (i * 4) + 1);
-          packetUBXESFSTATUS->data.status[i].freq = extractByte(msg, 16 + (i * 4) + 2);
-          packetUBXESFSTATUS->data.status[i].faults.all = extractByte(msg, 16 + (i * 4) + 3);
-        }
-
-        // Mark all datums as fresh (not read before)
-        packetUBXESFSTATUS->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXESFSTATUS->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXESFSTATUS->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXESFSTATUS->callbackData->iTOW, &packetUBXESFSTATUS->data.iTOW, sizeof(UBX_ESF_STATUS_data_t));
-          packetUBXESFSTATUS->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXESFSTATUS->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    break;
-#endif
-  case UBX_CLASS_MGA:
-    if (msg->id == UBX_MGA_ACK_DATA0 && msg->len == UBX_MGA_ACK_DATA0_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXMGAACK != nullptr)
-      {
-        // Calculate how many ACKs are already stored in the ring buffer
-        uint8_t ackBufferContains;
-        if (packetUBXMGAACK->head >= packetUBXMGAACK->tail) // Check if wrap-around has occurred
-        {
-          // Wrap-around has not occurred so do a simple subtraction
-          ackBufferContains = packetUBXMGAACK->head - packetUBXMGAACK->tail;
-        }
-        else
-        {
-          // Wrap-around has occurred so do a simple subtraction but add in the buffer length (UBX_MGA_ACK_RINGBUFFER_LEN)
-          ackBufferContains = ((uint8_t)(((uint16_t)packetUBXMGAACK->head + (uint16_t)UBX_MGA_ACK_DATA0_RINGBUFFER_LEN) - (uint16_t)packetUBXMGAACK->tail));
-        }
-        // Have we got space to store this ACK?
-        if (ackBufferContains < (UBX_MGA_ACK_DATA0_RINGBUFFER_LEN - 1))
-        {
-          // Yes, we have, so store it
-          packetUBXMGAACK->data[packetUBXMGAACK->head].type = extractByte(msg, 0);
-          packetUBXMGAACK->data[packetUBXMGAACK->head].version = extractByte(msg, 1);
-          packetUBXMGAACK->data[packetUBXMGAACK->head].infoCode = extractByte(msg, 2);
-          packetUBXMGAACK->data[packetUBXMGAACK->head].msgId = extractByte(msg, 3);
-          packetUBXMGAACK->data[packetUBXMGAACK->head].msgPayloadStart[0] = extractByte(msg, 4);
-          packetUBXMGAACK->data[packetUBXMGAACK->head].msgPayloadStart[1] = extractByte(msg, 5);
-          packetUBXMGAACK->data[packetUBXMGAACK->head].msgPayloadStart[2] = extractByte(msg, 6);
-          packetUBXMGAACK->data[packetUBXMGAACK->head].msgPayloadStart[3] = extractByte(msg, 7);
-          // Increment the head
-          packetUBXMGAACK->head++;
-          if (packetUBXMGAACK->head == UBX_MGA_ACK_DATA0_RINGBUFFER_LEN)
-            packetUBXMGAACK->head = 0;
-        }
-        else
-        {
-#ifndef SFE_UBLOX_REDUCED_PROG_MEM
-          if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXESFMEAS->automaticFlags.flags.bits.addToFileBuffer)
           {
-            _debugSerial.println(F("processUBXpacket: packetUBXMGAACK is full. ACK will be lost!"));
+            addedToFileBuffer = storePacket(msg);
           }
-#endif
         }
       }
-    }
-    else if (msg->id == UBX_MGA_DBD && msg->len <= UBX_MGA_DBD_LEN) // Message length may be less than UBX_MGA_DBD_LEN. UBX_MGA_DBD_LEN is the maximum it will be.
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXMGADBD != nullptr)
+      else if (msg->id == UBX_ESF_RAW)
       {
-        // Calculate how many DBDs are already stored in the ring buffer
-        uint8_t dbdBufferContains;
-        if (packetUBXMGADBD->head >= packetUBXMGADBD->tail) // Check if wrap-around has occurred
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXESFRAW != nullptr)
         {
-          // Wrap-around has not occurred so do a simple subtraction
-          dbdBufferContains = packetUBXMGADBD->head - packetUBXMGADBD->tail;
-        }
-        else
-        {
-          // Wrap-around has occurred so do a simple subtraction but add in the buffer length (UBX_MGA_DBD_RINGBUFFER_LEN)
-          dbdBufferContains = ((uint8_t)(((uint16_t)packetUBXMGADBD->head + (uint16_t)UBX_MGA_DBD_RINGBUFFER_LEN) - (uint16_t)packetUBXMGADBD->tail));
-        }
-        // Have we got space to store this DBD?
-        if (dbdBufferContains < (UBX_MGA_DBD_RINGBUFFER_LEN - 1))
-        {
-          // Yes, we have, so store it
-          // We need to save the entire message - header, payload and checksum
-          packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryHeader1 = UBX_SYNCH_1;
-          packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryHeader2 = UBX_SYNCH_2;
-          packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryClass = UBX_CLASS_MGA;
-          packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryID = UBX_MGA_DBD;
-          packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryLenLSB = (uint8_t)(msg->len & 0xFF); // We need to store the length of the DBD entry. The entry itself does not contain a length...
-          packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryLenMSB = (uint8_t)((msg->len >> 8) & 0xFF);
-          for (uint16_t i = 0; i < msg->len; i++)
+          packetUBXESFRAW->data.numEsfRawBlocks = (msg->len - 4) / 8; // Record how many blocks were received. Could be 7 or 70 (ZED-F9R vs. NEO-M8U)
+          for (uint16_t i = 0; (i < (DEF_NUM_SENS * DEF_MAX_NUM_ESF_RAW_REPEATS)) && ((i * 8) < (msg->len - 4)); i++)
           {
-            packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntry[i] = extractByte(msg, i);
+            packetUBXESFRAW->data.data[i].data.all = extractLong(msg, 4 + (i * 8));
+            packetUBXESFRAW->data.data[i].sTag = extractLong(msg, 8 + (i * 8));
           }
-          packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryChecksumA = msg->checksumA;
-          packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryChecksumB = msg->checksumB;
-          // Increment the head
-          packetUBXMGADBD->head++;
-          if (packetUBXMGADBD->head == UBX_MGA_DBD_RINGBUFFER_LEN)
-            packetUBXMGADBD->head = 0;
-        }
-        else
-        {
-#ifndef SFE_UBLOX_REDUCED_PROG_MEM
-          if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXESFRAW->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXESFRAW->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
           {
-            _debugSerial.println(F("processUBXpacket: packetUBXMGADBD is full. DBD data will be lost!"));
+            memcpy(&packetUBXESFRAW->callbackData->data[0].data.all, &packetUBXESFRAW->data.data[0].data.all, sizeof(UBX_ESF_RAW_data_t));
+            packetUBXESFRAW->automaticFlags.flags.bits.callbackCopyValid = true;
           }
-#endif
-        }
-      }
-    }
-    break;
-#ifndef SFE_UBLOX_DISABLE_HNR
-  case UBX_CLASS_HNR:
-    if (msg->id == UBX_HNR_PVT && msg->len == UBX_HNR_PVT_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXHNRPVT != nullptr)
-      {
-        packetUBXHNRPVT->data.iTOW = extractLong(msg, 0);
-        packetUBXHNRPVT->data.year = extractInt(msg, 4);
-        packetUBXHNRPVT->data.month = extractByte(msg, 6);
-        packetUBXHNRPVT->data.day = extractByte(msg, 7);
-        packetUBXHNRPVT->data.hour = extractByte(msg, 8);
-        packetUBXHNRPVT->data.min = extractByte(msg, 9);
-        packetUBXHNRPVT->data.sec = extractByte(msg, 10);
-        packetUBXHNRPVT->data.valid.all = extractByte(msg, 11);
-        packetUBXHNRPVT->data.nano = extractSignedLong(msg, 12);
-        packetUBXHNRPVT->data.gpsFix = extractByte(msg, 16);
-        packetUBXHNRPVT->data.flags.all = extractByte(msg, 17);
-        packetUBXHNRPVT->data.lon = extractSignedLong(msg, 20);
-        packetUBXHNRPVT->data.lat = extractSignedLong(msg, 24);
-        packetUBXHNRPVT->data.height = extractSignedLong(msg, 28);
-        packetUBXHNRPVT->data.hMSL = extractSignedLong(msg, 32);
-        packetUBXHNRPVT->data.gSpeed = extractSignedLong(msg, 36);
-        packetUBXHNRPVT->data.speed = extractSignedLong(msg, 40);
-        packetUBXHNRPVT->data.headMot = extractSignedLong(msg, 44);
-        packetUBXHNRPVT->data.headVeh = extractSignedLong(msg, 48);
-        packetUBXHNRPVT->data.hAcc = extractLong(msg, 52);
-        packetUBXHNRPVT->data.vAcc = extractLong(msg, 56);
-        packetUBXHNRPVT->data.sAcc = extractLong(msg, 60);
-        packetUBXHNRPVT->data.headAcc = extractLong(msg, 64);
 
-        // Mark all datums as fresh (not read before)
-        packetUBXHNRPVT->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXHNRPVT->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXHNRPVT->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXHNRPVT->callbackData->iTOW, &packetUBXHNRPVT->data.iTOW, sizeof(UBX_HNR_PVT_data_t));
-          packetUBXHNRPVT->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXHNRPVT->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_HNR_ATT && msg->len == UBX_HNR_ATT_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXHNRATT != nullptr)
-      {
-        packetUBXHNRATT->data.iTOW = extractLong(msg, 0);
-        packetUBXHNRATT->data.version = extractByte(msg, 4);
-        packetUBXHNRATT->data.roll = extractSignedLong(msg, 8);
-        packetUBXHNRATT->data.pitch = extractSignedLong(msg, 12);
-        packetUBXHNRATT->data.heading = extractSignedLong(msg, 16);
-        packetUBXHNRATT->data.accRoll = extractLong(msg, 20);
-        packetUBXHNRATT->data.accPitch = extractLong(msg, 24);
-        packetUBXHNRATT->data.accHeading = extractLong(msg, 28);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXHNRATT->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXHNRATT->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXHNRATT->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXHNRATT->callbackData->iTOW, &packetUBXHNRATT->data.iTOW, sizeof(UBX_HNR_ATT_data_t));
-          packetUBXHNRATT->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXHNRATT->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    else if (msg->id == UBX_HNR_INS && msg->len == UBX_HNR_INS_LEN)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXHNRINS != nullptr)
-      {
-        packetUBXHNRINS->data.bitfield0.all = extractLong(msg, 0);
-        packetUBXHNRINS->data.iTOW = extractLong(msg, 8);
-        packetUBXHNRINS->data.xAngRate = extractSignedLong(msg, 12);
-        packetUBXHNRINS->data.yAngRate = extractSignedLong(msg, 16);
-        packetUBXHNRINS->data.zAngRate = extractSignedLong(msg, 20);
-        packetUBXHNRINS->data.xAccel = extractSignedLong(msg, 24);
-        packetUBXHNRINS->data.yAccel = extractSignedLong(msg, 28);
-        packetUBXHNRINS->data.zAccel = extractSignedLong(msg, 32);
-
-        // Mark all datums as fresh (not read before)
-        packetUBXHNRINS->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXHNRINS->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXHNRINS->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXHNRINS->callbackData->bitfield0.all, &packetUBXHNRINS->data.bitfield0.all, sizeof(UBX_HNR_INS_data_t));
-          packetUBXHNRINS->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXHNRINS->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
-        }
-      }
-    }
-    break;
-#endif
-  case UBX_CLASS_SEC:
-    if (msg->id == UBX_SEC_SIG)
-    {
-      // Parse various byte fields into storage - but only if we have memory allocated for it
-      if (packetUBXSECSIG != nullptr)
-      {
-        packetUBXSECSIG->data.version = extractByte(msg, 0);
-
-        // Check the version
-        if ((packetUBXSECSIG->data.version == 1) && (msg->len == UBX_SEC_SIG_LEN_VERSION1))
-        {
-          packetUBXSECSIG->data.versions.version1.jamFlags.all = extractByte(msg, 4);
-          packetUBXSECSIG->data.versions.version1.spfFlags.all = extractByte(msg, 8);
-        }
-        else if (packetUBXSECSIG->data.version == 2)
-        {
-          packetUBXSECSIG->data.versions.version2.sigSecFlags.all = extractByte(msg, 1);
-          packetUBXSECSIG->data.versions.version2.jamNumCentFreqs = extractByte(msg, 3);
-          if (packetUBXSECSIG->data.versions.version2.jamNumCentFreqs > UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2)
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXESFRAW->automaticFlags.flags.bits.addToFileBuffer)
           {
-            #ifndef SFE_UBLOX_REDUCED_PROG_MEM
-            if (_printDebug == true)
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_ESF_STATUS)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXESFSTATUS != nullptr)
+        {
+          packetUBXESFSTATUS->data.iTOW = extractLong(msg, 0);
+          packetUBXESFSTATUS->data.version = extractByte(msg, 4);
+          packetUBXESFSTATUS->data.fusionMode = extractByte(msg, 12);
+          packetUBXESFSTATUS->data.numSens = extractByte(msg, 15);
+          for (uint16_t i = 0; (i < DEF_NUM_SENS) && (i < packetUBXESFSTATUS->data.numSens) && ((i * 4) < (msg->len - 16)); i++)
+          {
+            packetUBXESFSTATUS->data.status[i].sensStatus1.all = extractByte(msg, 16 + (i * 4) + 0);
+            packetUBXESFSTATUS->data.status[i].sensStatus2.all = extractByte(msg, 16 + (i * 4) + 1);
+            packetUBXESFSTATUS->data.status[i].freq = extractByte(msg, 16 + (i * 4) + 2);
+            packetUBXESFSTATUS->data.status[i].faults.all = extractByte(msg, 16 + (i * 4) + 3);
+          }
+
+          // Mark all datums as fresh (not read before)
+          packetUBXESFSTATUS->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXESFSTATUS->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXESFSTATUS->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXESFSTATUS->callbackData->iTOW, &packetUBXESFSTATUS->data.iTOW, sizeof(UBX_ESF_STATUS_data_t));
+            packetUBXESFSTATUS->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXESFSTATUS->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      break;
+  #endif
+    case UBX_CLASS_MGA:
+      if (msg->id == UBX_MGA_ACK_DATA0 && msg->len == UBX_MGA_ACK_DATA0_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXMGAACK != nullptr)
+        {
+          // Calculate how many ACKs are already stored in the ring buffer
+          uint8_t ackBufferContains;
+          if (packetUBXMGAACK->head >= packetUBXMGAACK->tail) // Check if wrap-around has occurred
+          {
+            // Wrap-around has not occurred so do a simple subtraction
+            ackBufferContains = packetUBXMGAACK->head - packetUBXMGAACK->tail;
+          }
+          else
+          {
+            // Wrap-around has occurred so do a simple subtraction but add in the buffer length (UBX_MGA_ACK_RINGBUFFER_LEN)
+            ackBufferContains = ((uint8_t)(((uint16_t)packetUBXMGAACK->head + (uint16_t)UBX_MGA_ACK_DATA0_RINGBUFFER_LEN) - (uint16_t)packetUBXMGAACK->tail));
+          }
+          // Have we got space to store this ACK?
+          if (ackBufferContains < (UBX_MGA_ACK_DATA0_RINGBUFFER_LEN - 1))
+          {
+            // Yes, we have, so store it
+            packetUBXMGAACK->data[packetUBXMGAACK->head].type = extractByte(msg, 0);
+            packetUBXMGAACK->data[packetUBXMGAACK->head].version = extractByte(msg, 1);
+            packetUBXMGAACK->data[packetUBXMGAACK->head].infoCode = extractByte(msg, 2);
+            packetUBXMGAACK->data[packetUBXMGAACK->head].msgId = extractByte(msg, 3);
+            packetUBXMGAACK->data[packetUBXMGAACK->head].msgPayloadStart[0] = extractByte(msg, 4);
+            packetUBXMGAACK->data[packetUBXMGAACK->head].msgPayloadStart[1] = extractByte(msg, 5);
+            packetUBXMGAACK->data[packetUBXMGAACK->head].msgPayloadStart[2] = extractByte(msg, 6);
+            packetUBXMGAACK->data[packetUBXMGAACK->head].msgPayloadStart[3] = extractByte(msg, 7);
+            // Increment the head
+            packetUBXMGAACK->head++;
+            if (packetUBXMGAACK->head == UBX_MGA_ACK_DATA0_RINGBUFFER_LEN)
+              packetUBXMGAACK->head = 0;
+          }
+          else
+          {
+  #ifndef SFE_UBLOX_REDUCED_PROG_MEM
+            if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
             {
-              _debugSerial.print(F("UBX_SEC_SIG: truncating "));
-              _debugSerial.print(packetUBXSECSIG->data.versions.version2.jamNumCentFreqs);
-              _debugSerial.print(F(" center frequencies to "));
-              _debugSerial.println(UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2);
+              _debugSerial.println(F("processUBXpacket: packetUBXMGAACK is full. ACK will be lost!"));
             }
-            #endif
-            packetUBXSECSIG->data.versions.version2.jamNumCentFreqs = UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2;
+  #endif
           }
-          uint16_t centFreq = 0;
-          while (centFreq < packetUBXSECSIG->data.versions.version2.jamNumCentFreqs)
-          {
-            packetUBXSECSIG->data.versions.version2.jamStateCentFreq[centFreq].all = extractLong(msg, 4 + (centFreq * 4));
-            centFreq++;
-          }
-        }
-
-        // Mark all datums as fresh (not read before)
-        packetUBXSECSIG->moduleQueried = true;
-
-        // Check if we need to copy the data for the callback
-        if ((packetUBXSECSIG->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-            && (packetUBXSECSIG->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-        {
-          memcpy(&packetUBXSECSIG->callbackData->version, &packetUBXSECSIG->data.version, sizeof(UBX_SEC_SIG_data_t));
-          packetUBXSECSIG->automaticFlags.flags.bits.callbackCopyValid = true;
-        }
-
-        // Check if we need to copy the data into the file buffer
-        if (packetUBXSECSIG->automaticFlags.flags.bits.addToFileBuffer)
-        {
-          addedToFileBuffer = storePacket(msg);
         }
       }
+      else if (msg->id == UBX_MGA_DBD && msg->len <= UBX_MGA_DBD_LEN) // Message length may be less than UBX_MGA_DBD_LEN. UBX_MGA_DBD_LEN is the maximum it will be.
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXMGADBD != nullptr)
+        {
+          // Calculate how many DBDs are already stored in the ring buffer
+          uint8_t dbdBufferContains;
+          if (packetUBXMGADBD->head >= packetUBXMGADBD->tail) // Check if wrap-around has occurred
+          {
+            // Wrap-around has not occurred so do a simple subtraction
+            dbdBufferContains = packetUBXMGADBD->head - packetUBXMGADBD->tail;
+          }
+          else
+          {
+            // Wrap-around has occurred so do a simple subtraction but add in the buffer length (UBX_MGA_DBD_RINGBUFFER_LEN)
+            dbdBufferContains = ((uint8_t)(((uint16_t)packetUBXMGADBD->head + (uint16_t)UBX_MGA_DBD_RINGBUFFER_LEN) - (uint16_t)packetUBXMGADBD->tail));
+          }
+          // Have we got space to store this DBD?
+          if (dbdBufferContains < (UBX_MGA_DBD_RINGBUFFER_LEN - 1))
+          {
+            // Yes, we have, so store it
+            // We need to save the entire message - header, payload and checksum
+            packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryHeader1 = UBX_SYNCH_1;
+            packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryHeader2 = UBX_SYNCH_2;
+            packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryClass = UBX_CLASS_MGA;
+            packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryID = UBX_MGA_DBD;
+            packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryLenLSB = (uint8_t)(msg->len & 0xFF); // We need to store the length of the DBD entry. The entry itself does not contain a length...
+            packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryLenMSB = (uint8_t)((msg->len >> 8) & 0xFF);
+            for (uint16_t i = 0; i < msg->len; i++)
+            {
+              packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntry[i] = extractByte(msg, i);
+            }
+            packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryChecksumA = msg->checksumA;
+            packetUBXMGADBD->data[packetUBXMGADBD->head].dbdEntryChecksumB = msg->checksumB;
+            // Increment the head
+            packetUBXMGADBD->head++;
+            if (packetUBXMGADBD->head == UBX_MGA_DBD_RINGBUFFER_LEN)
+              packetUBXMGADBD->head = 0;
+          }
+          else
+          {
+  #ifndef SFE_UBLOX_REDUCED_PROG_MEM
+            if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
+            {
+              _debugSerial.println(F("processUBXpacket: packetUBXMGADBD is full. DBD data will be lost!"));
+            }
+  #endif
+          }
+        }
+      }
+      break;
+  #ifndef SFE_UBLOX_DISABLE_HNR
+    case UBX_CLASS_HNR:
+      if (msg->id == UBX_HNR_PVT && msg->len == UBX_HNR_PVT_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXHNRPVT != nullptr)
+        {
+          packetUBXHNRPVT->data.iTOW = extractLong(msg, 0);
+          packetUBXHNRPVT->data.year = extractInt(msg, 4);
+          packetUBXHNRPVT->data.month = extractByte(msg, 6);
+          packetUBXHNRPVT->data.day = extractByte(msg, 7);
+          packetUBXHNRPVT->data.hour = extractByte(msg, 8);
+          packetUBXHNRPVT->data.min = extractByte(msg, 9);
+          packetUBXHNRPVT->data.sec = extractByte(msg, 10);
+          packetUBXHNRPVT->data.valid.all = extractByte(msg, 11);
+          packetUBXHNRPVT->data.nano = extractSignedLong(msg, 12);
+          packetUBXHNRPVT->data.gpsFix = extractByte(msg, 16);
+          packetUBXHNRPVT->data.flags.all = extractByte(msg, 17);
+          packetUBXHNRPVT->data.lon = extractSignedLong(msg, 20);
+          packetUBXHNRPVT->data.lat = extractSignedLong(msg, 24);
+          packetUBXHNRPVT->data.height = extractSignedLong(msg, 28);
+          packetUBXHNRPVT->data.hMSL = extractSignedLong(msg, 32);
+          packetUBXHNRPVT->data.gSpeed = extractSignedLong(msg, 36);
+          packetUBXHNRPVT->data.speed = extractSignedLong(msg, 40);
+          packetUBXHNRPVT->data.headMot = extractSignedLong(msg, 44);
+          packetUBXHNRPVT->data.headVeh = extractSignedLong(msg, 48);
+          packetUBXHNRPVT->data.hAcc = extractLong(msg, 52);
+          packetUBXHNRPVT->data.vAcc = extractLong(msg, 56);
+          packetUBXHNRPVT->data.sAcc = extractLong(msg, 60);
+          packetUBXHNRPVT->data.headAcc = extractLong(msg, 64);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXHNRPVT->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXHNRPVT->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXHNRPVT->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXHNRPVT->callbackData->iTOW, &packetUBXHNRPVT->data.iTOW, sizeof(UBX_HNR_PVT_data_t));
+            packetUBXHNRPVT->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXHNRPVT->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_HNR_ATT && msg->len == UBX_HNR_ATT_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXHNRATT != nullptr)
+        {
+          packetUBXHNRATT->data.iTOW = extractLong(msg, 0);
+          packetUBXHNRATT->data.version = extractByte(msg, 4);
+          packetUBXHNRATT->data.roll = extractSignedLong(msg, 8);
+          packetUBXHNRATT->data.pitch = extractSignedLong(msg, 12);
+          packetUBXHNRATT->data.heading = extractSignedLong(msg, 16);
+          packetUBXHNRATT->data.accRoll = extractLong(msg, 20);
+          packetUBXHNRATT->data.accPitch = extractLong(msg, 24);
+          packetUBXHNRATT->data.accHeading = extractLong(msg, 28);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXHNRATT->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXHNRATT->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXHNRATT->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXHNRATT->callbackData->iTOW, &packetUBXHNRATT->data.iTOW, sizeof(UBX_HNR_ATT_data_t));
+            packetUBXHNRATT->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXHNRATT->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      else if (msg->id == UBX_HNR_INS && msg->len == UBX_HNR_INS_LEN)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXHNRINS != nullptr)
+        {
+          packetUBXHNRINS->data.bitfield0.all = extractLong(msg, 0);
+          packetUBXHNRINS->data.iTOW = extractLong(msg, 8);
+          packetUBXHNRINS->data.xAngRate = extractSignedLong(msg, 12);
+          packetUBXHNRINS->data.yAngRate = extractSignedLong(msg, 16);
+          packetUBXHNRINS->data.zAngRate = extractSignedLong(msg, 20);
+          packetUBXHNRINS->data.xAccel = extractSignedLong(msg, 24);
+          packetUBXHNRINS->data.yAccel = extractSignedLong(msg, 28);
+          packetUBXHNRINS->data.zAccel = extractSignedLong(msg, 32);
+
+          // Mark all datums as fresh (not read before)
+          packetUBXHNRINS->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXHNRINS->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXHNRINS->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXHNRINS->callbackData->bitfield0.all, &packetUBXHNRINS->data.bitfield0.all, sizeof(UBX_HNR_INS_data_t));
+            packetUBXHNRINS->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXHNRINS->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      break;
+  #endif
+    case UBX_CLASS_SEC:
+      if (msg->id == UBX_SEC_SIG)
+      {
+        // Parse various byte fields into storage - but only if we have memory allocated for it
+        if (packetUBXSECSIG != nullptr)
+        {
+          packetUBXSECSIG->data.version = extractByte(msg, 0);
+
+          // Check the version
+          if ((packetUBXSECSIG->data.version == 1) && (msg->len == UBX_SEC_SIG_LEN_VERSION1))
+          {
+            packetUBXSECSIG->data.versions.version1.jamFlags.all = extractByte(msg, 4);
+            packetUBXSECSIG->data.versions.version1.spfFlags.all = extractByte(msg, 8);
+          }
+          else if (packetUBXSECSIG->data.version == 2)
+          {
+            packetUBXSECSIG->data.versions.version2.sigSecFlags.all = extractByte(msg, 1);
+            packetUBXSECSIG->data.versions.version2.jamNumCentFreqs = extractByte(msg, 3);
+            if (packetUBXSECSIG->data.versions.version2.jamNumCentFreqs > UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2)
+            {
+              #ifndef SFE_UBLOX_REDUCED_PROG_MEM
+              if (_printDebug == true)
+              {
+                _debugSerial.print(F("UBX_SEC_SIG: truncating "));
+                _debugSerial.print(packetUBXSECSIG->data.versions.version2.jamNumCentFreqs);
+                _debugSerial.print(F(" center frequencies to "));
+                _debugSerial.println(UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2);
+              }
+              #endif
+              packetUBXSECSIG->data.versions.version2.jamNumCentFreqs = UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2;
+            }
+            uint16_t centFreq = 0;
+            while (centFreq < packetUBXSECSIG->data.versions.version2.jamNumCentFreqs)
+            {
+              packetUBXSECSIG->data.versions.version2.jamStateCentFreq[centFreq].all = extractLong(msg, 4 + (centFreq * 4));
+              centFreq++;
+            }
+          }
+
+          // Mark all datums as fresh (not read before)
+          packetUBXSECSIG->moduleQueried = true;
+
+          // Check if we need to copy the data for the callback
+          if ((packetUBXSECSIG->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
+              && (packetUBXSECSIG->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
+          {
+            memcpy(&packetUBXSECSIG->callbackData->version, &packetUBXSECSIG->data.version, sizeof(UBX_SEC_SIG_data_t));
+            packetUBXSECSIG->automaticFlags.flags.bits.callbackCopyValid = true;
+          }
+
+          // Check if we need to copy the data into the file buffer
+          if (packetUBXSECSIG->automaticFlags.flags.bits.addToFileBuffer)
+          {
+            addedToFileBuffer = storePacket(msg);
+          }
+        }
+      }
+      break;
     }
-    break;
   }
 
   // Check if this UBX message should be added to the file buffer - if it has not been added already

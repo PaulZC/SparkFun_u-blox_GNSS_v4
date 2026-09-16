@@ -30,7 +30,7 @@
 
 // The generic typed-value carrier used to move a single field's value across the
 // Class/ID/field-name generic boundary (see DevUBLOXGNSS::getUBXfield() in u-blox_GNSS.h/.cpp, and
-// getFieldFromCallbackDataStruct() at the bottom of this file).
+// getUbxMessageField() at the bottom of this file).
 typedef struct ubxAnyType
 {
     uint8_t ubxDataType; // Which union member is valid, from ubxDataType8bit()
@@ -49,8 +49,8 @@ typedef struct ubxAnyType
         double R8;
     };
 
-    // A single, unambiguous implicit numeric conversion. See AGENTS.md "getCallbackDataStruct
-    // Factory design pattern": "getFieldFromCallbackDataStruct will also need to use a Factory
+    // A single, unambiguous implicit numeric conversion. See AGENTS.md "getUbxMessagePtr
+    // Factory design pattern": "getUbxMessageField will also need to use a Factory
     // method / design pattern to handle the different return types. If this is not possible,
     // identify the nearest alternative strategy which is possible." A non-template C++ function
     // cannot return a different static type per call depending on a runtime field-name string (the
@@ -98,7 +98,7 @@ typedef struct ubxAnyType
         case ubxDataType8bit(UBX_CFG_R8):
             return R8;
         default:
-            return 0.0; // Unknown tag, or the "field not found" sentinel set by getFieldFromCallbackDataStruct()
+            return 0.0; // Unknown tag, or the "field not found" sentinel set by getUbxMessageField()
         }
     }
 } ubxAnyType;
@@ -106,19 +106,19 @@ typedef struct ubxAnyType
 class ubxMessage; // Forward declaration - see ubxCallbackDataCommon_t below
 
 // What actually crosses into the user's callback function - see AGENTS.md "class ubxMessage needs
-// separate callback storage" / "setAutoCallbackPtr" / "getCallbackDataStruct Factory design
+// separate callback storage" / "setAutoCallbackPtr" / "getUbxMessagePtr Factory design
 // pattern". AGENTS.md envisaged this containing "an enum representing the type of data structure
 // (UBX_NAV_PVT_data_t, UBX_NAV_HPPOSLLH_data_t, etc.)" - but the whole point of the v4 registry is
 // that there is no longer a distinct C struct type per message, so there is nothing for such an
 // enum to name. `messagePtr` carries the same information generically: it is the opaque handle
-// getCallbackDataStruct()/getFieldFromCallbackDataStruct() use to navigate back to the message's
+// getUbxMessagePtr()/getUbxMessageField() use to navigate back to the message's
 // own field table and callback storage, for any message, without a per-message enum to maintain.
 typedef struct
 {
     uint8_t Class; // Convenience - which message this is, without needing to dereference messagePtr
     uint8_t ID;
-    ubxMessage *messagePtr; // Opaque - do not dereference directly. Use getCallbackDataStruct() /
-                            // getFieldFromCallbackDataStruct() to read it.
+    ubxMessage *messagePtr; // Opaque - do not dereference directly. Use getUbxMessagePtr() /
+                            // getUbxMessageField() to read it.
 } ubxCallbackDataCommon_t;
 
 class ubxMessage
@@ -223,7 +223,7 @@ public:
 
     // Look up one field of this message, by name, in the given byte buffer (either this object's
     // own _storage for a live/polled read, or its _callbackStorage for a callback read - see
-    // getFieldFromCallbackDataStruct() below). This is the shared core that used to be duplicated
+    // getUbxMessageField() below). This is the shared core that used to be duplicated
     // between the live-read path and the (new) callback-read path; ubxMessageVector::extractValue()
     // delegates to this too.
     bool extractFieldFrom(const uint8_t *buffer, const char *fieldName, ubxAnyType *value) const
@@ -350,14 +350,14 @@ public:
 };
 
 // Factory: hands back the opaque per-message object a callback's ubxCallbackDataCommon_t* points
-// at, so getFieldFromCallbackDataStruct() can navigate its field table and extract a named field's
-// value - see AGENTS.md "getCallbackDataStruct Factory design pattern". This is a free function
+// at, so getUbxMessageField() can navigate its field table and extract a named field's
+// value - see AGENTS.md "getUbxMessagePtr Factory design pattern". This is a free function
 // (not a DevUBLOXGNSS method) because the callback itself is a free function with no `this` to
 // call through - see CallbackExample1_NAVHPPOSLLH.ino. It doesn't need to consult any particular
 // DevUBLOXGNSS instance's registry: ubxCallbackDataCommon_t already carries the messagePtr directly
 // (set by DevUBLOXGNSS::checkCallbacks() when it fires the callback), so there is nothing left for
 // a more elaborate factory to do.
-inline ubxMessage *getCallbackDataStruct(ubxCallbackDataCommon_t *theData)
+inline ubxMessage *getUbxMessagePtr(ubxCallbackDataCommon_t *theData)
 {
     if (theData == nullptr)
         return nullptr;
@@ -367,11 +367,11 @@ inline ubxMessage *getCallbackDataStruct(ubxCallbackDataCommon_t *theData)
 // Factory: extracts a named field from the message a callback just fired for, reading from its
 // _callbackStorage (the copy storePayload() froze when the callback was queued) rather than its
 // live _storage (which may already have been overwritten by newer data by the time the callback
-// actually runs). See AGENTS.md "getFieldFromCallbackDataStruct will also need to use a Factory
+// actually runs). See AGENTS.md "getUbxMessageField will also need to use a Factory
 // method / design pattern to handle the different return types. If this is not possible, identify
 // the nearest alternative strategy which is possible" - see ubxAnyType::operator double() above for
 // why this returns ubxAnyType rather than a genuinely per-field C++ type.
-inline ubxAnyType getFieldFromCallbackDataStruct(ubxMessage *theMessage, const char *fieldName)
+inline ubxAnyType getUbxMessageField(ubxMessage *theMessage, const char *fieldName)
 {
     ubxAnyType value;
     value.ubxDataType = 0xFF; // Sentinel - ubxDataType8bit() can never produce this value; operator double() returns 0.0 for it

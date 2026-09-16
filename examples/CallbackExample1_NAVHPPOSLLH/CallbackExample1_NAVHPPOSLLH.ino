@@ -29,25 +29,26 @@ SFE_UBLOX_GNSS myGNSS; // SFE_UBLOX_GNSS uses I2C
 
 void printPVTdata(ubxCallbackDataCommon_t *theData)
 {
-    auto theDataStruct = getCallbackDataStruct(theData);
+    ubxMessage *theDataStruct = getUbxMessagePtr(theData);
 
-    auto timeOfWeek = getFieldFromCallbackDataStruct(theDataStruct, "iTOW");
+    // getUbxMessageField returns everything as double. Cast to other types as needed
+    unsigned long timeOfWeek = (unsigned long)getUbxMessageField(theDataStruct, "iTOW");
     Serial.print(F("TimeOfWeek: "));
     Serial.print(timeOfWeek); // Print the Time Of Week
     Serial.print(F(" (ms)"));
 
-    auto latitude = getFieldFromCallbackDataStruct(theDataStruct, "lat");
+    long latitude = (long)getUbxMessageField(theDataStruct, "lat");
     Serial.print(F(" Lat: "));
     Serial.print(latitude); // Print the latitude
 
-    auto longitude = getFieldFromCallbackDataStruct(theDataStruct, "lon");
+    long longitude = (long)getUbxMessageField(theDataStruct, "lon");
     Serial.print(F(" Long: "));
     Serial.print(longitude); // Print the longitude
     Serial.print(F(" (degrees * 10^-7)"));
 
-    auto hAcc = getFieldFromCallbackDataStruct(theDataStruct, "hAcc");
+    float hAcc = (float)getUbxMessageField(theDataStruct, "hAcc");
     Serial.print(F(" Horiz Acc: "));
-    Serial.print(hAcc / 10); // Print the horizontal accuracy estimate
+    Serial.print(hAcc / 10, 1); // Print the horizontal accuracy estimate
     Serial.println(F(" (mm)"));
 }
 

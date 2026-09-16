@@ -488,33 +488,33 @@ Create `ubxCallbackDataCommon_t`. It will need to be a new `struct` which includ
 
 `ubxMessage` currently defines `_callbackPtr` as `void (*_callbackPtr)(uint8_t *)`. This will need to be changed to `void (*_callbackPtr)(ubxCallbackDataCommon_t *)`
 
-### getCallbackDataStruct Factory design pattern
+### getUbxMessagePtr Factory design pattern
 
 Add whatever code is necessary to make it possible to do the following in the callback:
 
 ```
 void printPVTdata(ubxCallbackDataCommon_t *theData)
 {
-    auto theDataStruct = getCallbackDataStruct(theData);
+    auto theDataStruct = getUbxMessagePtr(theData);
 
-    auto timeOfWeek = getFieldFromCallbackDataStruct(theDataStruct, "iTOW");
+    auto timeOfWeek = getUbxMessageField(theDataStruct, "iTOW");
     Serial.print(F("TimeOfWeek: "));
     Serial.print(timeOfWeek); // Print the Time Of Week
     Serial.print(F(" (ms)"));
 }
 ```
 
-I envisage `getCallbackDataStruct` as being a Factory method / design pattern which returns enough information to make `auto timeOfWeek = getFieldFromCallbackDataStruct(theDataStruct, "iTOW");` possible. The return type of `getCallbackDataStruct` will need to contain enough information so that `getFieldFromCallbackDataStruct` can navigate to the `_storage` of the `ubxNAVHPPOSLLH` and extract the "iTOW" as `UBX_CFG_U4` (`uint32_t`).
+I envisage `getUbxMessagePtr` as being a Factory method / design pattern which returns enough information to make `auto timeOfWeek = getUbxMessageField(theDataStruct, "iTOW");` possible. The return type of `getUbxMessagePtr` will need to contain enough information so that `getUbxMessageField` can navigate to the `_storage` of the `ubxNAVHPPOSLLH` and extract the "iTOW" as `UBX_CFG_U4` (`uint32_t`).
 
-`getFieldFromCallbackDataStruct` will need to:
+`getUbxMessageField` will need to:
 - Step through each registered message type
-- Compare the `_Class` and `_ID` of the message type to the class and ID stored in return type of `getCallbackDataStruct`
+- Compare the `_Class` and `_ID` of the message type to the class and ID stored in return type of `getUbxMessagePtr`
 - If a match is found:
     - The code should step through the `const ubxField ubxFields[]` for that message
     - Use `extractValue()` to extract the value for the selected Class, ID and `fieldName`, returning it in a `ubxAnyType`
     - Copy the value from `ubxAnyType` into the return type
 
-I envisage `getFieldFromCallbackDataStruct` will also need to use a Factory method / design pattern to handle the different return types
+I envisage `getUbxMessageField` will also need to use a Factory method / design pattern to handle the different return types
 
 If this is not possible, identify the nearest alternative strategy which is possible.
 
