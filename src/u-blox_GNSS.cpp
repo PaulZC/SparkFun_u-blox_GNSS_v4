@@ -11739,7 +11739,7 @@ uint8_t DevUBLOXGNSS::getCarrierSolutionType(uint16_t maxWait)
 uint8_t DevUBLOXGNSS::getSIV(uint16_t maxWait)
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "nuumSV", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "numSV", &value, maxWait))
     return 0;
   return value.U1;
 }
@@ -12120,7 +12120,7 @@ int32_t DevUBLOXGNSS::getVehiclePitch(uint16_t maxWait)
 int32_t DevUBLOXGNSS::getVehicleHeading(uint16_t maxWait)
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVAT, "hehHeading", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVAT, "vehHeading", &value, maxWait))
     return 0;
   return value.I4;
 }
