@@ -285,22 +285,8 @@ setValFloat	KEYWORD2
 setValDouble	KEYWORD2
 
 newCfgValset	KEYWORD2
-newCfgValset8	KEYWORD2
-newCfgValset16	KEYWORD2
-newCfgValset32	KEYWORD2
-newCfgValset64	KEYWORD2
 addCfgValset	KEYWORD2
 addCfgValsetN	KEYWORD2
-addCfgValset8	KEYWORD2
-addCfgValset16	KEYWORD2
-addCfgValset32	KEYWORD2
-addCfgValset64	KEYWORD2
-addCfgValsetFloat	KEYWORD2
-addCfgValsetDouble	KEYWORD2
-sendCfgValset8	KEYWORD2
-sendCfgValset16	KEYWORD2
-sendCfgValset32	KEYWORD2
-sendCfgValset64	KEYWORD2
 sendCfgValset	KEYWORD2
 getCfgValsetLen	KEYWORD2
 getCfgValsetSpaceRemaining	KEYWORD2
@@ -425,7 +411,7 @@ flushNAVCLOCK	KEYWORD2
 logNAVCLOCK	KEYWORD2
 
 getLeapSecondEvent	KEYWORD2
-getLeapIndicator    KEYWORD2
+getTimeToLsEvent    KEYWORD2
 getCurrentLeapSeconds   KEYWORD2
 
 getSurveyStatus	KEYWORD2

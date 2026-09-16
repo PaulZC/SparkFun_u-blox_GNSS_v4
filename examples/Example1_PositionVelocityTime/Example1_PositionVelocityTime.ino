@@ -47,18 +47,42 @@ void loop()
 {
   // Poll the position, velocity and time (PVT) information.
   // getPVT() returns true when new data is received.
-  if (myGNSS.getPVT() == true)
+  if (myGNSS.getPVT() == true) // Use the helper method getPVT()
   {
-    int32_t latitude = myGNSS.getLatitude();
+    int32_t latitude = myGNSS.getLatitude(); // Use the helper method
     Serial.print(F("Lat: "));
     Serial.print(latitude);
 
-    int32_t longitude = myGNSS.getLongitude();
+    int32_t longitude = myGNSS.getLongitude(); // Use the helper method
     Serial.print(F(" Long: "));
     Serial.print(longitude);
     Serial.print(F(" (degrees * 10^-7)"));
 
-    int32_t altitude = myGNSS.getAltitudeMSL(); // Altitude above Mean Sea Level
+    int32_t altitude = myGNSS.getAltitudeMSL(); // Helper method for Altitude above Mean Sea Level
+    Serial.print(F(" Alt: "));
+    Serial.print(altitude);
+    Serial.print(F(" (mm)"));
+
+    Serial.println();
+  }
+
+  // Poll the position, velocity and time (PVT) information.
+  // getUBX() returns true when new data is received.
+  if (myGNSS.getUBX("NAV","PVT") == true)
+  {
+    ubxMessage *msg = myGNSS.ubxMessages.findByName("NAV","PVT");
+
+    // getUbxMessageField converts everything to double. Convert lat back to uint32_t
+    int32_t latitude = (int32_t)getUbxMessageField(msg, "lat");
+    Serial.print(F("Lat: "));
+    Serial.print(latitude);
+
+    int32_t longitude = (int32_t)getUbxMessageField(msg, "lon");
+    Serial.print(F(" Long: "));
+    Serial.print(longitude);
+    Serial.print(F(" (degrees * 10^-7)"));
+
+    int32_t altitude = (int32_t)getUbxMessageField(msg, "hMSL");
     Serial.print(F(" Alt: "));
     Serial.print(altitude);
     Serial.print(F(" (mm)"));

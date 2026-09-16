@@ -371,12 +371,21 @@ inline ubxMessage *getUbxMessagePtr(ubxCallbackDataCommon_t *theData)
 // method / design pattern to handle the different return types. If this is not possible, identify
 // the nearest alternative strategy which is possible" - see ubxAnyType::operator double() above for
 // why this returns ubxAnyType rather than a genuinely per-field C++ type.
-inline ubxAnyType getUbxMessageField(ubxMessage *theMessage, const char *fieldName)
+inline ubxAnyType getUbxMessageFieldCallback(ubxMessage *theMessage, const char *fieldName)
 {
     ubxAnyType value;
     value.ubxDataType = 0xFF; // Sentinel - ubxDataType8bit() can never produce this value; operator double() returns 0.0 for it
     value.U8 = 0;
     if (theMessage != nullptr)
         theMessage->extractFieldFrom(theMessage->_callbackStorage, fieldName, &value);
+    return value;
+}
+inline ubxAnyType getUbxMessageField(ubxMessage *theMessage, const char *fieldName)
+{
+    ubxAnyType value;
+    value.ubxDataType = 0xFF; // Sentinel - ubxDataType8bit() can never produce this value; operator double() returns 0.0 for it
+    value.U8 = 0;
+    if (theMessage != nullptr)
+        theMessage->extractFieldFrom(theMessage->_storage, fieldName, &value);
     return value;
 }

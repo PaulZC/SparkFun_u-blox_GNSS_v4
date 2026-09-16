@@ -188,6 +188,23 @@ public:
         return SFE_UBLOX_STATUS_SUCCESS;
     }
 
+    sfe_ublox_status_e getAddToFileBuffer(uint8_t Class, uint8_t ID, bool *adding)
+    {
+        ubxMessage *msg = find(Class, ID);
+        if (msg == nullptr)
+            return SFE_UBLOX_STATUS_INVALID_ARG;
+        *adding = msg->_addToFileBuffer;
+        return SFE_UBLOX_STATUS_SUCCESS;
+    }
+    sfe_ublox_status_e setAddToFileBuffer(uint8_t Class, uint8_t ID, bool adding)
+    {
+        ubxMessage *msg = find(Class, ID);
+        if (msg == nullptr)
+            return SFE_UBLOX_STATUS_INVALID_ARG;
+        msg->_addToFileBuffer = adding;
+        return SFE_UBLOX_STATUS_SUCCESS;
+    }
+
     sfe_ublox_status_e getMsgOutKey(uint8_t Class, uint8_t ID, uint8_t commType, uint32_t *key)
     {
         ubxMessage *msg = find(Class, ID);
