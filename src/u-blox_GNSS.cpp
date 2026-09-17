@@ -1565,11 +1565,12 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
           else
           {
             debugPrint("process: NMEA checksum fail (2)! Expected ", true); // Important
-            debugPrint(expectedChecksum1, true);
-            debugPrint(expectedChecksum2, true);
+            char checkHex[3];
+            sprintf(checkHex, "%c%c", expectedChecksum1, expectedChecksum2);
+            debugPrint(checkHex, true);
             debugPrint(" Got ", true);
-            debugPrint(*(workingNMEAPtr + charsChecked), true);
-            debugPrint(*(workingNMEAPtr + charsChecked + 1), true);
+            sprintf(checkHex, "%c%c", *(workingNMEAPtr + charsChecked), *(workingNMEAPtr + charsChecked + 1));
+            debugPrint(checkHex, true);
             debugPrint("\r\n", true);
           }
         }
@@ -2945,11 +2946,19 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
     //   it also copies the payload into _callbackStorage and sets _callbackDataValid
     if (ubxMessages.storePayload(msg->cls, msg->id, msg->payload, msg->len) != SFE_UBLOX_STATUS_SUCCESS)
     {
-
+      debugPrint("processUBXpacket: storePayload failed for msg Class ");
+      debugPrint(msg->cls);
+      debugPrint(" ID ");
+      debugPrint(msg->id);
+      debugPrint(" Len ");
+      debugPrintln(msg->len);
     }
-      // The only thing storePayload doesn't do is copy the message into the file buffer.
-      // Check if we need to copy the data into the file buffer
-    if (ubxMessagePtr->_addToFileBuffer)
+
+    // The only thing storePayload doesn't do is copy the message into the file buffer.
+    // Check if we need to copy the data into the file buffer
+    bool adding = false;
+    ubxMessages.getAddToFileBuffer(msg->cls, msg->id, &adding);
+    if (adding)
       addedToFileBuffer = storePacket(msg);
   }
   else
