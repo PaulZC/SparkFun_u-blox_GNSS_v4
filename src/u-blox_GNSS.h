@@ -44,6 +44,7 @@
 #include "u-blox_Class_and_ID.h"
 #include "sfe_bus.h"
 #include "ubxMessageVector.h" // v4 scaffolding - see AGENTS.md "Reference Scaffolding"
+#include "nmeaMessageVector.h"
 
 // Define a digital pin to aid debugging
 // Leave set to -1 if not needed
