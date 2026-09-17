@@ -9,10 +9,10 @@
 
 #pragma once
 
-#include "ubxMessage.h"
-#include "u-blox_config_keys.h"
-#include "u-blox_Class_and_ID.h"
-#include "u-blox_structs.h" // For UBX_MON_HW2_LEN
+#include "../ubxMessage.h"
+#include "../u-blox_config_keys.h"
+#include "../u-blox_Class_and_ID.h"
+#include "../u-blox_structs.h" // For UBX_MON_HW2_LEN
 
 class ubxMONHW2 : public ubxMessage
 {

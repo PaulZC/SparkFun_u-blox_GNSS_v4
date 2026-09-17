@@ -9,10 +9,10 @@
 
 #pragma once
 
-#include "ubxMessage.h"
-#include "u-blox_config_keys.h"
-#include "u-blox_Class_and_ID.h"
-#include "u-blox_structs.h" // For UBX_NAV_TIMELS_LEN
+#include "../ubxMessage.h"
+#include "../u-blox_config_keys.h"
+#include "../u-blox_Class_and_ID.h"
+#include "../u-blox_structs.h" // For UBX_NAV_TIMELS_LEN
 
 class ubxNAVTIMELS : public ubxMessage
 {
