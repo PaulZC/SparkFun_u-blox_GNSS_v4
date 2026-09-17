@@ -667,7 +667,7 @@ Such that: to remove support for (e.g.) NAV-PVT, all that would be required woul
 
 v4 will include the `nmeaMessage` `class`, which will follow the structure of `ubxMessage` as closely as possible.
 
-NMEA Messages are all ASCII text. To avoid difficulties with `anyType` code, data extracted by `getNmeaMessageField` / `getNmeaMessageFieldCallback` will be returned as `String`. Helper methods will be added later if needed to convert `String` to other types. But it is expectedd the standard C functions `atoi`, `atof` and `strtod` should cover most use cases.
+NMEA Messages are all ASCII text. To avoid difficulties with `anyType` code, data extracted by `getNmeaMessageField` / `getNmeaMessageFieldCallback` will be returned as `String`. Helper methods will be added later if needed to convert `String` to other types. But it is expected the standard C functions `atoi`, `atof` and `strtod` should cover most use cases.
 
 Prototypes of `nmeaMessage.h`​, `nmeaMessageRegistry.h`​, `nmeaMessageVector.h`​ and `nmeaGGA.h` have been added for review.
 
