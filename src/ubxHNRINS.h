@@ -56,3 +56,5 @@ public:
                    numFields, (const void *)&ubxFields, (const uint32_t *)msgOutKeys);
     }
 };
+
+ubxRegisterMessage(ubxHNRINS);

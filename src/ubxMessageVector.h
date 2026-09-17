@@ -21,6 +21,12 @@
 #include <string.h>
 
 #include "ubxMessage.h"
+
+// ===========================
+
+// Support for individual UBX messages is contained in these files
+// Individual files can be commented to save both program memory and RAM
+
 #include "ubxNAVPVT.h"
 #include "ubxNAVPOSECEF.h"
 #include "ubxNAVPOSLLH.h"
@@ -51,6 +57,9 @@
 #include "ubxHNRPVT.h"
 #include "ubxHNRATT.h"
 #include "ubxHNRINS.h"
+
+// ===========================
+
 #include "u-blox_external_typedefs.h" // sfe_ublox_status_e
 #include "u-blox_config_keys.h"       // UBX_CFG_* type tags
 
@@ -61,40 +70,12 @@ public:
 
     ubxMessageVector(void)
     {
-        // Each supported message is instantiated exactly once, here. This is the
-        // "self-registration" step described in AGENTS.md - see "Still undesigned even after
-        // this prototype" there for the conditional-registration mechanism this still needs
-        // (today, deleting a message header also requires removing its constructor call here).
-        ubxMessageVectors.push_back(new ubxNAVPVT());
-        ubxMessageVectors.push_back(new ubxNAVPOSECEF());
-        ubxMessageVectors.push_back(new ubxNAVPOSLLH());
-        ubxMessageVectors.push_back(new ubxNAVSTATUS());
-        ubxMessageVectors.push_back(new ubxNAVDOP());
-        ubxMessageVectors.push_back(new ubxNAVATT());
-        ubxMessageVectors.push_back(new ubxNAVODO());
-        ubxMessageVectors.push_back(new ubxNAVVELECEF());
-        ubxMessageVectors.push_back(new ubxNAVVELNED());
-        ubxMessageVectors.push_back(new ubxNAVHPPOSECEF());
-        ubxMessageVectors.push_back(new ubxNAVHPPOSLLH());
-        ubxMessageVectors.push_back(new ubxNAVPVAT());
-        ubxMessageVectors.push_back(new ubxNAVTIMEUTC());
-        ubxMessageVectors.push_back(new ubxNAVCLOCK());
-        ubxMessageVectors.push_back(new ubxNAVTIMELS());
-        ubxMessageVectors.push_back(new ubxNAVSVIN());
-        ubxMessageVectors.push_back(new ubxNAVRELPOSNED());
-        ubxMessageVectors.push_back(new ubxNAVDAHEADING());
-        ubxMessageVectors.push_back(new ubxNAVAOPSTATUS());
-        ubxMessageVectors.push_back(new ubxNAVEOE());
-        ubxMessageVectors.push_back(new ubxRXMCOR());
-        ubxMessageVectors.push_back(new ubxMONHW());
-        ubxMessageVectors.push_back(new ubxMONHW2());
-        ubxMessageVectors.push_back(new ubxTIMTM2());
-        ubxMessageVectors.push_back(new ubxTIMTP());
-        ubxMessageVectors.push_back(new ubxESFALG());
-        ubxMessageVectors.push_back(new ubxESFINS());
-        ubxMessageVectors.push_back(new ubxHNRPVT());
-        ubxMessageVectors.push_back(new ubxHNRATT());
-        ubxMessageVectors.push_back(new ubxHNRINS());
+        // Each header included above (e.g. ubxNAVPVT.h) self-registers a builder for its
+        // message class via ubxRegisterMessage() when the header is compiled in - see
+        // AGENTS.md "Message Class self-registration". This asks the registry to instantiate
+        // one instance of every message class that self-registered. To drop support for a
+        // message, comment out its #include above - nothing here needs to change.
+        ubxMessageRegistry::get().buildAll(ubxMessageVectors);
     }
 
     ~ubxMessageVector(void)

@@ -349,6 +349,8 @@ public:
     uint32_t _msgOutKeys[4] = {0, 0, 0, 0};    // UBLOX_CFG_MSGOUT_* keys for I2C, SPI, UART1, UART2
 };
 
+#include "ubxMessageRegistry.h" // Message self-registration - see AGENTS.md "Message Class self-registration"
+
 // Factory: hands back the opaque per-message object a callback's ubxCallbackDataCommon_t* points
 // at, so getUbxMessageField() can navigate its field table and extract a named field's
 // value - see AGENTS.md "getUbxMessagePtr Factory design pattern". This is a free function
