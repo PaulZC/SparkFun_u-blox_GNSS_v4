@@ -112,7 +112,7 @@ public:
             if (strncmp(fields[i].fieldName, fieldName, sizeof(fields[i].fieldName)) != 0)
                 continue;
 
-            const uint8_t *fieldStart = buffer + 1; // Point to the first char of the name
+            const uint8_t *fieldStart = buffer; // Points at the char just before the field data (the preceding delimiter, or '$' for field 0)
             const uint8_t *fieldEnd = buffer + 1; // Point to the first char of the name
 
             // Count the commas
@@ -179,7 +179,7 @@ public:
                 {
                     fieldStart++; // Skip over the decimal point
                     double multiplier = 1.0 / 600.0;
-                    while (fieldStart < fieldEnd - 1)
+                    while (fieldStart < fieldEnd)
                     {
                         field += (double)(*fieldStart++ - '0') * multiplier;
                         multiplier /= 10.0;
@@ -203,7 +203,7 @@ public:
                 {
                     fieldStart++; // Skip over the decimal point
                     double multiplier = 1.0 / 600.0;
-                    while (fieldStart < fieldEnd - 1)
+                    while (fieldStart < fieldEnd)
                     {
                         field += (double)(*fieldStart++ - '0') * multiplier;
                         multiplier /= 10.0;
@@ -215,12 +215,20 @@ public:
                 return true;
             case nmeaDataTypeChar:
             case nmeaDataTypeDigit:
+                fieldStart++;
                 value = String(*fieldStart);
                 return true;
             case nmeaDataTypeNumeric:
             {
-                // Convert integer / floating point to double
+                // Convert integer / floating point to double. Could be negative - e.g.
+                // nmeaDTM's alt (altitude offset) field.
                 fieldStart++;
+                bool isNegative = false;
+                if (*fieldStart == '-') // Handle a leading minus sign
+                {
+                    isNegative = true;
+                    fieldStart++;
+                }
                 double field = (double)(*fieldStart++ - '0');
                 while ((*fieldStart != '.') && (fieldStart < fieldEnd))
                 {
@@ -232,13 +240,15 @@ public:
                 {
                     fieldStart++; // Skip over the decimal point
                     double multiplier = 1.0 / 10.0;
-                    while (fieldStart < fieldEnd - 1)
+                    while (fieldStart < fieldEnd)
                     {
                         field += (double)(*fieldStart++ - '0') * multiplier;
                         multiplier /= 10.0;
                         numDPs++;
                     }
                 }
+                if (isNegative)
+                    field = -field;
                 value = String(field, numDPs);
             }
                 return true;
