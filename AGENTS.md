@@ -625,6 +625,44 @@ The "Future work" above has been superseded by a broader change: `autoLookup()` 
 
 `processUBXpacket()`'s registry branch copies a registered message's payload with `memcpy(ubxMessagePtr->_storage, msg->payload, ubxMessagePtr->_messageLength)` (and the same for `_callbackStorage`) - using the message's registered, fixed `_messageLength`, not the incoming packet's actual `msg->len`. This is safe for a message whose wire length never varies, but not for one where it can (e.g. `NAV_RELPOSNED`, registered at the F9 length but sent shorter by M8-generation receivers). A correctly-length-gated version of this copy already exists and is unused: `ubxMessageVector::storePayload()` in `ubxMessageVector.h` takes the real `len`, clamps it to `_messageLength`, and `memcpy`s only that many bytes - but `processUBXpacket()` does its own inline `memcpy` instead of calling it. See the `v4-migration-status` project doc for the full writeup and severity assessment; this has not been changed here per instruction.
 
+## Message Class self-registration
+
+The code in `C:\Users\pc235\Documents\GitHub\flux-sdk` contains a very useful self-registration feature.
+Each device in the sub folder `src\device` is able to self-register.
+
+`flxDeviceFactory` is a singleton that holds a multimap of device "builders," keyed by I2C address + confidence.
+`DeviceBuilder<DeviceType>` is a template whose constructor calls `flxDeviceFactory::get().registerDevice(this)`.
+The macro `#define flxRegisterDevice(kDevice) static DeviceBuilder<kDevice> global_##kDevice##Builder;` declares a file-scope static object of that builder template.
+
+At the bottom of (e.g.) `flxDevACS37800.cpp`:
+
+```
+flxRegisterDevice(flxDevACS37800);
+```
+
+expands to `static DeviceBuilder<flxDevACS37800> global_flxDevACS37800Builder;` — a global object. In C++, static/global objects are constructed before main() runs, as part of static initialization. So merely linking that translation unit into the binary is enough to make its constructor run and call registerDevice() — no explicit call site, no central switch statement, no list of "known devices" to edit.
+
+At runtime, `flxDeviceFactory::buildDevices(i2cDriver)` scans the I2C bus, and for each registered builder calls its `isConnected()/create()` to instantiate only the devices that are actually plugged in.
+
+I want to use the same or a similar technique in the v4 of this library.
+
+Can we remove the code from the `ubxMessageVector` constructor that start with:
+
+```
+        ubxMessageVectors.push_back(new ubxNAVPVT());
+        ubxMessageVectors.push_back(new ubxNAVPOSECEF());
+        ubxMessageVectors.push_back(new ubxNAVPOSLLH());
+        ubxMessageVectors.push_back(new ubxNAVSTATUS());
+```
+
+and replace it with the self-registration technique?
+
+For `ubxMessageVectors.push_back(new ubxNAVPVT());` to be able to compile, the `ubxNAVPVT.h` file must be present and `class ubxNAVPVT` must be defined.
+
+Can we change it so that: if `ubxNAVPVT.h` is included (`#include "ubxNAVPVT.h"`), `class ubxNAVPVT` self-registers?
+
+Such that: to remove support for (e.g.) NAV-PVT, all that would be required would be to comment the one line `#include "ubxNAVPVT.h"`. If `#include "ubxNAVPVT.h"` is commented, the code compiles successfully and runs normally but without NAV-PVT suppport.
+
 ## Test
 
 Compile the example code in examples/Example1\_PositionVelocityTime using the batch file compile\_example.bat.
