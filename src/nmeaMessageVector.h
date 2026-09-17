@@ -16,6 +16,13 @@
 // Individual files can be commented to save both program memory and RAM
 
 #include "nmeaMessages/nmeaGGA.h"
+#include "nmeaMessages/nmeaDTM.h"
+#include "nmeaMessages/nmeaGLL.h"
+#include "nmeaMessages/nmeaGNS.h"
+#include "nmeaMessages/nmeaGST.h"
+#include "nmeaMessages/nmeaRMC.h"
+#include "nmeaMessages/nmeaVTG.h"
+#include "nmeaMessages/nmeaZDA.h"
 
 // ===========================
 
