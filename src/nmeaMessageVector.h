@@ -19,7 +19,7 @@
 
 // ===========================
 
-#include "u-blox_config_keys.h"       // UBX_CFG_* type tags
+#include "u-blox_external_typedefs.h" // sfe_ublox_status_e
 
 class nmeaMessageVector
 {
@@ -140,7 +140,7 @@ public:
         return SFE_UBLOX_STATUS_SUCCESS;
     }
 
-    sfe_ublox_status_e setCallback(const char *msgId, void (*callbackPtr)(nmeaMessage *))
+    sfe_ublox_status_e setCallback(const char *msgId, void (*callbackPtr)(nmeaCallbackDataCommon_t *))
     {
         nmeaMessage *msg = find(msgId);
         if (msg == nullptr)
