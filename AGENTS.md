@@ -663,6 +663,12 @@ Can we change it so that: if `ubxNAVPVT.h` is included (`#include "ubxNAVPVT.h"`
 
 Such that: to remove support for (e.g.) NAV-PVT, all that would be required would be to comment the one line `#include "ubxNAVPVT.h"`. If `#include "ubxNAVPVT.h"` is commented, the code compiles successfully and runs normally but without NAV-PVT suppport.
 
+## nmeaMessage
+
+v4 will include the `nmeaMessage` `class`, which will follow the structure of `ubxMessage` as closely as possible.
+
+NMEA Messages are all ASCII text. To avoid difficulties with `anyType` code, data extracted by `getNmeaMessageField` / `getNmeaMessageFieldCallback` will be returned as `String`. Helper methods will be added later if needed to convert `String` to other types. But it is expectedd the standard C functions `atoi`, `atof` and `strtod` should cover most use cases.
+
 ## Test
 
 Compile the example code in examples/Example1\_PositionVelocityTime using the batch file compile\_example.bat.
