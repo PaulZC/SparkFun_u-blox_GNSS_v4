@@ -669,6 +669,14 @@ v4 will include the `nmeaMessage` `class`, which will follow the structure of `u
 
 NMEA Messages are all ASCII text. To avoid difficulties with `anyType` code, data extracted by `getNmeaMessageField` / `getNmeaMessageFieldCallback` will be returned as `String`. Helper methods will be added later if needed to convert `String` to other types. But it is expectedd the standard C functions `atoi`, `atof` and `strtod` should cover most use cases.
 
+Prototypes of `nmeaMessage.h`​, `nmeaMessageRegistry.h`​, `nmeaMessageVector.h`​ and `nmeaGGA.h` have been added for review.
+
+The next steps will be to: add other `nmea*.h` files for the other NMEA messages: DTM, GLL, GNS, GST, RMC, VTG, ZDA.
+
+Then the nmeaMessage class will be used to replace the existing NMEA support from v3 of the library.
+
+Future work will be to include the variable length GSA and GSV messages.
+
 ## Test
 
 Compile the example code in examples/Example1\_PositionVelocityTime using the batch file compile\_example.bat.
