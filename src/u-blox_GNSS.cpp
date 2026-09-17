@@ -90,10 +90,7 @@ void DevUBLOXGNSS::end(void)
 
   if (ubxFileBuffer != nullptr) // Check if RAM has been allocated for the file buffer
   {
-    if (_printDebug == true)
-    {
-      _debugSerial.println(F("end: the file buffer has been deleted. You will need to call setFileBufferSize before .begin to create a new one."));
-    }
+    debugPrintln("end: the file buffer has been deleted. You will need to call setFileBufferSize before .begin to create a new one.");
     delete[] ubxFileBuffer; // Created with new[]
     ubxFileBuffer = nullptr;
     fileBufferSize = 0; // Reset file buffer size. User will have to call setFileBufferSize again
@@ -434,8 +431,7 @@ bool DevUBLOXGNSS::setPacketCfgPayloadSize(size_t payloadSize)
     payloadCfg = nullptr;
     packetCfg.payload = payloadCfg;
     packetCfgPayloadSize = payloadSize;
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setPacketCfgPayloadSize: Zero payloadSize!"));
+    debugPrintln("setPacketCfgPayloadSize: Zero payloadSize!", true); // Important
   }
 
   else if (payloadCfg == nullptr) // Memory has not yet been allocated - so use new
@@ -447,16 +443,14 @@ bool DevUBLOXGNSS::setPacketCfgPayloadSize(size_t payloadSize)
     {
       success = false;
       packetCfgPayloadSize = 0;
-      if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-        _debugSerial.println(F("setPacketCfgPayloadSize: RAM alloc failed!"));
+      debugPrintln("setPacketCfgPayloadSize: RAM alloc failed!", true); // Important
     }
     else
       packetCfgPayloadSize = payloadSize;
 
     if ((packetCfgPayloadSize + 8) > spiBufferSize) // Warn the user if spiBuffer is now smaller than the packetCfg payload. Could result in lost data
     {
-      if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-        _debugSerial.println(F("setPacketCfgPayloadSize: packetCfgPayloadSize > spiBufferSize!"));
+      debugPrintln("setPacketCfgPayloadSize: packetCfgPayloadSize > spiBufferSize!", true); // Important
     }
   }
 
@@ -467,8 +461,7 @@ bool DevUBLOXGNSS::setPacketCfgPayloadSize(size_t payloadSize)
     if (newPayload == nullptr) // Check if the alloc was successful
     {
       success = false;                                           // Report failure. Don't change payloadCfg, packetCfg.payload or packetCfgPayloadSize
-      if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-        _debugSerial.println(F("setPacketCfgPayloadSize: RAM resize failed!"));
+      debugPrintln("setPacketCfgPayloadSize: RAM resize failed!", true); // Important
     }
     else
     {
@@ -481,8 +474,7 @@ bool DevUBLOXGNSS::setPacketCfgPayloadSize(size_t payloadSize)
 
     if ((packetCfgPayloadSize + 8) > spiBufferSize) // Warn the user if spiBuffer is now smaller than the packetCfg payload. Could result in lost data
     {
-      if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-        _debugSerial.println(F("setPacketCfgPayloadSize: packetCfgPayloadSize > spiBufferSize!"));
+      debugPrintln("setPacketCfgPayloadSize: packetCfgPayloadSize > spiBufferSize!", true); // Important
     }
   }
 
@@ -580,11 +572,8 @@ bool DevUBLOXGNSS::init(uint16_t maxWait, bool assumeSuccess)
 
     if (spiBuffer == nullptr)
     {
-      if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      {
-        _debugSerial.println(F("begin (SPI): memory allocation failed for SPI Buffer!"));
-        return (false);
-      }
+      debugPrintln("begin (SPI): memory allocation failed for SPI Buffer!", true); // Important
+      return (false);
     }
     else
     {
@@ -593,14 +582,11 @@ bool DevUBLOXGNSS::init(uint16_t maxWait, bool assumeSuccess)
       {
         spiBuffer[i] = 0xFF;
       }
-      if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      {
-        _debugSerial.print(F("begin (SPI): spiBuffer size is "));
-        _debugSerial.println(spiBufferSize);
-      }
+      debugPrint("begin (SPI): spiBuffer size is ", true); // Important
+      debugPrintln(spiBufferSize, true);
       if ((packetCfgPayloadSize + 8) > spiBufferSize) // Warn the user if spiBuffer is now smaller than the packetCfg payload. Could result in lost data
       {
-        _debugSerial.println(F("begin (SPI): packetCfgPayloadSize > spiBufferSize!"));
+        debugPrintln("begin (SPI): packetCfgPayloadSize > spiBufferSize!", true); // Important
       }
     }
   }
@@ -610,28 +596,19 @@ bool DevUBLOXGNSS::init(uint16_t maxWait, bool assumeSuccess)
 
   if (!connected)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.println(F("begin: isConnected - second attempt"));
-    }
+    debugPrintln("begin: isConnected - second attempt", true); // Important
     connected = isConnected(maxWait);
   }
 
   if (!connected)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.println(F("begin: isConnected - third attempt"));
-    }
+    debugPrintln("begin: isConnected - third attempt", true); // Important
     connected = isConnected(maxWait);
   }
 
   if ((!connected) && assumeSuccess && _signsOfLife) // Advanced users can assume success if required. Useful if the port is outputting messages at high navigation rate.
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.println(F("begin: third attempt failed. Assuming success..."));
-    }
+    debugPrintln("begin: third attempt failed. Assuming success...", true); // Important
     return (true);
   }
 
@@ -685,10 +662,7 @@ void DevUBLOXGNSS::setSpiTransactionSize(uint8_t transactionSize)
   }
   else
   {
-    if (_printDebug == true)
-    {
-      _debugSerial.println(F("setSpiTransactionSize: you need to call setSpiTransactionSize _before_ begin!"));
-    }
+    debugPrintln("setSpiTransactionSize: you need to call setSpiTransactionSize _before_ begin!"); // Not important
   }
 }
 uint8_t DevUBLOXGNSS::getSpiTransactionSize(void)
@@ -710,10 +684,7 @@ void DevUBLOXGNSS::setSpiBufferSize(size_t bufferSize)
   }
   else
   {
-    if (_printDebug == true)
-    {
-      _debugSerial.println(F("setSpiBufferSize: you need to call setSpiBufferSize _before_ begin!"));
-    }
+    debugPrintln("setSpiBufferSize: you need to call setSpiBufferSize _before_ begin!"); // Not important
   }
 }
 size_t DevUBLOXGNSS::getSpiBufferSize(void)
@@ -761,14 +732,8 @@ bool DevUBLOXGNSS::isConnected(uint16_t maxWait)
 void DevUBLOXGNSS::enableDebugging(Print &debugPort, bool printLimitedDebug)
 {
   _debugSerial.init(debugPort); // Grab which port the user wants us to use for debugging
-  if (printLimitedDebug == false)
-  {
-    _printDebug = true; // Should we print the commands we send? Good for debugging
-  }
-  else
-  {
-    _printLimitedDebug = true; // Should we print limited debug messages? Good for debugging high navigation rates
-  }
+  _printDebug = true; // Should we print the commands we send? Good for debugging
+  _printLimitedDebug = printLimitedDebug; // Should we print limited debug messages? Good for debugging high navigation rates
 }
 void DevUBLOXGNSS::disableDebugging(void)
 {
@@ -777,20 +742,60 @@ void DevUBLOXGNSS::disableDebugging(void)
 }
 
 // Safely print messages
-void DevUBLOXGNSS::debugPrint(char *message)
+void DevUBLOXGNSS::debugPrint(const char *message, bool important)
 {
-  if (_printDebug == true)
-  {
-    _debugSerial.print(message);
-  }
+  if (_printDebug == true) // if _printDebug is true, prepare to print
+    // Don't print if _printLimitedDebug is true and this message is not important
+    if (!(_printLimitedDebug && !important))
+      _debugSerial.print(message);
 }
 // Safely print messages
-void DevUBLOXGNSS::debugPrintln(char *message)
+void DevUBLOXGNSS::debugPrintln(const char *message, bool important)
 {
-  if (_printDebug == true)
-  {
-    _debugSerial.println(message);
-  }
+  if (_printDebug == true) // if _printDebug is true, prepare to print
+    // Don't print if _printLimitedDebug is true and this message is not important
+    if (!(_printLimitedDebug && !important))
+      _debugSerial.println(message);
+}
+// Safely print debug values
+void DevUBLOXGNSS::debugPrint(uint32_t value, bool important)
+{
+  if (_printDebug == true) // if _printDebug is true, prepare to print
+    // Don't print if _printLimitedDebug is true and this message is not important
+    if (!(_printLimitedDebug && !important))
+      _debugSerial.print(value);
+}
+// Safely print debug values in a given base (e.g. HEX)
+void DevUBLOXGNSS::debugPrint(uint32_t value, int printBase, bool important)
+{
+  if (_printDebug == true) // if _printDebug is true, prepare to print
+    // Don't print if _printLimitedDebug is true and this message is not important
+    if (!(_printLimitedDebug && !important))
+      _debugSerial.print(value, printBase);
+}
+// Safely print debug values
+void DevUBLOXGNSS::debugPrintln(uint32_t value, bool important)
+{
+  if (_printDebug == true) // if _printDebug is true, prepare to print
+    // Don't print if _printLimitedDebug is true and this message is not important
+    if (!(_printLimitedDebug && !important))
+      _debugSerial.println(value);
+}
+// Safely print debug values in a given base (e.g. HEX)
+void DevUBLOXGNSS::debugPrintln(uint32_t value, int printBase, bool important)
+{
+  if (_printDebug == true) // if _printDebug is true, prepare to print
+    // Don't print if _printLimitedDebug is true and this message is not important
+    if (!(_printLimitedDebug && !important))
+      _debugSerial.println(value, printBase);
+}
+// Safely print a blank debug line
+void DevUBLOXGNSS::debugPrintln(void)
+{
+  if (_printDebug == true) // if _printDebug is true, prepare to print
+    // Not important - don't print if doing limited debugging
+    if (!_printLimitedDebug)
+      _debugSerial.println();
 }
 
 const char *DevUBLOXGNSS::statusString(sfe_ublox_status_e stat)
@@ -904,12 +909,9 @@ bool DevUBLOXGNSS::checkUbloxI2C(ubxPacket *incomingUBX, uint8_t requestedClass,
       bytesAvailable &= ~((uint16_t)1 << 15);
     }
 
-    if (_printDebug == true)
-    {
-      _debugSerial.print(F("checkUbloxI2C: "));
-      _debugSerial.print(bytesAvailable);
-      _debugSerial.println(F(" bytes available"));
-    }
+    debugPrint("checkUbloxI2C: ");
+    debugPrint(bytesAvailable);
+    debugPrintln(" bytes available");
 
     while (bytesAvailable)
     {
@@ -935,10 +937,7 @@ bool DevUBLOXGNSS::checkUbloxI2C(ubxPacket *incomingUBX, uint8_t requestedClass,
         // Something has gone very wrong. Sensor did not respond - or a bus error happened...
         if (_resetCurrentSentenceOnBusError)
           currentSentence = SFE_UBLOX_SENTENCE_TYPE_NONE; // Reset the sentence to being looking for a new start char
-        if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-        {
-          _debugSerial.println(F("checkUbloxI2C: bus error? bytesReturned != bytesToRead"));
-        }
+        debugPrintln("checkUbloxI2C: bus error? bytesReturned != bytesToRead", true); // Important
         return (false);
       }
 
@@ -1243,13 +1242,10 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
           // reception is complete.
           if (logBecauseAuto && (maxPayload == 0))
           {
-            if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-            {
-              _debugSerial.print(F("process: autoLookup returned ZERO maxPayload!! Class: 0x"));
-              _debugSerial.print(packetBuf.cls, HEX);
-              _debugSerial.print(F(" ID: 0x"));
-              _debugSerial.println(packetBuf.id, HEX);
-            }
+            debugPrint("process: autoLookup returned ZERO maxPayload!! Class: 0x", true); // Important
+            debugPrint(packetBuf.cls, HEX, true);
+            debugPrint(" ID: 0x", true);
+            debugPrintln(packetBuf.id, HEX, true);
           }
 
           // Determine the payload length
@@ -1277,14 +1273,11 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
           
           if (payloadAuto == nullptr) // Check if the alloc failed
           {
-            if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-            {
-              _debugSerial.print(F("process: memory allocation failed for \"automatic\" message: Class: 0x"));
-              _debugSerial.print(packetBuf.cls, HEX);
-              _debugSerial.print(F(" ID: 0x"));
-              _debugSerial.println(packetBuf.id, HEX);
-              _debugSerial.println(F("process: \"automatic\" message could overwrite data"));
-            }
+            debugPrint("process: memory allocation failed for \"automatic\" message: Class: 0x", true); // Important
+            debugPrint(packetBuf.cls, HEX, true);
+            debugPrint(" ID: 0x", true);
+            debugPrintln(packetBuf.id, HEX, true);
+            debugPrintln("process: \"automatic\" message could overwrite data", true);
             // The RAM allocation failed so fall back to using incomingUBX (usually packetCfg) even though we risk overwriting data
             activePacketBuffer = SFE_UBLOX_PACKET_PACKETCFG;
             incomingUBX->cls = packetBuf.cls; // Copy the class and ID into incomingUBX (usually packetCfg)
@@ -1299,17 +1292,14 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
             packetAuto.id = packetBuf.id;
             packetAuto.counter = packetBuf.counter;           // Copy over the .counter too
             packetAuto.startingSpot = packetBuf.startingSpot; // And the starting spot? (Probably redundant)
-            if (_printDebug == true)
-            {
-              _debugSerial.print(F("process: incoming \"automatic\" message: Class: 0x"));
-              _debugSerial.print(packetBuf.cls, HEX);
-              _debugSerial.print(F(" ID: 0x"));
-              _debugSerial.print(packetBuf.id, HEX);
-              _debugSerial.print(F(" logBecauseAuto:"));
-              _debugSerial.print(logBecauseAuto);
-              _debugSerial.print(F(" logBecauseEnabled:"));
-              _debugSerial.println(logBecauseEnabled);
-            }
+            debugPrint("process: incoming \"automatic\" message: Class: 0x");
+            debugPrint(packetBuf.cls, HEX);
+            debugPrint(" ID: 0x");
+            debugPrint(packetBuf.id, HEX);
+            debugPrint(" logBecauseAuto:");
+            debugPrint(logBecauseAuto);
+            debugPrint(" logBecauseEnabled:");
+            debugPrintln(logBecauseEnabled);
           }
         }
         else
@@ -1340,13 +1330,10 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
     {
       if (packetBuf.len == 0) // Check if length is zero (hopefully this is impossible!)
       {
-        if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-        {
-          _debugSerial.print(F("process: ZERO LENGTH packet received: Class: 0x"));
-          _debugSerial.print(packetBuf.cls, HEX);
-          _debugSerial.print(F(" ID: 0x"));
-          _debugSerial.println(packetBuf.id, HEX);
-        }
+        debugPrint("process: ZERO LENGTH packet received: Class: 0x", true); // Important
+        debugPrint(packetBuf.cls, HEX, true);
+        debugPrint(" ID: 0x", true);
+        debugPrintln(packetBuf.id, HEX, true);
         // If length is zero (!) this will be the first byte of the checksum so record it
         packetBuf.checksumA = incoming;
       }
@@ -1391,15 +1378,12 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
         }
         else // Length is not 2 (hopefully this is impossible!)
         {
-          if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-          {
-            _debugSerial.print(F("process: ACK received with .len != 2: Class: 0x"));
-            _debugSerial.print(packetBuf.payload[0], HEX);
-            _debugSerial.print(F(" ID: 0x"));
-            _debugSerial.print(packetBuf.payload[1], HEX);
-            _debugSerial.print(F(" len: "));
-            _debugSerial.println(packetBuf.len);
-          }
+          debugPrint("process: ACK received with .len != 2: Class: 0x", true); // Important
+          debugPrint(packetBuf.payload[0], HEX, true);
+          debugPrint(" ID: 0x", true);
+          debugPrint(packetBuf.payload[1], HEX, true);
+          debugPrint(" len: ", true);
+          debugPrintln(packetBuf.len, true);
         }
       }
     }
@@ -1456,10 +1440,7 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
       }
       else
       {
-        // if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-        // {
-        //   _debugSerial.println(F("process: non-auto NMEA message"));
-        // }
+        // debugPrintln("process: non-auto NMEA message", true); // Important
       }
 
       // We've just received the end of the address field. Check if it is selected for logging
@@ -1495,10 +1476,7 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
           *lengthPtr = *lengthPtr + 1;        // Increment the length
           if (*lengthPtr == nmeaMaxLength)
           {
-            if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-            {
-              _debugSerial.println(F("process: NMEA buffer is full!"));
-            }
+            debugPrintln("process: NMEA buffer is full!", true); // Important
           }
         }
       }
@@ -1586,24 +1564,18 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
           }
           else
           {
-            if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-            {
-              _debugSerial.print(F("process: NMEA checksum fail (2)! Expected "));
-              _debugSerial.write(expectedChecksum1);
-              _debugSerial.write(expectedChecksum2);
-              _debugSerial.print(F(" Got "));
-              _debugSerial.write(*(workingNMEAPtr + charsChecked));
-              _debugSerial.write(*(workingNMEAPtr + charsChecked + 1));
-              _debugSerial.println();
-            }
+            debugPrint("process: NMEA checksum fail (2)! Expected ", true); // Important
+            debugPrint(expectedChecksum1, true);
+            debugPrint(expectedChecksum2, true);
+            debugPrint(" Got ", true);
+            debugPrint(*(workingNMEAPtr + charsChecked), true);
+            debugPrint(*(workingNMEAPtr + charsChecked + 1), true);
+            debugPrint("\r\n", true);
           }
         }
         else
         {
-          if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-          {
-            _debugSerial.println(F("process: NMEA checksum fail (1)!"));
-          }
+          debugPrintln("process: NMEA checksum fail (1)!", true); // Important
         }
       }
       if (logThisNMEA())
@@ -1631,10 +1603,8 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
           {
             storeFileBytes(_storageNMEA->data, _storageNMEA->length); // Add NMEA to the file buffer
           }
-          else if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-          {
-            _debugSerial.println(F("process: _storageNMEA checksum fail!"));
-          }
+          else
+            debugPrintln("process: _storageNMEA checksum fail!", true); // Important
         }
       }
       currentSentence = SFE_UBLOX_SENTENCE_TYPE_NONE; // All done!
@@ -1690,17 +1660,14 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
           messageSubType |= _storageRTCM->dataMessage[5];
           bool logThisRTCM = false;
 
-          if (_printDebug == true)
+          debugPrint("process: valid RTCM message type: ");
+          debugPrint(messageType);
+          if (messageType == 4072)
           {
-            _debugSerial.print(F("process: valid RTCM message type: "));
-            _debugSerial.print(messageType);
-            if (messageType == 4072)
-            {
-              _debugSerial.print(F("_"));
-              _debugSerial.print(messageSubType);
-            }
-            _debugSerial.println(F(""));
+            debugPrint("_");
+            debugPrint(messageSubType);
           }
+          debugPrintln();
 
           if (!logThisRTCM)
             logThisRTCM = (messageType == 1001) && ((_logRTCM.bits.all == 1) || (_logRTCM.bits.UBX_RTCM_TYPE1001 == 1));
@@ -1785,10 +1752,7 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
         }
         else
         {
-          if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-          {
-            _debugSerial.println(F("process: RTCM checksum fail!"));
-          }
+          debugPrintln("process: RTCM checksum fail!", true); // Important
         }
       }
     }
@@ -2762,13 +2726,10 @@ void DevUBLOXGNSS::processUBX(uint8_t incoming, ubxPacket *incomingUBX, uint8_t 
       maximum_payload_size = SFE_UBX_MAX_LENGTH;
     if (maximum_payload_size == 0)
     {
-      if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      {
-        _debugSerial.print(F("processUBX: autoLookup returned ZERO maxPayload!! Class: 0x"));
-        _debugSerial.print(incomingUBX->cls, HEX);
-        _debugSerial.print(F(" ID: 0x"));
-        _debugSerial.println(incomingUBX->id, HEX);
-      }
+      debugPrint("processUBX: autoLookup returned ZERO maxPayload!! Class: 0x", true); // Important
+      debugPrint(incomingUBX->cls, HEX, true);
+      debugPrint(" ID: 0x", true);
+      debugPrintln(incomingUBX->id, HEX, true);
     }
     //}
     // else
@@ -2833,13 +2794,10 @@ void DevUBLOXGNSS::processUBX(uint8_t incoming, ubxPacket *incomingUBX, uint8_t 
       else if ((incomingUBX->cls == UBX_CLASS_ACK) && (incomingUBX->id == UBX_ACK_NACK) && (incomingUBX->payload[0] == requestedClass) && (incomingUBX->payload[1] == requestedID))
       {
         incomingUBX->classAndIDmatch = SFE_UBLOX_PACKET_NOTACKNOWLEDGED; // If we have a match, set the classAndIDmatch flag to NOTACKNOWLEDGED
-        if (_printDebug == true)
-        {
-          _debugSerial.print(F("processUBX: NACK received: Requested Class: 0x"));
-          _debugSerial.print(incomingUBX->payload[0], HEX);
-          _debugSerial.print(F(" Requested ID: 0x"));
-          _debugSerial.println(incomingUBX->payload[1], HEX);
-        }
+        debugPrint("processUBX: NACK received: Requested Class: 0x");
+        debugPrint(incomingUBX->payload[0], HEX);
+        debugPrint(" Requested ID: 0x");
+        debugPrintln(incomingUBX->payload[1], HEX);
       }
 
       // This is not an ACK and we do not have a complete class and ID match
@@ -2848,38 +2806,32 @@ void DevUBLOXGNSS::processUBX(uint8_t incoming, ubxPacket *incomingUBX, uint8_t 
       {
         // This isn't the message we are looking for...
         // Let's say so and leave incomingUBX->classAndIDmatch _unchanged_
-        if (_printDebug == true)
-        {
-          _debugSerial.print(F("processUBX: incoming \"automatic\" message: Class: 0x"));
-          _debugSerial.print(incomingUBX->cls, HEX);
-          _debugSerial.print(F(" ID: 0x"));
-          _debugSerial.println(incomingUBX->id, HEX);
-        }
+        debugPrint("processUBX: incoming \"automatic\" message: Class: 0x");
+        debugPrint(incomingUBX->cls, HEX);
+        debugPrint(" ID: 0x");
+        debugPrintln(incomingUBX->id, HEX);
       }
 
-      if (_printDebug == true)
-      {
-        _debugSerial.print(F("Incoming: Size: "));
-        _debugSerial.print(incomingUBX->len);
-        _debugSerial.print(F(" Received: "));
-        printPacket(incomingUBX);
+      debugPrint("Incoming: Size: ");
+      debugPrint(incomingUBX->len);
+      debugPrint(" Received: ");
+      printPacket(incomingUBX);
 
-        if (incomingUBX->valid == SFE_UBLOX_PACKET_VALIDITY_VALID)
-        {
-          _debugSerial.println(F("packetCfg now valid"));
-        }
-        if (packetAck.valid == SFE_UBLOX_PACKET_VALIDITY_VALID)
-        {
-          _debugSerial.println(F("packetAck now valid"));
-        }
-        if (incomingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID)
-        {
-          _debugSerial.println(F("packetCfg classAndIDmatch"));
-        }
-        if (packetAck.classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID)
-        {
-          _debugSerial.println(F("packetAck classAndIDmatch"));
-        }
+      if (incomingUBX->valid == SFE_UBLOX_PACKET_VALIDITY_VALID)
+      {
+        debugPrintln("packetCfg now valid");
+      }
+      if (packetAck.valid == SFE_UBLOX_PACKET_VALIDITY_VALID)
+      {
+        debugPrintln("packetAck now valid");
+      }
+      if (incomingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID)
+      {
+        debugPrintln("packetCfg classAndIDmatch");
+      }
+      if (packetAck.classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID)
+      {
+        debugPrintln("packetAck classAndIDmatch");
       }
 
       // We've got a valid packet, now do something with it but only if ignoreThisPayload is false
@@ -2906,28 +2858,25 @@ void DevUBLOXGNSS::processUBX(uint8_t incoming, ubxPacket *incomingUBX, uint8_t 
         incomingUBX->classAndIDmatch = SFE_UBLOX_PACKET_VALIDITY_NOT_VALID; // If we have a match, set the classAndIDmatch flag to not valid
       }
 
-      if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
+      // Drive an external pin to allow for easier logic analyzation
+      if (debugPin >= 0)
       {
-        // Drive an external pin to allow for easier logic analyzation
-        if (debugPin >= 0)
-        {
-          digitalWrite((uint8_t)debugPin, LOW);
-          delay(10);
-          digitalWrite((uint8_t)debugPin, HIGH);
-        }
-
-        _debugSerial.print(F("Checksum failed:"));
-        _debugSerial.print(F(" checksumA: "));
-        _debugSerial.print(incomingUBX->checksumA);
-        _debugSerial.print(F(" checksumB: "));
-        _debugSerial.print(incomingUBX->checksumB);
-
-        _debugSerial.print(F(" rollingChecksumA: "));
-        _debugSerial.print(rollingChecksumA);
-        _debugSerial.print(F(" rollingChecksumB: "));
-        _debugSerial.print(rollingChecksumB);
-        _debugSerial.println();
+        digitalWrite((uint8_t)debugPin, LOW);
+        delay(10);
+        digitalWrite((uint8_t)debugPin, HIGH);
       }
+
+      debugPrint("Checksum failed:", true); // Important
+      debugPrint(" checksumA: ", true);
+      debugPrint(incomingUBX->checksumA, true);
+      debugPrint(" checksumB: ", true);
+      debugPrint(incomingUBX->checksumB, true);
+
+      debugPrint(" rollingChecksumA: ", true);
+      debugPrint(rollingChecksumA, true);
+      debugPrint(" rollingChecksumB: ", true);
+      debugPrint(rollingChecksumB, true);
+      debugPrint("\r\n", true);
     }
 
     // Now that the packet is complete and has been processed, 'free' the memory for packetAuto
@@ -2965,17 +2914,14 @@ void DevUBLOXGNSS::processUBX(uint8_t incoming, ubxPacket *incomingUBX, uint8_t 
   {
     // Something has gone very wrong
     currentSentence = SFE_UBLOX_SENTENCE_TYPE_NONE; // Reset the sentence to being looking for a new start char
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      if (overrun)
-        _debugSerial.print(F("processUBX: buffer overrun detected!"));
-      else
-        _debugSerial.print(F("processUBX: counter hit maximum_payload_size + 6!"));
-      _debugSerial.print(F(" activePacketBuffer: "));
-      _debugSerial.print(activePacketBuffer);
-      _debugSerial.print(F(" maximum_payload_size: "));
-      _debugSerial.println(maximum_payload_size);
-    }
+    if (overrun)
+      debugPrint("processUBX: buffer overrun detected!", true); // Important
+    else
+      debugPrint("processUBX: counter hit maximum_payload_size + 6!", true);
+    debugPrint(" activePacketBuffer: ", true);
+    debugPrint(activePacketBuffer, true);
+    debugPrint(" maximum_payload_size: ", true);
+    debugPrintln(maximum_payload_size, true);
   }
 
   // Increment the counter
@@ -2990,21 +2936,19 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
   ubxMessage *ubxMessagePtr = ubxMessages.find(msg->cls, msg->id);
   if (ubxMessagePtr)
   {
-    // Mark as fresh (not read before)
-    ubxMessagePtr->_moduleQueried = true;
-
-    // Copy the payload into storage - but only if we have memory allocated for it
-    if (ubxMessagePtr->_storage)
-      memcpy(ubxMessagePtr->_storage, msg->payload, ubxMessagePtr->_messageLength);
-
-    // Check if we need to copy the data for the callback
-    if (ubxMessagePtr->_callbackStorage)
+    // storePayload:
+    //  finds the message
+    //  calls its initStorage method
+    //  copies the payload into storage - correctly truncating the length if needed
+    //  marks the data as fresh (_moduleQueried = true)
+    //  if the _callbackPtr is not nullptr:
+    //   it also copies the payload into _callbackStorage and sets _callbackDataValid
+    if (ubxMessages.storePayload(msg->cls, msg->id, msg->payload, msg->len) != SFE_UBLOX_STATUS_SUCCESS)
     {
-      memcpy(ubxMessagePtr->_callbackStorage, msg->payload, ubxMessagePtr->_messageLength);
-      ubxMessagePtr->_callbackDataValid = true;
-    }
 
-    // Check if we need to copy the data into the file buffer
+    }
+      // The only thing storePayload doesn't do is copy the message into the file buffer.
+      // Check if we need to copy the data into the file buffer
     if (ubxMessagePtr->_addToFileBuffer)
       addedToFileBuffer = storePacket(msg);
   }
@@ -3551,10 +3495,7 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
           }
           else
           {
-              if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-            {
-              _debugSerial.println(F("processUBXpacket: packetUBXMGAACK is full. ACK will be lost!"));
-            }
+              debugPrintln("processUBXpacket: packetUBXMGAACK is full. ACK will be lost!", true); // Important
           }
         }
       }
@@ -3599,10 +3540,7 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
           }
           else
           {
-            if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-            {
-              _debugSerial.println(F("processUBXpacket: packetUBXMGADBD is full. DBD data will be lost!"));
-            }
+            debugPrintln("processUBXpacket: packetUBXMGADBD is full. DBD data will be lost!", true); // Important
           }
         }
       }
@@ -3627,13 +3565,10 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
             packetUBXSECSIG->data.versions.version2.jamNumCentFreqs = extractByte(msg, 3);
             if (packetUBXSECSIG->data.versions.version2.jamNumCentFreqs > UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2)
             {
-              if (_printDebug == true)
-              {
-                _debugSerial.print(F("UBX_SEC_SIG: truncating "));
-                _debugSerial.print(packetUBXSECSIG->data.versions.version2.jamNumCentFreqs);
-                _debugSerial.print(F(" center frequencies to "));
-                _debugSerial.println(UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2);
-              }
+              debugPrint("UBX_SEC_SIG: truncating ");
+              debugPrint(packetUBXSECSIG->data.versions.version2.jamNumCentFreqs);
+              debugPrint(" center frequencies to ");
+              debugPrintln(UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2);
               packetUBXSECSIG->data.versions.version2.jamNumCentFreqs = UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2;
             }
             uint16_t centFreq = 0;
@@ -3804,21 +3739,15 @@ sfe_ublox_status_e DevUBLOXGNSS::sendCommand(ubxPacket *outgoingUBX, uint16_t ma
 
   calcChecksum(outgoingUBX); // Sets checksum A and B bytes of the packet
 
-  if (_printDebug == true)
-  {
-    _debugSerial.print(F("\nSending: "));
-    printPacket(outgoingUBX, true); // Always print payload
-  }
+  debugPrint("\nSending: ");
+  printPacket(outgoingUBX, true); // Always print payload
 
   if (_commType == COMM_TYPE_I2C)
   {
     retVal = sendI2cCommand(outgoingUBX);
     if (retVal != SFE_UBLOX_STATUS_SUCCESS)
     {
-      if (_printDebug == true)
-      {
-        _debugSerial.println(F("Send I2C Command failed"));
-      }
+      debugPrintln("Send I2C Command failed"); // Not important
       unlock();
       return retVal;
     }
@@ -3839,18 +3768,12 @@ sfe_ublox_status_e DevUBLOXGNSS::sendCommand(ubxPacket *outgoingUBX, uint16_t ma
     // Depending on what we just sent, either we need to look for an ACK or not
     if ((outgoingUBX->cls == UBX_CLASS_CFG) || (expectACKonly == true))
     {
-      if (_printDebug == true)
-      {
-        _debugSerial.println(F("sendCommand: Waiting for ACK response"));
-      }
+      debugPrintln("sendCommand: Waiting for ACK response"); // Not important
       retVal = waitForACKResponse(outgoingUBX, outgoingUBX->cls, outgoingUBX->id, maxWait); // Wait for Ack response
     }
     else
     {
-      if (_printDebug == true)
-      {
-        _debugSerial.println(F("sendCommand: Waiting for No ACK response"));
-      }
+      debugPrintln("sendCommand: Waiting for No ACK response"); // Not important
       retVal = waitForNoACKResponse(outgoingUBX, outgoingUBX->cls, outgoingUBX->id, maxWait); // Wait for Ack response
     }
   }
@@ -4029,9 +3952,9 @@ void DevUBLOXGNSS::spiTransfer(const uint8_t byteToTransfer)
     }
     else
     {
-      if (((_printDebug == true) || (_printLimitedDebug == true)) && !printOnce) // This is important. Print this if doing limited debugging
+      if (!printOnce)
       {
-        _debugSerial.print(F("spiTransfer: spiBuffer is full!"));
+        debugPrintln("spiTransfer: spiBuffer is full!", true); // Important
         printOnce = true;
       }
     }
@@ -4043,10 +3966,7 @@ sfe_ublox_status_e DevUBLOXGNSS::sendSpiCommand(ubxPacket *outgoingUBX)
 {
   if (spiBuffer == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.print(F("sendSpiCommand: no memory allocation for SPI Buffer!"));
-    }
+    debugPrint("sendSpiCommand: no memory allocation for SPI Buffer!", true); // Important
     return (SFE_UBLOX_STATUS_MEM_ERR);
   }
 
@@ -4118,59 +4038,50 @@ void DevUBLOXGNSS::printPacket(ubxPacket *packet, bool alwaysPrintPayload)
   bool printPayload = (ignoreThisPayload == false);
   printPayload |= (alwaysPrintPayload == true);
 
-  if (_printDebug == true)
+  debugPrint("CLS:");
+  if (packet->cls == UBX_CLASS_NAV) // 1
+    debugPrint("NAV");
+  else if (packet->cls == UBX_CLASS_ACK) // 5
+    debugPrint("ACK");
+  else if (packet->cls == UBX_CLASS_CFG) // 6
+    debugPrint("CFG");
+  else if (packet->cls == UBX_CLASS_MON) // 0x0A
+    debugPrint("MON");
+  else
   {
-    _debugSerial.print(F("CLS:"));
-    if (packet->cls == UBX_CLASS_NAV) // 1
-      _debugSerial.print(F("NAV"));
-    else if (packet->cls == UBX_CLASS_ACK) // 5
-      _debugSerial.print(F("ACK"));
-    else if (packet->cls == UBX_CLASS_CFG) // 6
-      _debugSerial.print(F("CFG"));
-    else if (packet->cls == UBX_CLASS_MON) // 0x0A
-      _debugSerial.print(F("MON"));
-    else
-    {
-      _debugSerial.print(F("0x"));
-      _debugSerial.print(packet->cls, HEX);
-    }
-
-    _debugSerial.print(F(" ID:"));
-    if (packet->cls == UBX_CLASS_NAV && packet->id == UBX_NAV_PVT)
-      _debugSerial.print(F("PVT"));
-    else if (packet->cls == UBX_CLASS_CFG && packet->id == UBX_CFG_CFG)
-      _debugSerial.print(F("SAVE"));
-    else
-    {
-      _debugSerial.print(F("0x"));
-      _debugSerial.print(packet->id, HEX);
-    }
-
-    _debugSerial.print(F(" Len: 0x"));
-    _debugSerial.print(packet->len, HEX);
-
-    if (printPayload)
-    {
-      _debugSerial.print(F(" Payload:"));
-
-      for (uint16_t x = 0; x < packet->len - packet->startingSpot; x++)
-      {
-        _debugSerial.print(F(" "));
-        _debugSerial.print(packet->payload[x], HEX);
-      }
-    }
-    else
-    {
-      _debugSerial.print(F(" Payload: IGNORED"));
-    }
-    _debugSerial.println();
+    debugPrint("0x");
+    debugPrint(packet->cls, HEX);
   }
 
-  if (_printDebug == true)
+  debugPrint(" ID:");
+  if (packet->cls == UBX_CLASS_NAV && packet->id == UBX_NAV_PVT)
+    debugPrint("PVT");
+  else if (packet->cls == UBX_CLASS_CFG && packet->id == UBX_CFG_CFG)
+    debugPrint("SAVE");
+  else
   {
-    _debugSerial.print(F("Len: 0x"));
-    _debugSerial.print(packet->len, HEX);
+    debugPrint("0x");
+    debugPrint(packet->id, HEX);
   }
+
+  debugPrint(" Len: 0x");
+  debugPrint(packet->len, HEX);
+
+  if (printPayload)
+  {
+    debugPrint(" Payload:");
+
+    for (uint16_t x = 0; x < packet->len - packet->startingSpot; x++)
+    {
+      debugPrint(" ");
+      debugPrint(packet->payload[x], HEX);
+    }
+  }
+  else
+  {
+    debugPrint(" Payload: IGNORED");
+  }
+  debugPrintln();
 }
 
 // When messages from the class CFG are sent to the receiver, the receiver will send an "acknowledge"(UBX - ACK - ACK) or a
@@ -4225,12 +4136,9 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForACKResponse(ubxPacket *outgoingUBX, uint
       // then we can be confident that the data in outgoingUBX is valid
       if ((outgoingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID) && (packetAck.classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID) && (outgoingUBX->valid == SFE_UBLOX_PACKET_VALIDITY_VALID) && (outgoingUBX->cls == requestedClass) && (outgoingUBX->id == requestedID))
       {
-        if (_printDebug == true)
-        {
-          _debugSerial.print(F("waitForACKResponse: valid data and valid ACK received after "));
-          _debugSerial.print(millis() - startTime);
-          _debugSerial.println(F(" msec"));
-        }
+        debugPrint("waitForACKResponse: valid data and valid ACK received after ");
+        debugPrint(millis() - startTime);
+        debugPrintln(" msec");
         return (SFE_UBLOX_STATUS_DATA_RECEIVED); // We received valid data and a correct ACK!
       }
 
@@ -4241,12 +4149,9 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForACKResponse(ubxPacket *outgoingUBX, uint
       // as these may have been changed by an automatic packet.
       else if ((outgoingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_NOT_DEFINED) && (packetAck.classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID))
       {
-        if (_printDebug == true)
-        {
-          _debugSerial.print(F("waitForACKResponse: no data and valid ACK after "));
-          _debugSerial.print(millis() - startTime);
-          _debugSerial.println(F(" msec"));
-        }
+        debugPrint("waitForACKResponse: no data and valid ACK after ");
+        debugPrint(millis() - startTime);
+        debugPrintln(" msec");
         return (SFE_UBLOX_STATUS_DATA_SENT); // We got an ACK but no data...
       }
 
@@ -4259,12 +4164,9 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForACKResponse(ubxPacket *outgoingUBX, uint
       // Note: the addition of packetBuf should make this check redundant!
       else if ((outgoingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID) && (packetAck.classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID) && ((outgoingUBX->cls != requestedClass) || (outgoingUBX->id != requestedID)))
       {
-        if (_printDebug == true)
-        {
-          _debugSerial.print(F("waitForACKResponse: data being OVERWRITTEN after "));
-          _debugSerial.print(millis() - startTime);
-          _debugSerial.println(F(" msec"));
-        }
+        debugPrint("waitForACKResponse: data being OVERWRITTEN after ");
+        debugPrint(millis() - startTime);
+        debugPrintln(" msec");
         return (SFE_UBLOX_STATUS_DATA_OVERWRITTEN); // Data was valid but has been or is being overwritten
       }
 
@@ -4272,12 +4174,9 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForACKResponse(ubxPacket *outgoingUBX, uint
       // are NOT_VALID then we can be confident we have had a checksum failure on the data packet
       else if ((packetAck.classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID) && (outgoingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_NOT_VALID) && (outgoingUBX->valid == SFE_UBLOX_PACKET_VALIDITY_NOT_VALID))
       {
-        if (_printDebug == true)
-        {
-          _debugSerial.print(F("waitForACKResponse: CRC failed after "));
-          _debugSerial.print(millis() - startTime);
-          _debugSerial.println(F(" msec"));
-        }
+        debugPrint("waitForACKResponse: CRC failed after ");
+        debugPrint(millis() - startTime);
+        debugPrintln(" msec");
         return (SFE_UBLOX_STATUS_CRC_FAIL); // Checksum fail
       }
 
@@ -4290,12 +4189,9 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForACKResponse(ubxPacket *outgoingUBX, uint
       // Note: the addition of packetBuf changes the logic of this, but we'll leave the code as is for now.
       else if (packetAck.classAndIDmatch == SFE_UBLOX_PACKET_NOTACKNOWLEDGED)
       {
-        if (_printDebug == true)
-        {
-          _debugSerial.print(F("waitForACKResponse: data was NOTACKNOWLEDGED (NACK) after "));
-          _debugSerial.print(millis() - startTime);
-          _debugSerial.println(F(" msec"));
-        }
+        debugPrint("waitForACKResponse: data was NOTACKNOWLEDGED (NACK) after ");
+        debugPrint(millis() - startTime);
+        debugPrintln(" msec");
         return (SFE_UBLOX_STATUS_COMMAND_NACK); // We received a NACK!
       }
 
@@ -4304,12 +4200,9 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForACKResponse(ubxPacket *outgoingUBX, uint
       // If we were playing safe, we should return FAIL instead
       else if ((outgoingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID) && (packetAck.classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_NOT_VALID) && (outgoingUBX->valid == SFE_UBLOX_PACKET_VALIDITY_VALID) && (outgoingUBX->cls == requestedClass) && (outgoingUBX->id == requestedID))
       {
-        if (_printDebug == true)
-        {
-          _debugSerial.print(F("waitForACKResponse: VALID data and INVALID ACK received after "));
-          _debugSerial.print(millis() - startTime);
-          _debugSerial.println(F(" msec"));
-        }
+        debugPrint("waitForACKResponse: VALID data and INVALID ACK received after ");
+        debugPrint(millis() - startTime);
+        debugPrintln(" msec");
         return (SFE_UBLOX_STATUS_DATA_RECEIVED); // We received valid data and an invalid ACK!
       }
 
@@ -4317,12 +4210,9 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForACKResponse(ubxPacket *outgoingUBX, uint
       // then we return a FAIL. This must be a double checksum failure?
       else if ((outgoingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_NOT_VALID) && (packetAck.classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_NOT_VALID))
       {
-        if (_printDebug == true)
-        {
-          _debugSerial.print(F("waitForACKResponse: INVALID data and INVALID ACK received after "));
-          _debugSerial.print(millis() - startTime);
-          _debugSerial.println(F(" msec"));
-        }
+        debugPrint("waitForACKResponse: INVALID data and INVALID ACK received after ");
+        debugPrint(millis() - startTime);
+        debugPrintln(" msec");
         return (SFE_UBLOX_STATUS_FAIL); // We received invalid data and an invalid ACK!
       }
 
@@ -4330,12 +4220,9 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForACKResponse(ubxPacket *outgoingUBX, uint
       // then the ACK has not yet been received and we should keep waiting for it
       else if ((outgoingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID) && (packetAck.classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_NOT_DEFINED))
       {
-        // if (_printDebug == true)
-        // {
-        //   _debugSerial.print(F("waitForACKResponse: valid data after "));
-        //   _debugSerial.print(millis() - startTime);
-        //   _debugSerial.println(F(" msec. Waiting for ACK."));
-        // }
+        //   debugPrint("waitForACKResponse: valid data after ");
+        //   debugPrint(millis() - startTime);
+        //   debugPrintln(" msec. Waiting for ACK.");
       }
 
     } // checkUbloxInternal == true
@@ -4348,21 +4235,15 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForACKResponse(ubxPacket *outgoingUBX, uint
   // even though we did not get an ACK
   if ((outgoingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID) && (packetAck.classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_NOT_DEFINED) && (outgoingUBX->valid == SFE_UBLOX_PACKET_VALIDITY_VALID) && (outgoingUBX->cls == requestedClass) && (outgoingUBX->id == requestedID))
   {
-    if (_printDebug == true)
-    {
-      _debugSerial.print(F("waitForACKResponse: TIMEOUT with valid data after "));
-      _debugSerial.print(millis() - startTime);
-      _debugSerial.println(F(" msec. "));
-    }
+    debugPrint("waitForACKResponse: TIMEOUT with valid data after ");
+    debugPrint(millis() - startTime);
+    debugPrintln(" msec. ");
     return (SFE_UBLOX_STATUS_DATA_RECEIVED); // We received valid data... But no ACK!
   }
 
-  if (_printDebug == true)
-  {
-    _debugSerial.print(F("waitForACKResponse: TIMEOUT after "));
-    _debugSerial.print(millis() - startTime);
-    _debugSerial.println(F(" msec."));
-  }
+  debugPrint("waitForACKResponse: TIMEOUT after ");
+  debugPrint(millis() - startTime);
+  debugPrintln(" msec.");
 
   return (SFE_UBLOX_STATUS_TIMEOUT);
 }
@@ -4395,12 +4276,9 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForNoACKResponse(ubxPacket *outgoingUBX, ui
       // then we can be confident that the data in outgoingUBX is valid
       if ((outgoingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID) && (outgoingUBX->valid == SFE_UBLOX_PACKET_VALIDITY_VALID) && (outgoingUBX->cls == requestedClass) && (outgoingUBX->id == requestedID))
       {
-        if (_printDebug == true)
-        {
-          _debugSerial.print(F("waitForNoACKResponse: valid data with CLS/ID match after "));
-          _debugSerial.print(millis() - startTime);
-          _debugSerial.println(F(" msec"));
-        }
+        debugPrint("waitForNoACKResponse: valid data with CLS/ID match after ");
+        debugPrint(millis() - startTime);
+        debugPrintln(" msec");
         return (SFE_UBLOX_STATUS_DATA_RECEIVED); // We received valid data!
       }
 
@@ -4413,12 +4291,9 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForNoACKResponse(ubxPacket *outgoingUBX, ui
       // Note: the addition of packetBuf should make this check redundant!
       else if ((outgoingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_VALID) && ((outgoingUBX->cls != requestedClass) || (outgoingUBX->id != requestedID)))
       {
-        if (_printDebug == true)
-        {
-          _debugSerial.print(F("waitForNoACKResponse: data being OVERWRITTEN after "));
-          _debugSerial.print(millis() - startTime);
-          _debugSerial.println(F(" msec"));
-        }
+        debugPrint("waitForNoACKResponse: data being OVERWRITTEN after ");
+        debugPrint(millis() - startTime);
+        debugPrintln(" msec");
         return (SFE_UBLOX_STATUS_DATA_OVERWRITTEN); // Data was valid but has been or is being overwritten
       }
 
@@ -4426,26 +4301,20 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForNoACKResponse(ubxPacket *outgoingUBX, ui
       // and outgoingUBX->valid is VALID then this must be (e.g.) a PVT packet
       else if ((outgoingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_NOT_DEFINED) && (outgoingUBX->valid == SFE_UBLOX_PACKET_VALIDITY_VALID))
       {
-        // if (_printDebug == true)
-        // {
-        //   _debugSerial.print(F("waitForNoACKResponse: valid but UNWANTED data after "));
-        //   _debugSerial.print(millis() - startTime);
-        //   _debugSerial.print(F(" msec. Class: 0x"));
-        //   _debugSerial.print(outgoingUBX->cls, HEX);
-        //   _debugSerial.print(F(" ID: 0x"));
-        //   _debugSerial.print(outgoingUBX->id, HEX);
-        // }
+        //   debugPrint("waitForNoACKResponse: valid but UNWANTED data after ");
+        //   debugPrint(millis() - startTime);
+        //   debugPrint(" msec. Class: 0x");
+        //   debugPrint(outgoingUBX->cls, HEX);
+        //   debugPrint(" ID: 0x");
+        //   debugPrintln(outgoingUBX->id, HEX);
       }
 
       // If the outgoingUBX->classAndIDmatch is NOT_VALID then we return CRC failure
       else if (outgoingUBX->classAndIDmatch == SFE_UBLOX_PACKET_VALIDITY_NOT_VALID)
       {
-        if (_printDebug == true)
-        {
-          _debugSerial.print(F("waitForNoACKResponse: CLS/ID match but failed CRC after "));
-          _debugSerial.print(millis() - startTime);
-          _debugSerial.println(F(" msec"));
-        }
+        debugPrint("waitForNoACKResponse: CLS/ID match but failed CRC after ");
+        debugPrint(millis() - startTime);
+        debugPrintln(" msec");
         return (SFE_UBLOX_STATUS_CRC_FAIL); // We received invalid data
       }
     }
@@ -4453,12 +4322,9 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForNoACKResponse(ubxPacket *outgoingUBX, ui
     delay(1); // Allow an RTOS to get an elbow in (#11)
   }
 
-  if (_printDebug == true)
-  {
-    _debugSerial.print(F("waitForNoACKResponse: TIMEOUT after "));
-    _debugSerial.print(millis() - startTime);
-    _debugSerial.println(F(" msec. No packet received."));
-  }
+  debugPrint("waitForNoACKResponse: TIMEOUT after ");
+  debugPrint(millis() - startTime);
+  debugPrintln(" msec. No packet received.");
 
   return (SFE_UBLOX_STATUS_TIMEOUT);
 }
@@ -4763,8 +4629,7 @@ void DevUBLOXGNSS::checkCallbacks(void)
       {
         if (storageNMEAGNZDA->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
         {
-          // if (_printDebug == true)
-          //   _debugSerial.println(F("checkCallbacks: calling callbackPtr for GNZDA"));
+          // debugPrintln("checkCallbacks: calling callbackPtr for GNZDA"); // Not important
           storageNMEAGNZDA->callbackPointerPtr(storageNMEAGNZDA->callbackCopy); // Call the callback
         }
         storageNMEAGNZDA->automaticFlags.flags.bits.callbackCopyValid = 0; // Mark the data as stale
@@ -4787,8 +4652,7 @@ void DevUBLOXGNSS::checkCallbacks(void)
       {
         if (storageNMEAGNGST->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
         {
-          // if (_printDebug == true)
-          //   _debugSerial.println(F("checkCallbacks: calling callbackPtr for GNGST"));
+          // debugPrintln("checkCallbacks: calling callbackPtr for GNGST"); // Not important
           storageNMEAGNGST->callbackPointerPtr(storageNMEAGNGST->callbackCopy); // Call the callback
         }
         storageNMEAGNGST->automaticFlags.flags.bits.callbackCopyValid = 0; // Mark the data as stale
@@ -5016,11 +4880,8 @@ size_t DevUBLOXGNSS::pushAssistNowDataInternal(size_t offset, bool skipTime, con
     if (ackAiding == 1)
       checkForAcks = true;
 
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.print(F("pushAssistNowData: mgaAck is ENQUIRE. getAckAiding returned "));
-      _debugSerial.println(ackAiding);
-    }
+    debugPrint("pushAssistNowData: mgaAck is ENQUIRE. getAckAiding returned ", true); // Important
+    debugPrintln(ackAiding, true);
   }
 
   // If checkForAcks is true, then we need to set up storage for the UBX-MGA-ACK-DATA0 messages
@@ -5065,13 +4926,10 @@ size_t DevUBLOXGNSS::pushAssistNowDataInternal(size_t offset, bool skipTime, con
       // Check if this is time assistance data which should be skipped
       if ((skipTime) && ((*(dataBytes + dataPtr + 3) == UBX_MGA_INI_TIME_UTC) || (*(dataBytes + dataPtr + 3) == UBX_MGA_INI_TIME_GNSS)))
       {
-        if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-        {
-          _debugSerial.print(F("pushAssistNowData: skipped INI_TIME ID 0x"));
-          if (*(dataBytes + dataPtr + 3) < 0x10)
-            _debugSerial.print(F("0"));
-          _debugSerial.println(*(dataBytes + dataPtr + 3), HEX);
-        }
+        debugPrint("pushAssistNowData: skipped INI_TIME ID 0x", true); // Important
+        if (*(dataBytes + dataPtr + 3) < 0x10)
+          debugPrint("0", true);
+        debugPrintln(*(dataBytes + dataPtr + 3), HEX, true);
       }
       else
       {
@@ -5080,15 +4938,12 @@ size_t DevUBLOXGNSS::pushAssistNowDataInternal(size_t offset, bool skipTime, con
         if (pushResult)
           bytesPushed += packetLength + ((size_t)8); // Increment bytesPushed if the push was successful
 
-        if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-        {
-          _debugSerial.print(F("pushAssistNowData: packet ID 0x"));
-          if (*(dataBytes + dataPtr + 3) < 0x10)
-            _debugSerial.print(F("0"));
-          _debugSerial.print(*(dataBytes + dataPtr + 3), HEX);
-          _debugSerial.print(F(" length "));
-          _debugSerial.println(packetLength);
-        }
+        debugPrint("pushAssistNowData: packet ID 0x", true); // Important
+        if (*(dataBytes + dataPtr + 3) < 0x10)
+          debugPrint("0", true);
+        debugPrint(*(dataBytes + dataPtr + 3), HEX, true);
+        debugPrint(" length ", true);
+        debugPrintln(packetLength, true);
 
         if (checkForAcks)
         {
@@ -5110,21 +4965,15 @@ size_t DevUBLOXGNSS::pushAssistNowDataInternal(size_t offset, bool skipTime, con
               {
                 if ((packetUBXMGAACK->data[packetUBXMGAACK->tail].type == (uint8_t)1) && (packetUBXMGAACK->data[packetUBXMGAACK->tail].infoCode == (uint8_t)SFE_UBLOX_MGA_ACK_INFOCODE_ACCEPTED))
                 {
-                  if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-                  {
-                    _debugSerial.print(F("pushAssistNowData: packet was accepted after "));
-                    _debugSerial.print(millis() - startTime);
-                    _debugSerial.println(F(" ms"));
-                  }
+                  debugPrint("pushAssistNowData: packet was accepted after ", true); // Important
+                  debugPrint(millis() - startTime, true);
+                  debugPrintln(" ms", true);
                   packetsProcessed++;
                 }
                 else
                 {
-                  if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-                  {
-                    _debugSerial.print(F("pushAssistNowData: packet was _not_ accepted. infoCode is "));
-                    _debugSerial.println(packetUBXMGAACK->data[packetUBXMGAACK->tail].infoCode);
-                  }
+                  debugPrint("pushAssistNowData: packet was _not_ accepted. infoCode is ", true); // Important
+                  debugPrintln(packetUBXMGAACK->data[packetUBXMGAACK->tail].infoCode, true);
                 }
                 keepGoing = false;
               }
@@ -5136,10 +4985,7 @@ size_t DevUBLOXGNSS::pushAssistNowDataInternal(size_t offset, bool skipTime, con
           }
           if (keepGoing) // If keepGoing is still true, we must have timed out
           {
-            if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-            {
-              _debugSerial.println(F("pushAssistNowData: packet ack timed out!"));
-            }
+            debugPrintln("pushAssistNowData: packet ack timed out!", true); // Important
           }
         }
         else
@@ -5160,11 +5006,8 @@ size_t DevUBLOXGNSS::pushAssistNowDataInternal(size_t offset, bool skipTime, con
     {
 
       // The data was invalid. Send a debug message and then try to find the next 0xB5
-      if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      {
-        _debugSerial.print(F("pushAssistNowData: bad data - ignored! dataPtr is "));
-        _debugSerial.println(dataPtr);
-      }
+      debugPrint("pushAssistNowData: bad data - ignored! dataPtr is ", true); // Important
+      debugPrintln(dataPtr, true);
 
       while ((dataPtr < (offset + numDataBytes)) && (*(dataBytes + ++dataPtr) != UBX_SYNCH_1))
       {
@@ -5173,11 +5016,8 @@ size_t DevUBLOXGNSS::pushAssistNowDataInternal(size_t offset, bool skipTime, con
     }
   }
 
-  if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-  {
-    _debugSerial.print(F("pushAssistNowData: packetsProcessed: "));
-    _debugSerial.println(packetsProcessed);
-  }
+  debugPrint("pushAssistNowData: packetsProcessed: ", true); // Important
+  debugPrintln(packetsProcessed, true);
 
   return (bytesPushed); // Return the number of valid bytes successfully pushed
 }
@@ -5188,8 +5028,7 @@ bool DevUBLOXGNSS::initPacketUBXMGAACK()
   packetUBXMGAACK = new UBX_MGA_ACK_DATA0_t; // Allocate RAM for the main struct
   if (packetUBXMGAACK == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initPacketUBXMGAACK: RAM alloc failed!"));
+    debugPrintln("initPacketUBXMGAACK: RAM alloc failed!", true); // Important
     return (false);
   }
   packetUBXMGAACK->head = 0; // Initialize the ring buffer pointers
@@ -5459,11 +5298,8 @@ size_t DevUBLOXGNSS::findMGAANOForDateInternal(const uint8_t *dataBytes, size_t 
     {
       if ((*(dataBytes + dataPtr + 3) == UBX_MGA_ANO) && (*(dataBytes + dataPtr + 10) == matchYear) && (*(dataBytes + dataPtr + 11) == matchMonth) && (*(dataBytes + dataPtr + 12) == matchDay))
       {
-        if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-        {
-          _debugSerial.print(F("findMGAANOForDate: found date match at location "));
-          _debugSerial.println(dataPtr);
-        }
+        debugPrint("findMGAANOForDate: found date match at location ", true); // Important
+        debugPrintln(dataPtr, true);
         dateFound = true;
       }
       else
@@ -5476,11 +5312,8 @@ size_t DevUBLOXGNSS::findMGAANOForDateInternal(const uint8_t *dataBytes, size_t 
     {
 
       // The data was invalid. Send a debug message and then try to find the next 0xB5
-      if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      {
-        _debugSerial.print(F("findMGAANOForDate: bad data - ignored! dataPtr is "));
-        _debugSerial.println(dataPtr);
-      }
+      debugPrint("findMGAANOForDate: bad data - ignored! dataPtr is ", true); // Important
+      debugPrintln(dataPtr, true);
 
       while ((dataPtr < numDataBytes) && (*(dataBytes + ++dataPtr) != UBX_SYNCH_1))
       {
@@ -5505,18 +5338,12 @@ size_t DevUBLOXGNSS::readNavigationDatabase(uint8_t *dataBytes, size_t maxNumDat
     initPacketUBXMGAACK();        // Check that RAM has been allocated for the MGA_ACK data
   if (packetUBXMGAACK == nullptr) // Bail if the RAM allocation failed
   {
-    if (_printDebug == true)
-    {
-      _debugSerial.println(F("readNavigationDatabase: packetUBXMGAACK RAM allocation failed!"));
-    }
+    debugPrintln("readNavigationDatabase: packetUBXMGAACK RAM allocation failed!"); // Not important
     return ((size_t)0);
   }
   if (packetUBXMGAACK->head != packetUBXMGAACK->tail) // Does the MGA ACK ringbuffer contain any data?
   {
-    if (_printDebug == true)
-    {
-      _debugSerial.println(F("readNavigationDatabase: packetUBXMGAACK contains unprocessed data. Clearing it."));
-    }
+    debugPrintln("readNavigationDatabase: packetUBXMGAACK contains unprocessed data. Clearing it."); // Not important
     packetUBXMGAACK->tail = packetUBXMGAACK->head; // Clear the buffer by setting the tail equal to the head
   }
 
@@ -5525,18 +5352,12 @@ size_t DevUBLOXGNSS::readNavigationDatabase(uint8_t *dataBytes, size_t maxNumDat
     initPacketUBXMGADBD();        // Check that RAM has been allocated for the MGA_DBD data
   if (packetUBXMGADBD == nullptr) // Bail if the RAM allocation failed
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.println(F("readNavigationDatabase: packetUBXMGADBD RAM allocation failed!"));
-    }
+    debugPrintln("readNavigationDatabase: packetUBXMGADBD RAM allocation failed!", true); // Important
     return ((size_t)0);
   }
   if (packetUBXMGADBD->head != packetUBXMGADBD->tail) // Does the MGA DBD ringbuffer contain any data?
   {
-    if (_printDebug == true)
-    {
-      _debugSerial.println(F("readNavigationDatabase: packetUBXMGADBD contains unprocessed data. Clearing it."));
-    }
+    debugPrintln("readNavigationDatabase: packetUBXMGADBD contains unprocessed data. Clearing it."); // Not important
     packetUBXMGADBD->tail = packetUBXMGADBD->head; // Clear the buffer by setting the tail equal to the head
   }
 
@@ -5576,10 +5397,7 @@ size_t DevUBLOXGNSS::readNavigationDatabase(uint8_t *dataBytes, size_t maxNumDat
   // Check pushResult == 8
   if (pushResult != 8)
   {
-    if (_printDebug == true)
-    {
-      _debugSerial.println(F("readNavigationDatabase: pushAssistNowDataInternal failed!"));
-    }
+    debugPrintln("readNavigationDatabase: pushAssistNowDataInternal failed!"); // Not important
     i2cPollingWait = currentI2cPollingWait; // Restore i2cPollingWait
     setAckAiding(currentAckAiding);         // Restore Ack Aiding
     return ((size_t)0);
@@ -5644,33 +5462,27 @@ size_t DevUBLOXGNSS::readNavigationDatabase(uint8_t *dataBytes, size_t maxNumDat
 
       if (idMatch && dataAckd) // Is the ACK valid?
       {
-        if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-        {
-          _debugSerial.print(F("readNavigationDatabase: ACK received. databaseEntriesRX is "));
-          _debugSerial.print(databaseEntriesRX);
-          _debugSerial.print(F(". numBytesReceived is "));
-          _debugSerial.print(numBytesReceived);
-          _debugSerial.print(F(". DBD read complete after "));
-          _debugSerial.print(millis() - startTime);
-          _debugSerial.println(F(" ms"));
-        }
+        debugPrint("readNavigationDatabase: ACK received. databaseEntriesRX is ", true); // Important
+        debugPrint(databaseEntriesRX, true);
+        debugPrint(". numBytesReceived is ", true);
+        debugPrint(numBytesReceived, true);
+        debugPrint(". DBD read complete after ", true);
+        debugPrint(millis() - startTime, true);
+        debugPrintln(" ms", true);
         keepGoing = false;
       }
       else if (idMatch)
       {
-        if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
+        debugPrint("readNavigationDatabase: unexpected ACK received. databaseEntriesRX is 0x", true); // Important
+        debugPrint(databaseEntriesRX, HEX, true);
+        debugPrint(". msgPayloadStart is 0x", true);
+        for (uint8_t i = 4; i > 0; i--)
         {
-          _debugSerial.print(F("readNavigationDatabase: unexpected ACK received. databaseEntriesRX is 0x"));
-          _debugSerial.print(databaseEntriesRX, HEX);
-          _debugSerial.print(F(". msgPayloadStart is 0x"));
-          for (uint8_t i = 4; i > 0; i--)
-          {
-            if (packetUBXMGAACK->data[packetUBXMGAACK->tail].msgPayloadStart[i - 1] < 0x10)
-              _debugSerial.print(F("0"));
-            _debugSerial.print(packetUBXMGAACK->data[packetUBXMGAACK->tail].msgPayloadStart[i - 1], HEX);
-          }
-          _debugSerial.println();
+          if (packetUBXMGAACK->data[packetUBXMGAACK->tail].msgPayloadStart[i - 1] < 0x10)
+            debugPrint("0", true);
+          debugPrint(packetUBXMGAACK->data[packetUBXMGAACK->tail].msgPayloadStart[i - 1], HEX, true);
         }
+        debugPrint("\r\n", true);
       }
 
       // Increment the tail
@@ -5682,10 +5494,7 @@ size_t DevUBLOXGNSS::readNavigationDatabase(uint8_t *dataBytes, size_t maxNumDat
 
   if (keepGoing) // If keepGoing is still true, we must have timed out
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.println(F("readNavigationDatabase: DBD RX timed out!"));
-    }
+    debugPrintln("readNavigationDatabase: DBD RX timed out!", true); // Important
   }
 
   i2cPollingWait = currentI2cPollingWait; // Restore i2cPollingWait
@@ -5700,8 +5509,7 @@ bool DevUBLOXGNSS::initPacketUBXMGADBD()
   packetUBXMGADBD = new UBX_MGA_DBD_t; // Allocate RAM for the main struct
   if (packetUBXMGADBD == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initPacketUBXMGADBD: RAM alloc failed!"));
+    debugPrintln("initPacketUBXMGADBD: RAM alloc failed!", true); // Important
     return (false);
   }
   packetUBXMGADBD->head = 0; // Initialize the ring buffer pointers
@@ -5788,19 +5596,13 @@ bool DevUBLOXGNSS::createFileBuffer(void)
 {
   if (fileBufferSize == 0) // Bail if the user has not called setFileBufferSize
   {
-    if (_printDebug == true)
-    {
-      _debugSerial.println(F("createFileBuffer: Warning. fileBufferSize is zero. Data logging is not possible."));
-    }
+    debugPrintln("createFileBuffer: Warning. fileBufferSize is zero. Data logging is not possible."); // Not important
     return (false);
   }
 
   if (ubxFileBuffer != nullptr) // Bail if RAM has already been allocated for the file buffer
   {                             // This will happen if you call .begin more than once - without calling .end first
-    if (_printDebug == true)
-    {
-      _debugSerial.println(F("createFileBuffer: Warning. File buffer already exists. Skipping..."));
-    }
+    debugPrintln("createFileBuffer: Warning. File buffer already exists. Skipping..."); // Not important
     return (false);
   }
 
@@ -5808,19 +5610,13 @@ bool DevUBLOXGNSS::createFileBuffer(void)
 
   if (ubxFileBuffer == nullptr) // Check if the new (alloc) was successful
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.println(F("createFileBuffer: RAM alloc failed!"));
-    }
+    debugPrintln("createFileBuffer: RAM alloc failed!", true); // Important
     fileBufferSize = 0; // Set file buffer size so user can check with getFileBufferSize (ubxFileBuffer is protected)
     return (false);
   }
 
-  if (_printDebug == true)
-  {
-    _debugSerial.print(F("createFileBuffer: fileBufferSize is: "));
-    _debugSerial.println(fileBufferSize);
-  }
+  debugPrint("createFileBuffer: fileBufferSize is: ");
+  debugPrintln(fileBufferSize);
 
   fileBufferHead = 0; // Initialize head and tail
   fileBufferTail = 0;
@@ -5855,10 +5651,7 @@ bool DevUBLOXGNSS::storePacket(ubxPacket *msg)
   // First, check that the file buffer has been created
   if ((ubxFileBuffer == nullptr) || (fileBufferSize == 0))
   {
-    if (_printDebug == true)
-    {
-      _debugSerial.println(F("storePacket: file buffer not available!"));
-    }
+    debugPrintln("storePacket: file buffer not available!"); // Not important
     return (false);
   }
 
@@ -5866,10 +5659,7 @@ bool DevUBLOXGNSS::storePacket(ubxPacket *msg)
   uint16_t totalLength = msg->len + 8; // Total length. Include sync chars, class, id, length and checksum bytes
   if (totalLength > fileBufferSpaceAvailable())
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.println(F("storePacket: insufficient space available! Data will be lost!"));
-    }
+    debugPrintln("storePacket: insufficient space available! Data will be lost!", true); // Important
     return (false);
   }
 
@@ -5903,20 +5693,14 @@ bool DevUBLOXGNSS::storeFileBytes(uint8_t *theBytes, uint16_t numBytes)
   // First, check that the file buffer has been created
   if ((ubxFileBuffer == nullptr) || (fileBufferSize == 0))
   {
-    if (_printDebug == true)
-    {
-      _debugSerial.println(F("storeFileBytes: file buffer not available!"));
-    }
+    debugPrintln("storeFileBytes: file buffer not available!"); // Not important
     return (false);
   }
 
   // Now, check if there is enough space in the buffer for all of the data
   if (numBytes > fileBufferSpaceAvailable())
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.println(F("storeFileBytes: insufficient space available! Data will be lost!"));
-    }
+    debugPrintln("storeFileBytes: insufficient space available! Data will be lost!", true); // Important
     return (false);
   }
 
@@ -6033,10 +5817,7 @@ bool DevUBLOXGNSS::createRTCMBuffer(void)
 
   if (rtcmBuffer == nullptr) // Check if the new (alloc) was successful
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.println(F("createRTCMBuffer: RAM alloc failed!"));
-    }
+    debugPrintln("createRTCMBuffer: RAM alloc failed!", true); // Important
     rtcmBufferSize = 0; // Set buffer size so user can check with getRTCMBufferSize (rtcmBuffer is protected)
     return (false);
   }
@@ -6827,19 +6608,16 @@ bool DevUBLOXGNSS::getModuleInfo(uint16_t maxWait)
 
   if (fwProtMod == 0x07) // Did we extract all three?
   {
-    if (_printDebug == true)
-    {
-      _debugSerial.print(F("getModuleInfo: FWVER: "));
-      _debugSerial.print(moduleSWVersion->firmwareVersionHigh);
-      _debugSerial.print(F("."));
-      _debugSerial.println(moduleSWVersion->firmwareVersionLow);
-      _debugSerial.print(F("getModuleInfo: PROTVER: "));
-      _debugSerial.print(moduleSWVersion->protocolVersionHigh);
-      _debugSerial.print(F("."));
-      _debugSerial.println(moduleSWVersion->protocolVersionLow);
-      _debugSerial.print(F("getModuleInfo: MOD: "));
-      _debugSerial.println(moduleSWVersion->moduleName);
-    }
+    debugPrint("getModuleInfo: FWVER: ");
+    debugPrint(moduleSWVersion->firmwareVersionHigh);
+    debugPrint(".");
+    debugPrintln(moduleSWVersion->firmwareVersionLow);
+    debugPrint("getModuleInfo: PROTVER: ");
+    debugPrint(moduleSWVersion->protocolVersionHigh);
+    debugPrint(".");
+    debugPrintln(moduleSWVersion->protocolVersionLow);
+    debugPrint("getModuleInfo: MOD: ");
+    debugPrintln(moduleSWVersion->moduleName);
 
     moduleSWVersion->moduleQueried = true; // Mark this data as new
 
@@ -6855,8 +6633,7 @@ bool DevUBLOXGNSS::initModuleSWVersion()
   moduleSWVersion = new moduleSWVersion_t; // Allocate RAM for the main struct
   if (moduleSWVersion == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initModuleSWVersion: RAM alloc failed!"));
+    debugPrintln("initModuleSWVersion: RAM alloc failed!", true); // Important
     return (false);
   }
   moduleSWVersion->protocolVersionHigh = 0; // Clear the contents
@@ -6992,8 +6769,7 @@ bool DevUBLOXGNSS::initGeofenceParams()
   currentGeofenceParams = new geofenceParams_t; // Allocate RAM for the main struct
   if (currentGeofenceParams == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initGeofenceParams: RAM alloc failed!"));
+    debugPrintln("initGeofenceParams: RAM alloc failed!", true); // Important
     return (false);
   }
   currentGeofenceParams->numFences = 0;
@@ -7007,12 +6783,9 @@ bool DevUBLOXGNSS::initGeofenceParams()
 bool DevUBLOXGNSS::powerOff(uint32_t durationInMs, uint16_t maxWait)
 {
   // use durationInMs = 0 for infinite duration
-  if (_printDebug == true)
-  {
-    _debugSerial.print(F("Powering off for "));
-    _debugSerial.print(durationInMs);
-    _debugSerial.println(" ms");
-  }
+  debugPrint("Powering off for ");
+  debugPrint(durationInMs);
+  debugPrintln(" ms");
 
   // Power off device using UBX-RXM-PMREQ
   packetCfg.cls = UBX_CLASS_RXM; // 0x02
@@ -7051,12 +6824,9 @@ bool DevUBLOXGNSS::powerOff(uint32_t durationInMs, uint16_t maxWait)
 bool DevUBLOXGNSS::powerOffWithInterrupt(uint32_t durationInMs, uint32_t wakeupSources, bool forceWhileUsb, uint16_t maxWait)
 {
   // use durationInMs = 0 for infinite duration
-  if (_printDebug == true)
-  {
-    _debugSerial.print(F("Powering off for "));
-    _debugSerial.print(durationInMs);
-    _debugSerial.println(" ms");
-  }
+  debugPrint("Powering off for ");
+  debugPrint(durationInMs);
+  debugPrintln(" ms");
 
   // Power off device using UBX-RXM-PMREQ
   packetCfg.cls = UBX_CLASS_RXM; // 0x02
@@ -7396,8 +7166,7 @@ bool DevUBLOXGNSS::setDynamicSPARTNKey(uint8_t keyLengthBytes, uint16_t validFro
 
   if (binaryKey == nullptr)
   {
-    if (_printDebug == true)
-      _debugSerial.println(F("setDynamicSPARTNKey: binaryKey RAM allocation failed!"));
+    debugPrintln("setDynamicSPARTNKey: binaryKey RAM allocation failed!"); // Not important
     return (false);
   }
 
@@ -7492,8 +7261,7 @@ bool DevUBLOXGNSS::setDynamicSPARTNKeys(uint8_t keyLengthBytes1, uint16_t validF
 
   if (binaryKey1 == nullptr)
   {
-    if (_printDebug == true)
-      _debugSerial.println(F("setDynamicSPARTNKeys: binaryKey1 RAM allocation failed!"));
+    debugPrintln("setDynamicSPARTNKeys: binaryKey1 RAM allocation failed!"); // Not important
     return (false);
   }
 
@@ -7501,8 +7269,7 @@ bool DevUBLOXGNSS::setDynamicSPARTNKeys(uint8_t keyLengthBytes1, uint16_t validF
 
   if (binaryKey2 == nullptr)
   {
-    if (_printDebug == true)
-      _debugSerial.println(F("setDynamicSPARTNKeys: binaryKey2 RAM allocation failed!"));
+    debugPrintln("setDynamicSPARTNKeys: binaryKey2 RAM allocation failed!"); // Not important
     delete[] binaryKey1;
     return (false);
   }
@@ -7803,23 +7570,17 @@ uint8_t * DevUBLOXGNSS::parseSPARTN(uint8_t incoming, bool &valid, uint16_t &len
         {
           spartn[3] = incoming; // Restore TF005 and TF006 now we know the data is valid
           parseState = TF007;
-          if (_printDebug == true)
-          {
-            _debugSerial.print(F("SPARTN Header CRC is valid: payloadLength "));
-            _debugSerial.print(_header.payloadLength);
-            _debugSerial.print(F(" EAF "));
-            _debugSerial.print(_header.EAF);
-            _debugSerial.print(F(" crcType "));
-            _debugSerial.println(_header.crcType);
-          }
+          debugPrint("SPARTN Header CRC is valid: payloadLength ");
+          debugPrint(_header.payloadLength);
+          debugPrint(" EAF ");
+          debugPrint(_header.EAF);
+          debugPrint(" crcType ");
+          debugPrintln(_header.crcType);
         }
         else
         {
           parseState = waitingFor73;
-          if (_printDebug == true)
-          {
-            _debugSerial.println(F("SPARTN Header CRC is INVALID"));
-          }
+          debugPrintln("SPARTN Header CRC is INVALID"); // Not important
         }
       }
       frameCount++;
@@ -7828,11 +7589,8 @@ uint8_t * DevUBLOXGNSS::parseSPARTN(uint8_t incoming, bool &valid, uint16_t &len
       spartn[4] = incoming;
       _header.messageSubtype = incoming >> 4;
       _header.timeTagType = (incoming >> 3) & 0x01;
-      if (_printDebug == true)
-      {
-        _debugSerial.print(F("SPARTN timeTagType "));
-        _debugSerial.println(_header.timeTagType);
-      }
+      debugPrint("SPARTN timeTagType ");
+      debugPrintln(_header.timeTagType);
       if (_header.timeTagType == 0)
         TF007toTF016 = 4;
       else
@@ -7855,11 +7613,8 @@ uint8_t * DevUBLOXGNSS::parseSPARTN(uint8_t incoming, bool &valid, uint16_t &len
         else
         {
           _header.authenticationIndicator = (incoming >> 3) & 0x07;
-          if (_printDebug == true)
-          {
-            _debugSerial.print(F("SPARTN authenticationIndicator "));
-            _debugSerial.println(_header.authenticationIndicator);
-          }
+          debugPrint("SPARTN authenticationIndicator ");
+          debugPrintln(_header.authenticationIndicator);
           if (_header.authenticationIndicator <= 1)
             _header.embeddedApplicationLengthBytes = 0;
           else
@@ -7883,11 +7638,8 @@ uint8_t * DevUBLOXGNSS::parseSPARTN(uint8_t incoming, bool &valid, uint16_t &len
                 break;
             }
           }
-          if (_printDebug == true)
-          {
-            _debugSerial.print(F("SPARTN embeddedApplicationLengthBytes "));
-            _debugSerial.println(_header.embeddedApplicationLengthBytes);
-          }
+          debugPrint("SPARTN embeddedApplicationLengthBytes ");
+          debugPrintln(_header.embeddedApplicationLengthBytes);
         }
         parseState = TF016;
         frameCount = 0;                  
@@ -7926,11 +7678,8 @@ uint8_t * DevUBLOXGNSS::parseSPARTN(uint8_t incoming, bool &valid, uint16_t &len
       {
           parseState = waitingFor73;
           uint16_t numBytes = 4 + TF007toTF016 + _header.payloadLength + _header.embeddedApplicationLengthBytes;
-          if (_printDebug == true)
-          {
-            _debugSerial.print(F("SPARTN numBytes "));
-            _debugSerial.println(numBytes);
-          }
+          debugPrint("SPARTN numBytes ");
+          debugPrintln(numBytes);
           uint8_t *ptr = &spartn[numBytes];
           switch (_header.crcType)
           {
@@ -7971,13 +7720,10 @@ uint8_t * DevUBLOXGNSS::parseSPARTN(uint8_t incoming, bool &valid, uint16_t &len
               }
               else
               {
-                if (_printDebug == true)
-                {
-                  _debugSerial.print(F("SPARTN CRC-24 is INVALID: 0x"));
-                  _debugSerial.print(expected, HEX);
-                  _debugSerial.print(F(" vs 0x"));
-                  _debugSerial.println(crc, HEX);
-                }
+                debugPrint("SPARTN CRC-24 is INVALID: 0x");
+                debugPrint(expected, HEX);
+                debugPrint(" vs 0x");
+                debugPrintln(crc, HEX);
               }
             }
             break;
@@ -8118,21 +7864,15 @@ sfe_ublox_status_e DevUBLOXGNSS::getVal(uint32_t key, uint8_t layer, uint16_t ma
   payloadCfg[6] = key >> 8 * 2;
   payloadCfg[7] = key >> 8 * 3;
 
-  if (_printDebug == true)
-  {
-    _debugSerial.print(F("getVal key: 0x"));
-    _debugSerial.print(key, HEX);
-    _debugSerial.println();
-  }
+  debugPrint("getVal key: 0x");
+  debugPrint(key, HEX);
+  debugPrintln();
 
   // Send VALGET command with this key
 
   sfe_ublox_status_e retVal = sendCommand(&packetCfg, maxWait);
-  if (_printDebug == true)
-  {
-    _debugSerial.print(F("getVal: sendCommand returned: "));
-    _debugSerial.println(statusString(retVal));
-  }
+  debugPrint("getVal: sendCommand returned: ");
+  debugPrintln(statusString(retVal));
 
   // Verify the response is the correct length as compared to what the user called (did the module respond with 8-bits but the user called getVal32?)
   // Response is 8 bytes plus cfg data
@@ -8355,10 +8095,7 @@ bool DevUBLOXGNSS::setValFloat(uint32_t key, float value, uint8_t layer, uint16_
 {
   if (sizeof(float) != 4)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.println(F("setValFloat not supported!"));
-    }
+    debugPrintln("setValFloat not supported!", true); // Important
     return false;
   }
   unsigned32float converter;
@@ -8370,10 +8107,7 @@ bool DevUBLOXGNSS::setValDouble(uint32_t key, double value, uint8_t layer, uint1
 {
   if (sizeof(double) != 8)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.println(F("setValDouble not supported!"));
-    }
+    debugPrintln("setValDouble not supported!", true); // Important
     return false;
   }
   unsigned64double converter;
@@ -8408,8 +8142,7 @@ bool DevUBLOXGNSS::addCfgValsetN(uint32_t key, uint8_t *value, uint8_t N)
 {
   if ((_autoSendAtSpaceRemaining > 0) && (packetCfg.len >= (packetCfgPayloadSize - _autoSendAtSpaceRemaining)))
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("addCfgValsetN: autosend"));
+    debugPrintln("addCfgValsetN: autosend", true); // Important
     if (sendCommand(&packetCfg) != SFE_UBLOX_STATUS_DATA_SENT) // We are only expecting an ACK
       return false;
     packetCfg.len = 4; // 4 byte header
@@ -8420,15 +8153,13 @@ bool DevUBLOXGNSS::addCfgValsetN(uint32_t key, uint8_t *value, uint8_t N)
 
   if (packetCfg.len >= (packetCfgPayloadSize - (4 + N)))
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("addCfgValsetN: packetCfgPayloadSize reached!"));
+    debugPrintln("addCfgValsetN: packetCfgPayloadSize reached!", true); // Important
     return false;
   }
 
   if (_numCfgKeys == CFG_VALSET_MAX_KEYS)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("addCfgValsetN: key limit reached!"));
+    debugPrintln("addCfgValsetN: key limit reached!", true); // Important
     return false;
   }
 
@@ -8552,19 +8283,13 @@ bool DevUBLOXGNSS::addCfgValget(ubxPacket *pkt, uint32_t key) // Add a new key t
 
   if (_lenCfgValGetResponse >= (_cfgValgetMaxPayload - (4 + (valueSizeBytes))))
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.println(F("addCfgValget: packetCfgPayloadSize reached!"));
-    }
+    debugPrintln("addCfgValget: packetCfgPayloadSize reached!", true); // Important
     return false;
   }
 
   if (_numGetCfgKeys == CFG_VALSET_MAX_KEYS)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-    {
-      _debugSerial.println(F("addCfgValget: key limit reached!"));
-    }
+    debugPrintln("addCfgValget: key limit reached!", true); // Important
     return false;
   }
 
@@ -8974,8 +8699,7 @@ bool DevUBLOXGNSS::setAutoNAVSATcallbackPtr(void (*callbackPointerPtr)(UBX_NAV_S
 
   if (packetUBXNAVSAT->callbackData == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setAutoNAVSATcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setAutoNAVSATcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -9007,8 +8731,7 @@ bool DevUBLOXGNSS::initPacketUBXNAVSAT()
   packetUBXNAVSAT = new UBX_NAV_SAT_t; // Allocate RAM for the main struct
   if (packetUBXNAVSAT == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initPacketUBXNAVSAT: RAM alloc failed!"));
+    debugPrintln("initPacketUBXNAVSAT: RAM alloc failed!", true); // Important
     return (false);
   }
   packetUBXNAVSAT->automaticFlags.flags.all = 0;
@@ -9136,8 +8859,7 @@ bool DevUBLOXGNSS::setAutoNAVSIGcallbackPtr(void (*callbackPointerPtr)(UBX_NAV_S
 
   if (packetUBXNAVSIG->callbackData == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setAutoNAVSIGcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setAutoNAVSIGcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -9169,8 +8891,7 @@ bool DevUBLOXGNSS::initPacketUBXNAVSIG()
   packetUBXNAVSIG = new UBX_NAV_SIG_t; // Allocate RAM for the main struct
   if (packetUBXNAVSIG == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initPacketUBXNAVSIG: RAM alloc failed!"));
+    debugPrintln("initPacketUBXNAVSIG: RAM alloc failed!", true); // Important
     return (false);
   }
   packetUBXNAVSIG->automaticFlags.flags.all = 0;
@@ -9213,8 +8934,7 @@ bool DevUBLOXGNSS::setRXMPMPcallbackPtr(void (*callbackPointerPtr)(UBX_RXM_PMP_d
 
   if (packetUBXRXMPMP->callbackData == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setAutoRXMPMPcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setAutoRXMPMPcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -9228,8 +8948,7 @@ bool DevUBLOXGNSS::initPacketUBXRXMPMP()
   packetUBXRXMPMP = new UBX_RXM_PMP_t; // Allocate RAM for the main struct
   if (packetUBXRXMPMP == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initPacketUBXRXMPMP: RAM alloc failed!"));
+    debugPrintln("initPacketUBXRXMPMP: RAM alloc failed!", true); // Important
     return (false);
   }
   packetUBXRXMPMP->automaticFlags.flags.all = 0;
@@ -9253,8 +8972,7 @@ bool DevUBLOXGNSS::setRXMPMPmessageCallbackPtr(void (*callbackPointerPtr)(UBX_RX
 
   if (packetUBXRXMPMPmessage->callbackData == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setAutoRXMPMPmessagecallbackPtr: RAM alloc failed!"));
+    debugPrintln("setAutoRXMPMPmessagecallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -9268,8 +8986,7 @@ bool DevUBLOXGNSS::initPacketUBXRXMPMPmessage()
   packetUBXRXMPMPmessage = new UBX_RXM_PMP_message_t; // Allocate RAM for the main struct
   if (packetUBXRXMPMPmessage == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initPacketUBXRXMPMPmessage: RAM alloc failed!"));
+    debugPrintln("initPacketUBXRXMPMPmessage: RAM alloc failed!", true); // Important
     return (false);
   }
   packetUBXRXMPMPmessage->automaticFlags.flags.all = 0;
@@ -9295,8 +9012,7 @@ bool DevUBLOXGNSS::setRXMQZSSL6messageCallbackPtr(void (*callbackPointerPtr)(UBX
 
   if (packetUBXRXMQZSSL6message->callbackData == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setAutoRXMQZSSL6messagecallbackPtr: RAM alloc failed!"));
+    debugPrintln("setAutoRXMQZSSL6messagecallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -9310,8 +9026,7 @@ bool DevUBLOXGNSS::initPacketUBXRXMQZSSL6message()
   packetUBXRXMQZSSL6message = new UBX_RXM_QZSSL6_message_t; // Allocate RAM for the main struct
   if (packetUBXRXMQZSSL6message == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initPacketUBXRXMQZSSL6message: RAM alloc failed!"));
+    debugPrintln("initPacketUBXRXMQZSSL6message: RAM alloc failed!", true); // Important
     return (false);
   }
   packetUBXRXMQZSSL6message->automaticFlags.flags.all = 0;
@@ -9427,8 +9142,7 @@ bool DevUBLOXGNSS::setAutoRXMSFRBXcallbackPtr(void (*callbackPointerPtr)(UBX_RXM
 
   if (packetUBXRXMSFRBX->callbackData == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setAutoRXMSFRBXcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setAutoRXMSFRBXcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -9450,8 +9164,7 @@ bool DevUBLOXGNSS::setAutoRXMSFRBXmessageCallbackPtr(void (*callbackMessagePoint
 
   if (packetUBXRXMSFRBX->callbackMessageData == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setAutoRXMSFRBXmessageCallbackPtr: RAM alloc failed!"));
+    debugPrintln("setAutoRXMSFRBXmessageCallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -9483,8 +9196,7 @@ bool DevUBLOXGNSS::initPacketUBXRXMSFRBX()
   packetUBXRXMSFRBX = new UBX_RXM_SFRBX_t; // Allocate RAM for the main struct
   if (packetUBXRXMSFRBX == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initPacketUBXRXMSFRBX: RAM alloc failed!"));
+    debugPrintln("initPacketUBXRXMSFRBX: RAM alloc failed!", true); // Important
     return (false);
   }
   packetUBXRXMSFRBX->automaticFlags.flags.all = 0;
@@ -9612,8 +9324,7 @@ bool DevUBLOXGNSS::setAutoRXMRAWXcallbackPtr(void (*callbackPointerPtr)(UBX_RXM_
 
   if (packetUBXRXMRAWX->callbackData == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setAutoRXMRAWXcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setAutoRXMRAWXcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -9645,8 +9356,7 @@ bool DevUBLOXGNSS::initPacketUBXRXMRAWX()
   packetUBXRXMRAWX = new UBX_RXM_RAWX_t; // Allocate RAM for the main struct
   if (packetUBXRXMRAWX == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initPacketUBXRXMRAWX: RAM alloc failed!"));
+    debugPrintln("initPacketUBXRXMRAWX: RAM alloc failed!", true); // Important
     return (false);
   }
   packetUBXRXMRAWX->automaticFlags.flags.all = 0;
@@ -9772,8 +9482,7 @@ bool DevUBLOXGNSS::setAutoRXMMEASXcallbackPtr(void (*callbackPointerPtr)(UBX_RXM
 
   if (packetUBXRXMMEASX->callbackData == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setAutoRXMMEASXcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setAutoRXMMEASXcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -9805,8 +9514,7 @@ bool DevUBLOXGNSS::initPacketUBXRXMMEASX()
   packetUBXRXMMEASX = new UBX_RXM_MEASX_t; // Allocate RAM for the main struct
   if (packetUBXRXMMEASX == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initPacketUBXRXMMEASX: RAM alloc failed!"));
+    debugPrintln("initPacketUBXRXMMEASX: RAM alloc failed!", true); // Important
     return (false);
   }
   packetUBXRXMMEASX->automaticFlags.flags.all = 0;
@@ -9929,8 +9637,7 @@ bool DevUBLOXGNSS::setAutoMONCOMMScallbackPtr(void (*callbackPointerPtr)(UBX_MON
 
   if (packetUBXMONCOMMS->callbackData == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setAutoMONCOMMScallbackPtr: RAM alloc failed!"));
+    debugPrintln("setAutoMONCOMMScallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -9962,8 +9669,7 @@ bool DevUBLOXGNSS::initPacketUBXMONCOMMS()
   packetUBXMONCOMMS = new UBX_MON_COMMS_t; // Allocate RAM for the main struct
   if (packetUBXMONCOMMS == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initPacketUBXMONCOMMS: RAM alloc failed!"));
+    debugPrintln("initPacketUBXMONCOMMS: RAM alloc failed!", true); // Important
     return (false);
   }
   packetUBXMONCOMMS->automaticFlags.flags.all = 0;
@@ -10096,8 +9802,7 @@ bool DevUBLOXGNSS::setAutoESFSTATUScallbackPtr(void (*callbackPointerPtr)(UBX_ES
 
   if (packetUBXESFSTATUS->callbackData == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setAutoESFSTATUScallbackPtr: RAM alloc failed!"));
+    debugPrintln("setAutoESFSTATUScallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10130,8 +9835,7 @@ bool DevUBLOXGNSS::initPacketUBXESFSTATUS()
 
   if (packetUBXESFSTATUS == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initPacketUBXESFSTATUS: RAM alloc failed!"));
+    debugPrintln("initPacketUBXESFSTATUS: RAM alloc failed!", true); // Important
     return (false);
   }
   packetUBXESFSTATUS->automaticFlags.flags.all = 0;
@@ -10273,8 +9977,7 @@ bool DevUBLOXGNSS::setAutoSECSIGcallbackPtr(void (*callbackPointerPtr)(UBX_SEC_S
 
   if (packetUBXSECSIG->callbackData == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setAutoSECSIGcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setAutoSECSIGcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10307,8 +10010,7 @@ bool DevUBLOXGNSS::initPacketUBXSECSIG()
   packetUBXSECSIG = new UBX_SEC_SIG_t; // Allocate RAM for the main struct
   if (packetUBXSECSIG == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initPacketUBXSECSIG: RAM alloc failed!"));
+    debugPrintln("initPacketUBXSECSIG: RAM alloc failed!", true); // Important
     return (false);
   }
   packetUBXSECSIG->automaticFlags.flags.all = 0;
@@ -10415,8 +10117,7 @@ bool DevUBLOXGNSS::setNMEAGPGGAcallbackPtr(void (*callbackPointerPtr)(NMEA_GGA_d
 
   if (storageNMEAGPGGA->callbackCopy == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setNMEAGPGGAcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setNMEAGPGGAcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10430,8 +10131,7 @@ bool DevUBLOXGNSS::initStorageNMEAGPGGA()
   storageNMEAGPGGA = new NMEA_GPGGA_t; // Allocate RAM for the main struct
   if (storageNMEAGPGGA == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageNMEAGPGGA: RAM alloc failed!"));
+    debugPrintln("initStorageNMEAGPGGA: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10487,8 +10187,7 @@ bool DevUBLOXGNSS::setNMEAGNGGAcallbackPtr(void (*callbackPointerPtr)(NMEA_GGA_d
 
   if (storageNMEAGNGGA->callbackCopy == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setNMEAGNGGAcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setNMEAGNGGAcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10502,8 +10201,7 @@ bool DevUBLOXGNSS::initStorageNMEAGNGGA()
   storageNMEAGNGGA = new NMEA_GNGGA_t; // Allocate RAM for the main struct
   if (storageNMEAGNGGA == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageNMEAGNGGA: RAM alloc failed!"));
+    debugPrintln("initStorageNMEAGNGGA: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10566,8 +10264,7 @@ bool DevUBLOXGNSS::setNMEAGPVTGcallbackPtr(void (*callbackPointerPtr)(NMEA_VTG_d
 
   if (storageNMEAGPVTG->callbackCopy == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setNMEAGPVTGcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setNMEAGPVTGcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10581,8 +10278,7 @@ bool DevUBLOXGNSS::initStorageNMEAGPVTG()
   storageNMEAGPVTG = new NMEA_GPVTG_t; // Allocate RAM for the main struct
   if (storageNMEAGPVTG == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageNMEAGPVTG: RAM alloc failed!"));
+    debugPrintln("initStorageNMEAGPVTG: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10638,8 +10334,7 @@ bool DevUBLOXGNSS::setNMEAGNVTGcallbackPtr(void (*callbackPointerPtr)(NMEA_VTG_d
 
   if (storageNMEAGNVTG->callbackCopy == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setNMEAGNVTGcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setNMEAGNVTGcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10653,8 +10348,7 @@ bool DevUBLOXGNSS::initStorageNMEAGNVTG()
   storageNMEAGNVTG = new NMEA_GNVTG_t; // Allocate RAM for the main struct
   if (storageNMEAGNVTG == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageNMEAGNVTG: RAM alloc failed!"));
+    debugPrintln("initStorageNMEAGNVTG: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10717,8 +10411,7 @@ bool DevUBLOXGNSS::setNMEAGPRMCcallbackPtr(void (*callbackPointerPtr)(NMEA_RMC_d
 
   if (storageNMEAGPRMC->callbackCopy == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setNMEAGPRMCcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setNMEAGPRMCcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10732,8 +10425,7 @@ bool DevUBLOXGNSS::initStorageNMEAGPRMC()
   storageNMEAGPRMC = new NMEA_GPRMC_t; // Allocate RAM for the main struct
   if (storageNMEAGPRMC == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageNMEAGPRMC: RAM alloc failed!"));
+    debugPrintln("initStorageNMEAGPRMC: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10789,8 +10481,7 @@ bool DevUBLOXGNSS::setNMEAGNRMCcallbackPtr(void (*callbackPointerPtr)(NMEA_RMC_d
 
   if (storageNMEAGNRMC->callbackCopy == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setNMEAGNRMCcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setNMEAGNRMCcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10804,8 +10495,7 @@ bool DevUBLOXGNSS::initStorageNMEAGNRMC()
   storageNMEAGNRMC = new NMEA_GNRMC_t; // Allocate RAM for the main struct
   if (storageNMEAGNRMC == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageNMEAGNRMC: RAM alloc failed!"));
+    debugPrintln("initStorageNMEAGNRMC: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10868,8 +10558,7 @@ bool DevUBLOXGNSS::setNMEAGPZDAcallbackPtr(void (*callbackPointerPtr)(NMEA_ZDA_d
 
   if (storageNMEAGPZDA->callbackCopy == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setNMEAGPZDAcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setNMEAGPZDAcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10883,8 +10572,7 @@ bool DevUBLOXGNSS::initStorageNMEAGPZDA()
   storageNMEAGPZDA = new NMEA_GPZDA_t; // Allocate RAM for the main struct
   if (storageNMEAGPZDA == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageNMEAGPZDA: RAM alloc failed!"));
+    debugPrintln("initStorageNMEAGPZDA: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10940,8 +10628,7 @@ bool DevUBLOXGNSS::setNMEAGNZDAcallbackPtr(void (*callbackPointerPtr)(NMEA_ZDA_d
 
   if (storageNMEAGNZDA->callbackCopy == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setNMEAGNZDAcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setNMEAGNZDAcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -10955,8 +10642,7 @@ bool DevUBLOXGNSS::initStorageNMEAGNZDA()
   storageNMEAGNZDA = new NMEA_GNZDA_t; // Allocate RAM for the main struct
   if (storageNMEAGNZDA == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageNMEAGNZDA: RAM alloc failed!"));
+    debugPrintln("initStorageNMEAGNZDA: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -11019,8 +10705,7 @@ bool DevUBLOXGNSS::setNMEAGPGSTcallbackPtr(void (*callbackPointerPtr)(NMEA_GST_d
 
   if (storageNMEAGPGST->callbackCopy == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setNMEAGPGSTcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setNMEAGPGSTcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -11034,8 +10719,7 @@ bool DevUBLOXGNSS::initStorageNMEAGPGST()
   storageNMEAGPGST = new NMEA_GPGST_t; // Allocate RAM for the main struct
   if (storageNMEAGPGST == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageNMEAGPGST: RAM alloc failed!"));
+    debugPrintln("initStorageNMEAGPGST: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -11091,8 +10775,7 @@ bool DevUBLOXGNSS::setNMEAGNGSTcallbackPtr(void (*callbackPointerPtr)(NMEA_GST_d
 
   if (storageNMEAGNGST->callbackCopy == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setNMEAGNGSTcallbackPtr: RAM alloc failed!"));
+    debugPrintln("setNMEAGNGSTcallbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -11106,8 +10789,7 @@ bool DevUBLOXGNSS::initStorageNMEAGNGST()
   storageNMEAGNGST = new NMEA_GNGST_t; // Allocate RAM for the main struct
   if (storageNMEAGNGST == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageNMEAGNGST: RAM alloc failed!"));
+    debugPrintln("initStorageNMEAGNGST: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -11133,8 +10815,7 @@ bool DevUBLOXGNSS::initStorageNMEA()
   _storageNMEA = new NMEA_STORAGE_t; // Allocate RAM for the main struct
   if (_storageNMEA == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageNMEA: RAM alloc failed!"));
+    debugPrintln("initStorageNMEA: RAM alloc failed!", true); // Important
     return (false);
   }
   _storageNMEA->data = nullptr;
@@ -11142,8 +10823,7 @@ bool DevUBLOXGNSS::initStorageNMEA()
   _storageNMEA->data = new uint8_t[maxNMEAByteCount];
   if (_storageNMEA->data == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageNMEA: RAM alloc failed!"));
+    debugPrintln("initStorageNMEA: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -11173,8 +10853,7 @@ bool DevUBLOXGNSS::initStorageRTCM()
   _storageRTCM = new RTCM_FRAME_t; // Allocate RAM for the main struct
   if (_storageRTCM == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageRTCM: RAM alloc failed!"));
+    debugPrintln("initStorageRTCM: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -11240,8 +10919,7 @@ bool DevUBLOXGNSS::setRTCM1005callbackPtr(void (*callbackPointerPtr)(RTCM_1005_d
 
   if (storageRTCM1005->callbackData == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("setRTCM1005callbackPtr: RAM alloc failed!"));
+    debugPrintln("setRTCM1005callbackPtr: RAM alloc failed!", true); // Important
     return (false);
   }
 
@@ -11258,8 +10936,7 @@ bool DevUBLOXGNSS::initStorageRTCM1005()
   storageRTCM1005 = new RTCM_1005_t; // Allocate RAM for the main struct
   if (storageRTCM1005 == nullptr)
   {
-    if ((_printDebug == true) || (_printLimitedDebug == true)) // This is important. Print this if doing limited debugging
-      _debugSerial.println(F("initStorageRTCM1005: RAM alloc failed!"));
+    debugPrintln("initStorageRTCM1005: RAM alloc failed!", true); // Important
     return (false);
   }
 

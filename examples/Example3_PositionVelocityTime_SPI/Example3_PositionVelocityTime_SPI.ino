@@ -41,7 +41,7 @@ void setup()
 
   while (myGNSS.begin(myCS) == false) //Connect to the u-blox module using SPI and myCS (defined above)
   {
-    Serial.println(F("u-blox GNSS not detected. Retrying..."));
+    Serial.println("u-blox GNSS not detected. Retrying...");
     delay (1000);
   }
 }
@@ -53,18 +53,18 @@ void loop()
   if (myGNSS.getPVT() == true) // Use the helper method getPVT()
   {
     int32_t latitude = myGNSS.getLatitude(); // Use the helper method
-    Serial.print(F("Lat: "));
+    Serial.print("Lat: ");
     Serial.print(latitude);
 
     int32_t longitude = myGNSS.getLongitude(); // Use the helper method
-    Serial.print(F(" Long: "));
+    Serial.print(" Long: ");
     Serial.print(longitude);
-    Serial.print(F(" (degrees * 10^-7)"));
+    Serial.print(" (degrees * 10^-7)");
 
     int32_t altitude = myGNSS.getAltitudeMSL(); // Helper method for Altitude above Mean Sea Level
-    Serial.print(F(" Alt: "));
+    Serial.print(" Alt: ");
     Serial.print(altitude);
-    Serial.print(F(" (mm)"));
+    Serial.print(" (mm)");
 
     Serial.println();
   }

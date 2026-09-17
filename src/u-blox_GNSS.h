@@ -157,24 +157,29 @@ public:
 #if defined(USB_VID)                                                                  // Is the USB Vendor ID defined?
 #if (USB_VID == 0x1B4F)                                                               // Is this a SparkFun board?
 #if !defined(ARDUINO_SAMD51_THING_PLUS) & !defined(ARDUINO_SAMD51_MICROMOD)           // If it is not a SAMD51 Thing Plus or SAMD51 MicroMod
-  void enableDebugging(Print &debugPort = SerialUSB, bool printLimitedDebug = false); // Given a port to print to, enable debug messages. Default to all, not limited.
+  void enableDebugging(Print &debugPort = SerialUSB, bool printLimitedDebug = false); // Given a port to print to, enable debug messages. Default to all, not important-only.
 #else
-  void enableDebugging(Print &debugPort = Serial, bool printLimitedDebug = false); // Given a port to print to, enable debug messages. Default to all, not limited.
+  void enableDebugging(Print &debugPort = Serial, bool printLimitedDebug = false); // Given a port to print to, enable debug messages. Default to all, not important-only.
 #endif
 #else
-  void enableDebugging(Print &debugPort = Serial, bool printLimitedDebug = false); // Given a port to print to, enable debug messages. Default to all, not limited.
+  void enableDebugging(Print &debugPort = Serial, bool printLimitedDebug = false); // Given a port to print to, enable debug messages. Default to all, not important-only.
 #endif
 #else
-  void enableDebugging(Print &debugPort = Serial, bool printLimitedDebug = false); // Given a port to print to, enable debug messages. Default to all, not limited.
+  void enableDebugging(Print &debugPort = Serial, bool printLimitedDebug = false); // Given a port to print to, enable debug messages. Default to all, not important-only.
 #endif
 #else
-  void enableDebugging(Print &debugPort = Serial, bool printLimitedDebug = false); // Given a port to print to, enable debug messages. Default to all, not limited.
+  void enableDebugging(Print &debugPort = Serial, bool printLimitedDebug = false); // Given a port to print to, enable debug messages. Default to all, not important-only.
 #endif
 
-  void disableDebugging(void);                       // Turn off debug statements
-  void debugPrint(char *message);                    // Safely print debug statements
-  void debugPrintln(char *message);                  // Safely print debug statements
-  const char *statusString(sfe_ublox_status_e stat); // Pretty print the return value
+  void disableDebugging(void);                                    // Turn off debug statements
+  void debugPrint(const char *message, bool important = false);             // Safely print debug statements
+  void debugPrint(uint32_t value, bool important = false);                  // Safely print debug values
+  void debugPrint(uint32_t value, int printBase, bool important = false);   // Safely print debug values in a given base (e.g. HEX)
+  void debugPrintln(const char *message, bool important = false);           // Safely print debug statements
+  void debugPrintln(uint32_t value, bool important = false);                // Safely print debug values
+  void debugPrintln(uint32_t value, int printBase, bool important = false); // Safely print debug values in a given base (e.g. HEX)
+  void debugPrintln(void);                                                  // Safely print a blank debug line
+  const char *statusString(sfe_ublox_status_e stat);              // Pretty print the return value
 
   // Check for the arrival of new I2C/Serial data
   // Changed in V1.8.1: provides backward compatibility for the examples that call checkUblox directly

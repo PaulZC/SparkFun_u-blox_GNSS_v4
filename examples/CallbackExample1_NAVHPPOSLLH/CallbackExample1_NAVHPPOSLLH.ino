@@ -35,23 +35,23 @@ void printPVTdata(ubxCallbackDataCommon_t *theData)
 
     // getUbxMessageField returns everything as double. Cast to other types as needed
     unsigned long timeOfWeek = (unsigned long)getUbxMessageFieldCallback(theDataStruct, "iTOW");
-    Serial.print(F("TimeOfWeek: "));
+    Serial.print("TimeOfWeek: ");
     Serial.print(timeOfWeek); // Print the Time Of Week
-    Serial.print(F(" (ms)"));
+    Serial.print(" (ms)");
 
     long latitude = (long)getUbxMessageFieldCallback(theDataStruct, "lat");
-    Serial.print(F(" Lat: "));
+    Serial.print(" Lat: ");
     Serial.print(latitude); // Print the latitude
 
     long longitude = (long)getUbxMessageFieldCallback(theDataStruct, "lon");
-    Serial.print(F(" Long: "));
+    Serial.print(" Long: ");
     Serial.print(longitude); // Print the longitude
-    Serial.print(F(" (degrees * 10^-7)"));
+    Serial.print(" (degrees * 10^-7)");
 
     float hAcc = (float)getUbxMessageFieldCallback(theDataStruct, "hAcc");
-    Serial.print(F(" Horiz Acc: "));
+    Serial.print(" Horiz Acc: ");
     Serial.print(hAcc / 10.0, 1); // Print the horizontal accuracy estimate
-    Serial.println(F(" (mm)"));
+    Serial.println(" (mm)");
 }
 
 void setup()
@@ -66,7 +66,7 @@ void setup()
 
   while (myGNSS.begin() == false) //Connect to the u-blox module using Wire port
   {
-    Serial.println(F("u-blox GNSS not detected at default I2C address. Retrying..."));
+    Serial.println("u-blox GNSS not detected at default I2C address. Retrying...");
     delay (1000);
   }
 
