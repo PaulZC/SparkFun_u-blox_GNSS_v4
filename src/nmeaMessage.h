@@ -100,40 +100,151 @@ public:
         if (buffer == nullptr)
             return false;
 
+        if (*buffer != '$') // NMEA messages always start with $
+        {
+            value = String(""); // Clear value just in case
+            return false;
+        }
+
         const nmeaField *fields = (const nmeaField *)_fields;
         for (uint8_t i = 0; i < _numFields; i++)
         {
             if (strncmp(fields[i].fieldName, fieldName, sizeof(fields[i].fieldName)) != 0)
                 continue;
 
+            const uint8_t *fieldStart = buffer + 1; // Point to the first char of the name
+            const uint8_t *fieldEnd = buffer + 1; // Point to the first char of the name
+
+            // Count the commas
+            int commaCount = 0;
+            int x;
+            for (x = 1; x < strlen((const char *)buffer); x++) // Assumes sentence is null terminated
+            {
+                if ((buffer[x] == ',') || (buffer[x] == '*')) // Treat * as a comma delimiter
+                {
+                    fieldEnd = &buffer[x]; // fieldEnd is the current comma
+
+                    // if commaCount matches the fieldNumber then buffer[x] is the fieldEnd
+                    if (commaCount == fields[i].fieldNumber)
+                    {
+                        break; // fieldEnd found. We are done
+                    }
+
+                    commaCount++; // Increment the count
+                    fieldStart = &buffer[x]; // Set fieldStart to this comma
+                }
+            }
+
+            // If x reached strlen(buffer), the field was not found
+            if (x == strlen((const char *)buffer))
+            {
+                value = String(""); // Clear value just in case
+                return false;
+            }
+
+            // If fieldEnd is 0 or 1 more than fieldStart, the field is empty
+            if ((fieldEnd - fieldStart) <= 1)
+            {
+                value = String(""); // Clear value just in case
+                return false;
+            }
+
             switch (fields[i].nmeaDataType)
             {
             default:
                 value = String("Unknown");
-                break;
+                return false;
             case nmeaDataTypeString:
-                // TODO
-                break;
             case nmeaDataTypeTime:
-                // TODO
-                break;
+                // Copy from the character after fieldStart
+                // to the character before fieldEnd
+                fieldStart++;
+                value = String("");
+                while (fieldStart < fieldEnd)
+                {
+                    value += String(*fieldStart);
+                    fieldStart++;
+                }
+                return true;
             case nmeaDataTypeDDMM:
-                // TODO
-                break;
+            {
+                // Convert DDMM to degrees (double)
+                fieldStart++;
+                double field = (double)(*fieldStart++ - '0') * 10.0;
+                field += (double)(*fieldStart++ - '0') * 1.0;
+                field += (double)(*fieldStart++ - '0') / 6.0;
+                field += (double)(*fieldStart++ - '0') / 60.0;
+                int numDPs = 0;
+                if (*fieldStart == '.') // Does it have a decimal point?
+                {
+                    fieldStart++; // Skip over the decimal point
+                    double multiplier = 1.0 / 600.0;
+                    while (fieldStart < fieldEnd - 1)
+                    {
+                        field += (double)(*fieldStart++ - '0') * multiplier;
+                        multiplier /= 10.0;
+                        numDPs++;
+                    }
+                }
+                value = String(field, numDPs);
+            }
+                return true;
             case nmeaDataTypeDDDMM:
-                // TODO
-                break;
+            {
+                // Convert DDDMM to degrees (double)
+                fieldStart++;
+                double field = (double)(*fieldStart++ - '0') * 100.0;
+                field += (double)(*fieldStart++ - '0') * 10.0;
+                field += (double)(*fieldStart++ - '0') * 1.0;
+                field += (double)(*fieldStart++ - '0') / 6.0;
+                field += (double)(*fieldStart++ - '0') / 60.0;
+                int numDPs = 0;
+                if (*fieldStart == '.') // Does it have a decimal point?
+                {
+                    fieldStart++; // Skip over the decimal point
+                    double multiplier = 1.0 / 600.0;
+                    while (fieldStart < fieldEnd - 1)
+                    {
+                        field += (double)(*fieldStart++ - '0') * multiplier;
+                        multiplier /= 10.0;
+                        numDPs++;
+                    }
+                }
+                value = String(field, numDPs);
+            }
+                return true;
             case nmeaDataTypeChar:
-                // TODO
-                break;
             case nmeaDataTypeDigit:
-                // TODO
-                break;
+                value = String(*fieldStart);
+                return true;
             case nmeaDataTypeNumeric:
-                // TODO
-                break;
+            {
+                // Convert integer / floating point to double
+                fieldStart++;
+                double field = (double)(*fieldStart++ - '0');
+                while ((*fieldStart != '.') && (fieldStart < fieldEnd))
+                {
+                    field *= 10.0;
+                    field += (double)(*fieldStart++ - '0');
+                }
+                int numDPs = 0;
+                if ((*fieldStart == '.') && (fieldStart < fieldEnd))
+                {
+                    fieldStart++; // Skip over the decimal point
+                    double multiplier = 1.0 / 10.0;
+                    while (fieldStart < fieldEnd - 1)
+                    {
+                        field += (double)(*fieldStart++ - '0') * multiplier;
+                        multiplier /= 10.0;
+                        numDPs++;
+                    }
+                }
+                value = String(field, numDPs);
+            }
+                return true;
             }
         }
+        value = String(""); // Clear value just in case
         return false; // Field name not found
     }
 
@@ -169,7 +280,7 @@ public:
     const void *_fields = nullptr; // Points at the subclass's own, permanently-lived `nmeaFields[]` table
     uint8_t *_callbackStorage = nullptr; // Storage for the callback copy / copies - nullptr until initCallbackStorage() is called
     // Called by DevUBLOXGNSS::checkCallbacks() (via the generic registry walk) once fresh data is waiting
-    void (*_callbackPtr)(nmeaMessage *) = nullptr;
+    void (*_callbackPtr)(nmeaCallbackDataCommon_t *) = nullptr;
     bool _callbackDataValid = false;           // Has storePayload() frozen a fresh copy into _callbackStorage that checkCallbacks() hasn't fired yet?
     bool _automatic = false;                   // Is the module set to output this message periodically?
     bool _implicitUpdate = true;               // true: getNMEA() itself parses new data; false: caller must call checkUblox() itself
