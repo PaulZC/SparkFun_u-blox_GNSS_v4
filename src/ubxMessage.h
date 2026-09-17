@@ -345,7 +345,7 @@ public:
     bool _callbackDataValid = false;           // Has storePayload() frozen a fresh copy into _callbackStorage that checkCallbacks() hasn't fired yet?
     bool _automatic = false;                   // Is the module set to output this message periodically?
     bool _implicitUpdate = true;               // true: getUBX() itself parses new data; false: caller must call checkUblox() itself
-    bool _addToFileBuffer = false;             // Reserved for future use - not yet wired up for any message
+    bool _addToFileBuffer = false;             // Set by logUBX() using setAddToFileBuffer
     uint32_t _msgOutKeys[4] = {0, 0, 0, 0};    // UBLOX_CFG_MSGOUT_* keys for I2C, SPI, UART1, UART2
 };
 
