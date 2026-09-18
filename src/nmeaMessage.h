@@ -169,12 +169,13 @@ public:
             case nmeaDataTypeDDMM:
             {
                 // Convert DDMM to degrees (double)
+
                 fieldStart++;
                 double field = (double)(*fieldStart++ - '0') * 10.0;
                 field += (double)(*fieldStart++ - '0') * 1.0;
                 field += (double)(*fieldStart++ - '0') / 6.0;
                 field += (double)(*fieldStart++ - '0') / 60.0;
-                int numDPs = 0;
+                int numDPs = 3; // One minute needs at least three decimal places
                 if (*fieldStart == '.') // Does it have a decimal point?
                 {
                     fieldStart++; // Skip over the decimal point
@@ -198,7 +199,7 @@ public:
                 field += (double)(*fieldStart++ - '0') * 1.0;
                 field += (double)(*fieldStart++ - '0') / 6.0;
                 field += (double)(*fieldStart++ - '0') / 60.0;
-                int numDPs = 0;
+                int numDPs = 3; // One minute needs at least three decimal places
                 if (*fieldStart == '.') // Does it have a decimal point?
                 {
                     fieldStart++; // Skip over the decimal point

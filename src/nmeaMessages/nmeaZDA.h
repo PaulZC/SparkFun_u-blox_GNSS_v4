@@ -7,8 +7,7 @@
   The nmeaField.fieldName is taken from the u-blox Interface Description, e.g.:
   https://www.u-blox.com/sites/default/files/documents/u-blox-X20-HPG-2.11_InterfaceDescription_UBXDOC-304424225-21617.pdf
 
-  day/mon are two-digit fields but are more than a single character, so they
-  use nmeaDataTypeNumeric rather than nmeaDataTypeDigit (which only reads one char).
+  day/month are two-digit fields with leading zeros if needed, so they use nmeaDataTypeString.
 
 */
 

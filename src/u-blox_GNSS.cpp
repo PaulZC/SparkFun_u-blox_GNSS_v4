@@ -3007,7 +3007,10 @@ sfe_ublox_status_e DevUBLOXGNSS::pollNMEA(const char *msgId, uint16_t maxWait)
   if (_commType == COMM_TYPE_I2C)
   {
     if (writeBytes((uint8_t *)pollRequest, strlen(pollRequest)) != strlen(pollRequest))
+    {
+      unlock();
       return SFE_UBLOX_STATUS_I2C_COMM_FAILURE;
+    }
   }
   else if (_commType == COMM_TYPE_SERIAL)
   {
@@ -3735,7 +3738,7 @@ void DevUBLOXGNSS::checkCallbacks(void)
     if ((msg->_callbackPtr != nullptr) && msg->_callbackDataValid)
     {
       nmeaCallbackDataCommon_t commonData;
-      memcpy(commonData.msgId, msg->_msgId, 3);
+      memcpy(commonData.msgId, msg->_msgId, 4); // Copy the three char ID plus the NULL
       commonData.messagePtr = msg;
       msg->_callbackPtr(&commonData); // Call the callback
       msg->_callbackDataValid = false; // Mark the callback copy as stale

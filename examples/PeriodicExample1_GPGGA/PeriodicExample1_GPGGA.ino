@@ -69,7 +69,7 @@ void loop()
     // Use atoi(), atof() or strtod() to convert to numeric types as needed
     Serial.print(" Long: ");
     float longitude = atof(myGNSS.getNmeaMessageField(msg, "lon").c_str()); // Convert String to float
-    Serial.print(longitude, 5); // Print the longitude with 5 decimal places
+    Serial.print(longitude, 8); // Print the longitude with 8 decimal places
     Serial.print(" ");
     Serial.print(myGNSS.getNmeaMessageField(msg, "EW")); // Print the East / West indicator
     Serial.print(" (degrees)");

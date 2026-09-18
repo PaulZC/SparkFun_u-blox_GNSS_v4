@@ -1077,7 +1077,7 @@ public:
   nmeaMessageVector nmeaMessages; // v4 scaffolding - the registry of per-message objects
 
   bool getNMEA(const char *msgId, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Generic poll-or-check-automatic, by message name
-  bool getNMEAfield(const char *msgId, const char *field, String &value); // Generic field read, by Class/ID/name
+  bool getNMEAfield(const char *msgId, const char *field, String &value); // Generic field read, by message ID
 
   bool setAutoNMEA(const char *msgId, bool enabled = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
   bool setAutoNMEA(const char *msgId, bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
@@ -1208,7 +1208,6 @@ protected:
   bool initPacketUBXRXMPMP();           // Allocate RAM for packetUBXRXMPMP and initialize it
   bool initPacketUBXRXMPMPmessage();    // Allocate RAM for packetUBXRXMPMPRaw and initialize it
   bool initPacketUBXRXMQZSSL6message(); // Allocate RAM for packetUBXRXMQZSSL6raw and initialize it
-  bool initPacketUBXRXMCOR();           // Allocate RAM for packetUBXRXMCOR and initialize it
   bool initPacketUBXRXMSFRBX();         // Allocate RAM for packetUBXRXMSFRBX and initialize it
   bool initPacketUBXRXMRAWX();          // Allocate RAM for packetUBXRXMRAWX and initialize it
   bool initPacketUBXRXMMEASX();         // Allocate RAM for packetUBXRXMMEASX and initialize it
