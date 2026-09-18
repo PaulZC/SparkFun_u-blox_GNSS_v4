@@ -10261,6 +10261,11 @@ int32_t DevUBLOXGNSS::getGeoidSeparation()
 
 // ***** POSECEF Helper Functions
 
+bool DevUBLOXGNSS::getNAVPOSECEF(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_POSECEF, maxWait);
+}
+
 // Get the current 3D high precision positional accuracy - a fun thing to watch
 // Returns a long representing the 3D accuracy in millimeters
 uint32_t DevUBLOXGNSS::getPositionAccuracyPOSECEF()
@@ -10272,6 +10277,11 @@ uint32_t DevUBLOXGNSS::getPositionAccuracyPOSECEF()
 }
 
 // ***** HPPOSECEF Helper Functions
+
+bool DevUBLOXGNSS::getNAVHPPOSECEF(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, maxWait);
+}
 
 // Get the current 3D high precision positional accuracy - a fun thing to watch
 // Returns a long representing the 3D accuracy in millimeters
@@ -10447,6 +10457,11 @@ uint32_t DevUBLOXGNSS::getVerticalAccuracy()
 
 // ***** PVAT Helper Functions
 
+bool DevUBLOXGNSS::getNAVPVAT(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_PVAT, maxWait);
+}
+
 int32_t DevUBLOXGNSS::getVehicleRoll()
 {
   ubxAnyType value;
@@ -10480,6 +10495,11 @@ int32_t DevUBLOXGNSS::getMotionHeading()
 }
 
 // ***** SVIN Helper Functions
+
+bool DevUBLOXGNSS::getNAVSVIN(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_SVIN, maxWait);
+}
 
 bool DevUBLOXGNSS::getSurveyInActive()
 {
@@ -10532,6 +10552,11 @@ float DevUBLOXGNSS::getSurveyInMeanAccuracy() // Returned as m
 
 // ***** TIMELS Helper Functions
 
+bool DevUBLOXGNSS::getNAVTIMELS(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_TIMELS, maxWait);
+}
+
 int32_t DevUBLOXGNSS::getTimeToLsEvent()
 {
   ubxAnyType value;
@@ -10549,6 +10574,11 @@ int8_t DevUBLOXGNSS::getCurrentLeapSeconds()
 }
 
 // ***** RELPOSNED Helper Functions and automatic support
+
+bool DevUBLOXGNSS::getNAVRELPOSNED(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_RELPOSNED, maxWait);
+}
 
 float DevUBLOXGNSS::getRelPosN() // Returned as m
 {
@@ -10600,6 +10630,11 @@ float DevUBLOXGNSS::getRelPosAccD() // Returned as m
 
 // ***** AOPSTATUS Helper Functions
 
+bool DevUBLOXGNSS::getNAVAOPSTATUS(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_AOPSTATUS, maxWait);
+}
+
 uint8_t DevUBLOXGNSS::getAOPSTATUSuseAOP()
 {
   ubxAnyType value;
@@ -10617,6 +10652,11 @@ uint8_t DevUBLOXGNSS::getAOPSTATUSstatus()
 }
 
 // ***** DAHEADING Helper Functions and automatic support
+
+bool DevUBLOXGNSS::getNAVDAHEADING(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_DAHEADING, maxWait);
+}
 
 float DevUBLOXGNSS::getDAHeadingRelPosN() // Returned as m
 {
@@ -10667,6 +10707,11 @@ float DevUBLOXGNSS::getDAHeadingRelPosAccD() // Returned as m
 }
 
 // ***** TIM TP Helper Functions
+
+bool DevUBLOXGNSS::getTIMTP(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_TIM, UBX_TIM_TP, maxWait);
+}
 
 uint32_t DevUBLOXGNSS::getTIMTPtowMS()
 {
@@ -10736,6 +10781,11 @@ bool DevUBLOXGNSS::getCommsPortInfo(UBX_MON_COMMS_data_t *data, uint16_t maxWait
 
 // ***** MON HW Helper Functions
 
+bool DevUBLOXGNSS::getMONHW(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_MON, UBX_MON_HW, maxWait);
+}
+
 // Get the hardware status (including jamming) using UBX_MON_HW
 bool DevUBLOXGNSS::getHWstatus(UBX_MON_HW_data_t *data, uint16_t maxWait)
 {
@@ -10790,6 +10840,11 @@ bool DevUBLOXGNSS::setGPSL5HealthOverride(bool override, uint8_t layer, uint16_t
 }
 
 // ***** ESF Helper Functions
+
+bool DevUBLOXGNSS::getESFALG(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_ESF, UBX_ESF_ALG, maxWait);
+}
 
 float DevUBLOXGNSS::getESFroll() // Returned as degrees
 {
@@ -10856,6 +10911,11 @@ bool DevUBLOXGNSS::getSensorFusionStatus(UBX_ESF_STATUS_sensorStatus_t *sensorSt
 }
 
 // ***** HNR Helper Functions
+
+bool DevUBLOXGNSS::getHNRATT(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_HNR, UBX_HNR_ATT, maxWait);
+}
 
 // Set the High Navigation Rate
 // Returns true if the setHNRNavigationRate is successful
@@ -10935,6 +10995,80 @@ float DevUBLOXGNSS::getHNRheading() // Returned as degrees
   if (!getUBXfield(UBX_CLASS_HNR, UBX_HNR_ATT, "heading", &value))
     return 0;
   return (((float)value.I4) / 100000.0); // Convert to degrees
+}
+
+// ***** Helper Functions for the remaining registered messages (thin wrappers only -
+// see AGENTS.md "getUBX()". None of these has per-field convenience getters yet;
+// call getUBXfield(Class, ID, "fieldName", &value) directly to read individual fields)
+
+bool DevUBLOXGNSS::getNAVPOSLLH(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_POSLLH, maxWait);
+}
+
+bool DevUBLOXGNSS::getNAVSTATUS(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_STATUS, maxWait);
+}
+
+bool DevUBLOXGNSS::getNAVODO(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_ODO, maxWait);
+}
+
+bool DevUBLOXGNSS::getNAVVELECEF(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_VELECEF, maxWait);
+}
+
+bool DevUBLOXGNSS::getNAVVELNED(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_VELNED, maxWait);
+}
+
+bool DevUBLOXGNSS::getNAVTIMEUTC(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_TIMEUTC, maxWait);
+}
+
+bool DevUBLOXGNSS::getNAVCLOCK(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_CLOCK, maxWait);
+}
+
+bool DevUBLOXGNSS::getNAVEOE(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_EOE, maxWait);
+}
+
+bool DevUBLOXGNSS::getRXMCOR(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_RXM, UBX_RXM_COR, maxWait);
+}
+
+bool DevUBLOXGNSS::getMONHW2(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_MON, UBX_MON_HW2, maxWait);
+}
+
+bool DevUBLOXGNSS::getTIMTM2(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_TIM, UBX_TIM_TM2, maxWait);
+}
+
+bool DevUBLOXGNSS::getESFINS(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_ESF, UBX_ESF_INS, maxWait);
+}
+
+bool DevUBLOXGNSS::getHNRPVT(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_HNR, UBX_HNR_PVT, maxWait);
+}
+
+bool DevUBLOXGNSS::getHNRINS(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_HNR, UBX_HNR_INS, maxWait);
 }
 
 // Functions to extract signed and unsigned 8/16/32-bit data from a ubxPacket

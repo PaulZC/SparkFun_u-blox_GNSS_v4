@@ -928,12 +928,16 @@ public:
   int32_t getGeoidSeparation();
 
   // Helper functions for POSECEF
-  // For safety, call these inside an if(getNAVPOSECEF())
+  // For safety, call these inside an if(getNAVPOSECEF()) or if(getUBX("NAV","POSECEF"))
+
+  bool getNAVPOSECEF(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
   uint32_t getPositionAccuracyPOSECEF(); // Returns the position accuracy estimate of the current POSECEF solution, in mm (not cm)
 
   // Helper functions for HPPOSECEF
-  // For safety, call these inside an if(getNAVHPPOSECEF())
+  // For safety, call these inside an if(getNAVHPPOSECEF()) or if(getUBX("NAV","HPPOSECEF"))
+
+  bool getNAVHPPOSECEF(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
   uint32_t getPositionAccuracy(); // Returns the 3D accuracy of the current high-precision fix, in mm. Supported on NEO-M8P, ZED-F9P,
   int32_t getHighResECEFX();      // Returns the ECEF X coordinate (cm)
@@ -961,7 +965,9 @@ public:
   uint32_t getVerticalAccuracy();
 
   // Helper functions for PVAT
-  // For safety, call these inside an if(getNAVPVAT())
+  // For safety, call these inside an if(getNAVPVAT()) or if(getUBX("NAV","PVAT"))
+
+  bool getNAVPVAT(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
   int32_t getVehicleRoll();    // Returns vehicle roll in degrees * 10^-5
   int32_t getVehiclePitch();   // Returns vehicle pitch in degrees * 10^-5
@@ -969,7 +975,9 @@ public:
   int32_t getMotionHeading();  // Returns the motion heading in degrees * 10^-5
 
   // Helper functions for SVIN
-  // For safety, call these inside an if(getSurveyStatus())
+  // For safety, call these inside an if(getNAVSVIN()) or if(getUBX("NAV","SVIN"))
+
+  bool getNAVSVIN(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
   bool getSurveyInActive();
   bool getSurveyInValid();
@@ -978,13 +986,17 @@ public:
   float getSurveyInMeanAccuracy();           // Returned as m
 
   // Helper functions for TIMELS
-  // For safety, call these inside an if(getLeapSecondEvent())
+  // For safety, call these inside an if(getNAVTIMELS()) or if(getUBX("NAV","TIMELS"))
+
+  bool getNAVTIMELS(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
   int32_t getTimeToLsEvent();
   int8_t getCurrentLeapSeconds();
 
   // Helper functions for RELPOSNED
-  // For safety, call these inside an if(getRELPOSNED())
+  // For safety, call these inside an if(getNAVRELPOSNED()) or if(getUBX("NAV","RELPOSNED"))
+
+  bool getNAVRELPOSNED(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
   float getRelPosN();    // Returned as m
   float getRelPosE();    // Returned as m
@@ -994,7 +1006,9 @@ public:
   float getRelPosAccD(); // Returned as m
 
   // Helper functions for DAHEADING
-  // For safety, call these inside an if(getDAHEADING())
+  // For safety, call these inside an if(getNAVDAHEADING()) or if(getUBX("NAV","DAHEADING"))
+
+  bool getNAVDAHEADING(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
   float getDAHeadingRelPosN();    // Returned as m
   float getDAHeadingRelPosE();    // Returned as m
@@ -1004,13 +1018,17 @@ public:
   float getDAHeadingRelPosAccD(); // Returned as m
 
   // Helper functions for AOPSTATUS
-  // For safety, call these inside an if(getAOPSTATUS())
+  // For safety, call these inside an if(getNAVAOPSTATUS()) or if(getUBX("NAV","AOPSTATUS"))
+
+  bool getNAVAOPSTATUS(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
   uint8_t getAOPSTATUSuseAOP(); // Returns the UBX-NAV-AOPSTATUS useAOP flag. Don't confuse this with getAopCfg - which returns the aopCfg byte from UBX-CFG-NAVX5
   uint8_t getAOPSTATUSstatus(); // Returns the UBX-NAV-AOPSTATUS status field. A host application can determine the optimal time to shut down the receiver by monitoring the status field for a steady 0.
 
   // Helper functions for TIM TP
-  // For safety, call these inside an if(getTIMTP())
+  // For safety, call these inside an if(getTIMTP()) or if(getUBX("TIM","TP"))
+
+  bool getTIMTP(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
   uint32_t getTIMTPtowMS();                          // Returns the UBX-TIM-TP towMS time pulse of week (ms)
   uint32_t getTIMTPtowSubMS();                       // Returns the UBX-TIM-TP submillisecond part of towMS (ms * 2^-32)
@@ -1022,13 +1040,17 @@ public:
   bool getCommsPortInfo(UBX_MON_COMMS_data_t *data, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get the communication port information using UBX_MON_COMMS
 
   // Helper function for hardware status (including jamming)
-  // For safety, call getAntennaStatus inside an if(getMONHW())
+  // For safety, call getAntennaStatus inside an if(getMONHW()) or if(getUBX("MON","HW"))
+
+  bool getMONHW(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
   bool getHWstatus(UBX_MON_HW_data_t *data = nullptr, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get the hardware status using UBX_MON_HW
   sfe_ublox_antenna_status_e getAntennaStatus();         // Get the antenna status (aStatus) using UBX_MON_HW
 
   // Helper functions for ESF
-  // For safety, call getESFroll/pitch/yaw inside an if(getESFALG())
+  // For safety, call getESFroll/pitch/yaw inside an if(getESFALG()) or if(getUBX("ESF","ALG"))
+
+  bool getESFALG(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
   float getESFroll();  // Returned as degrees
   float getESFpitch(); // Returned as degrees
@@ -1039,13 +1061,35 @@ public:
   bool getSensorFusionStatus(UBX_ESF_STATUS_sensorStatus_t *sensorStatus, UBX_ESF_STATUS_data_t ubxDataStruct, uint8_t sensor);
 
   // Helper functions for HNR
-  // For safety, call getHNRroll/pitch/yaw inside an if(getHNRATT())
+  // For safety, call getHNRroll/pitch/yaw inside an if(getHNRATT()) or if(getUBX("HNR","ATT"))
+
+  bool getHNRATT(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
   bool setHNRNavigationRate(uint8_t rate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returns true if the setHNRNavigationRate is successful
   uint8_t getHNRNavigationRate(uint8_t layer = VAL_LAYER_RAM, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                // Returns 0 if the getHNRNavigationRate fails
   float getHNRroll();                                                           // Returned as degrees
   float getHNRpitch();                                                          // Returned as degrees
   float getHNRheading();                                                        // Returned as degrees
+
+  // Helper functions for the remaining registered ubxMessages (thin wrappers only - see
+  // AGENTS.md "getUBX()"). None of these has per-field convenience getters yet; call
+  // getUBXfield(Class, ID, "fieldName", &value) directly, or use getUBX("Class","ID") /
+  // findByName(), to read individual fields.
+
+  bool getNAVPOSLLH(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);  // NAV-POSLLH: Geodetic position solution
+  bool getNAVSTATUS(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);  // NAV-STATUS: Receiver navigation status
+  bool getNAVODO(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);     // NAV-ODO: Odometer solution
+  bool getNAVVELECEF(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // NAV-VELECEF: Velocity solution in ECEF
+  bool getNAVVELNED(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);  // NAV-VELNED: Velocity solution in NED frame
+  bool getNAVTIMEUTC(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // NAV-TIMEUTC: UTC time solution
+  bool getNAVCLOCK(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);   // NAV-CLOCK: Clock solution
+  bool getNAVEOE(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);     // NAV-EOE: End of epoch marker
+  bool getRXMCOR(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);     // RXM-COR: Differential correction input status
+  bool getMONHW2(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);     // MON-HW2: Extended hardware status
+  bool getTIMTM2(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);     // TIM-TM2: Time mark data
+  bool getESFINS(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);     // ESF-INS: Vehicle dynamics information
+  bool getHNRPVT(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);     // HNR-PVT: High rate output of PVT solution
+  bool getHNRINS(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);     // HNR-INS: High rate inertial solution
 
   // Helper functions for the NEO-F10N
   bool getLNAMode(sfe_ublox_lna_mode_e *mode, uint8_t layer = VAL_LAYER_RAM, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get the LNA mode
