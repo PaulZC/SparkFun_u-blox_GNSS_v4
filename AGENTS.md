@@ -682,6 +682,78 @@ See `PeriodicExample1_GPGGA.ino` (a message that is periodic/automatic by defaul
 
 Future work will be to include the variable length GSA and GSV messages.
 
+## Adding the variable-length UBX messages
+
+We need to add the variable length UBX messages to the `ubxMessages` `class`. E.g. UBX-NAV-SAT currently uses the v3 legacy code and needs both `UBX_NAV_SAT_t` and `packetUBXNAVSAT`. The critical issue for (e.g.) NAV-SAT is that: `UBX_NAV_SAT_t` includes a single `UBX_NAV_SAT_data_t`; `UBX_NAV_SAT_data_t` includes a single `UBX_NAV_SAT_header_t` and up to `UBX_NAV_SAT_MAX_BLOCKS` `UBX_NAV_SAT_block_t` stored in an array. How do we include NAV-SAT in `ubxMessages` and make the following callback possible:
+
+```
+// Callback: newNAVSAT will be called when new NAV SAT data arrives
+void newNAVSAT(ubxCallbackDataCommon_t *theData)
+{
+  Serial.println();
+
+  ubxMessage *msg = myGNSS.getUbxMessagePtr(theData);
+
+  Serial.print(F("New NAV SAT data received. It contains data for "));
+  uint8_t numSvs = myGNSS.getUbxMessageFieldCallback(msg, "numSvs");
+  Serial.print(numSvs);
+  if (numSvs == 1)
+    Serial.println(F(" SV."));
+  else
+    Serial.println(F(" SVs."));
+
+  // Print the signal strength for each SV as a barchart
+  for (uint8_t block = 0; block < numSvs; block++) // For each SV
+  {
+    auto blockPointer = getNAVSATSVblock(msg, block);
+    switch (myGNSS.getUbxNavSatBlockData(blockPointer, "gnssId")) // Print the GNSS ID
+    {
+      case 0:
+        Serial.print(F("GPS     "));
+      break;
+      case 1:
+        Serial.print(F("SBAS    "));
+      break;
+      case 2:
+        Serial.print(F("Galileo "));
+      break;
+      case 3:
+        Serial.print(F("BeiDou  "));
+      break;
+      case 4:
+        Serial.print(F("IMES    "));
+      break;
+      case 5:
+        Serial.print(F("QZSS    "));
+      break;
+      case 6:
+        Serial.print(F("GLONASS "));
+      break;
+      default:
+        Serial.print(F("UNKNOWN "));
+      break;      
+    }
+    
+    uint8_t svId = myGNSS.getUbxNavSatBlockData(blockPointer, "svId"); // Extract the svId from the block
+    Serial.print(); // Print the SV ID
+    
+    if (svId < 10) Serial.print(F("   "));
+    else if (svId < 100) Serial.print(F("  "));
+    else Serial.print(F(" "));
+
+    // Print the signal strength as a bar chart
+    for (uint8_t cno = 0; cno < myGNSS.getUbxNavSatBlockData(blockPointer, "cno"); cno++)
+      Serial.print(F("="));
+
+    Serial.println();
+  }
+}
+```
+
+Refer to `u-blox-X20-HPG-2.10_InterfaceDescription_UBXDOC-304424225-21263.pdf` for the UBX-NAV-SAT field names and definitions.
+
+Please write a proposal on how we should do that. Do not make any code changes yet. Let me review your proposal first.
+
 ## Test
 
 Compile the example code in examples/Example1\_PositionVelocityTime using the batch file compile\_example.bat.
