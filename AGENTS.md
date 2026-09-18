@@ -172,7 +172,7 @@ The `getUBX()` method is to be provided by the `class DevUBLOXGNSS`. It is a gen
   - `getUBX()` will call the method `checkUbloxInternal()` to check for the availablelity of new I2C/UART/SPI data
   - If a new NAV\-PVT message has arrived, it is stored in the allocated storage
   - `getNAVPVT()` returns true if `checkUbloxInternal()` provided a new NAV\-PVT message, `false` otherwise.
-  - In this mode, `getNAVPVT()` acts as a one-shot: `getNAVPVT()` will return `true` once on the arrival of new NAV-PVT data, clearing its internal `_moduleQueried` flag as it does so. The user should 
+  - In this mode, `getNAVPVT()` acts as a one-shot: `getNAVPVT()` will return `true` once on the arrival of new NAV-PVT data, clearing its internal `_moduleQueried` flag as it does so. The user should read whatever fields they need inside that same `if (getNAVPVT())` block, since the flag will not be `true` again until the next fresh message arrives - see `PeriodicExample1_NAVHPPOSLLH.ino`.
   - `getNAVPVT()` is non\-blocking in this case. After calling `checkUbloxInternal()` once, it returns `true` or `false` immediately. It does not wait for `maxWait` milliseconds.
 
 ## Reference Scaffolding (from a preliminary prototype)
@@ -496,16 +496,18 @@ Add whatever code is necessary to make it possible to do the following in the ca
 ```
 void printPVTdata(ubxCallbackDataCommon_t *theData)
 {
-    auto theDataStruct = getUbxMessagePtr(theData);
+    ubxMessage *msg = myGNSS.getUbxMessagePtr(theData);
 
-    auto timeOfWeek = getUbxMessageField(theDataStruct, "iTOW");
-    Serial.print(F("TimeOfWeek: "));
+    unsigned long timeOfWeek = (unsigned long)myGNSS.getUbxMessageFieldCallback(msg, "iTOW");
+    Serial.print("TimeOfWeek: ");
     Serial.print(timeOfWeek); // Print the Time Of Week
-    Serial.print(F(" (ms)"));
+    Serial.print(" (ms)");
 }
 ```
 
-I envisage `getUbxMessagePtr` as being a Factory method / design pattern which returns enough information to make `auto timeOfWeek = getUbxMessageField(theDataStruct, "iTOW");` possible. The return type of `getUbxMessagePtr` will need to contain enough information so that `getUbxMessageField` can navigate to the `_storage` of the `ubxNAVHPPOSLLH` and extract the "iTOW" as `UBX_CFG_U4` (`uint32_t`).
+(`getUbxMessagePtr`/`getUbxMessageFieldCallback` are `DevUBLOXGNSS` member methods, not free functions - call them as `myGNSS.getUbxMessagePtr(...)` etc. Inside a callback, use the `...Callback` variant - see "getUbxMessageField() has been split into two functions" below.)
+
+I envisage `getUbxMessagePtr` as being a Factory method / design pattern which returns enough information to make `myGNSS.getUbxMessageFieldCallback(msg, "iTOW")` possible. The return type of `getUbxMessagePtr` will need to contain enough information so that `getUbxMessageField` can navigate to the `_storage` of the `ubxNAVHPPOSLLH` and extract the "iTOW" as `UBX_CFG_U4` (`uint32_t`).
 
 `getUbxMessageField` will need to:
 - Step through each registered message type
@@ -666,15 +668,17 @@ Such that: to remove support for (e.g.) NAV-PVT, all that would be required woul
 
 ## nmeaMessage
 
-v4 will include the `nmeaMessage` `class`, which will follow the structure of `ubxMessage` as closely as possible.
+The `nmeaMessage` `class` follows the structure of `ubxMessage` as closely as possible.
 
-NMEA Messages are all ASCII text. To avoid difficulties with `anyType` code, data extracted by `getNmeaMessageField` / `getNmeaMessageFieldCallback` will be returned as `String`. Helper methods will be added later if needed to convert `String` to other types. But it is expected the standard C functions `atoi`, `atof` and `strtod` should cover most use cases.
+NMEA Messages are all ASCII text. To avoid difficulties with `anyType` code, data extracted by `getNmeaMessageField` / `getNmeaMessageFieldCallback` is returned as `String`. The standard C functions `atoi`, `atof` and `strtod` cover most use cases for converting it to other types - see `PeriodicExample1_GPGGA.ino` and `PollingExample1_GPZDA.ino`.
 
-Prototypes of `nmeaMessage.h`​, `nmeaMessageRegistry.h`​, `nmeaMessageVector.h`​ and `nmeaGGA.h` have been added for review.
+All 8 standard-length NMEA messages now have their own `nmea*.h` file in `src/nmeaMessages/`: `nmeaGGA.h`, `nmeaDTM.h`, `nmeaGLL.h`, `nmeaGNS.h`, `nmeaGST.h`, `nmeaRMC.h`, `nmeaVTG.h`, `nmeaZDA.h`. Each self-registers with `nmeaRegisterMessage(...)`, exactly like the `ubxRegisterMessage(...)` messages - see "Message Class self-registration" above.
 
-The next steps will be to: add other `nmea*.h` files for the other NMEA messages: DTM, GLL, GNS, GST, RMC, VTG, ZDA.
+The `nmeaMessage` class has replaced the existing NMEA support from v3 of the library. `DevUBLOXGNSS` now holds a public `nmeaMessageVector nmeaMessages;` registry, and a generic (msgId)-keyed API that mirrors the (Class, ID)-keyed UBX API function-for-function: `getNMEA`, `getNMEAfield`, `setAutoNMEA`/`setAutoNMEArate`, `assumeAutoNMEA`, `flushNMEA`, `logNMEA`, `setNmeaCallbackPtr`, and a new `pollNMEA(msgId, maxWait)` (the NMEA equivalent of `sendCommand` - it sends `$EIGNQ,<msgId>*<checksum>` to poll a single message using the GN Talker ID). The old v3 per-message NMEA API (`getLatestNMEAGPGGA()`-style getters, `storageNMEAGPGGA`-style pointers, per-message `setNMEA<MSG>callbackPtr()` setters) has been removed entirely.
 
-Then the nmeaMessage class will be used to replace the existing NMEA support from v3 of the library.
+See `PeriodicExample1_GPGGA.ino` (a message that is periodic/automatic by default), `PollingExample1_GPZDA.ino` (a message that is not, and so must be polled), and `CallbackExample2_GPRMC.ino` (a message read via a registered callback instead of polling in `loop()`) for the three usage patterns.
+
+`extractFieldFrom()`'s `DDMM`/`DDDMM` cases (used for `lat`/`lon`) always compute at least 3 decimal places of degrees, even if the NMEA sentence's minutes field has no fractional digits at all - converting minutes to degrees divides by 60, so truncating to the number of fractional digits actually present in the sentence would silently throw away precision in the whole-minutes part of the conversion, not just the fraction.
 
 Future work will be to include the variable length GSA and GSV messages.
 
