@@ -187,7 +187,7 @@ whether each field has been read, which has since been superseded \- see "module
 files in the prototype are:
 
 - `src/ubxMessage.h` \- the per\-message base class
-- `src/ubxNAVPVT.h` \- a concrete per\-message subclass (NAV\-PVT)
+- `src/ubxMessages/ubxNAVPVT.h` \- a concrete per\-message subclass (NAV\-PVT)
 - `src/ubxMessageVector.h` \- the registry that owns all per\-message objects and does the generic (Class, ID) dispatch
 - `src/u-blox_GNSS.h` / `.cpp` \- `DevUBLOXGNSS`, updated to hold and use the registry
 - `src/u-blox_config_keys.h` \- confirms the field\-type tagging scheme (see below)
