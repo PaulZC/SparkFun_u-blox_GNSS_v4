@@ -36,23 +36,23 @@ void printNMEAdata(nmeaCallbackDataCommon_t *theData)
     nmeaMessage *msg = myGNSS.getNmeaMessagePtr(theData);
 
     Serial.print("UTC time: ");
-    Serial.print(myGNSS.getNmeaMessageField(msg, "time")); // Print the UTC time
+    Serial.print(myGNSS.getNmeaMessageFieldCallback(msg, "time")); // Print the UTC time
 
     Serial.print(" Date: ");
-    Serial.print(myGNSS.getNmeaMessageField(msg, "date")); // UTC date: DDMMYY
+    Serial.print(myGNSS.getNmeaMessageFieldCallback(msg, "date")); // UTC date: DDMMYY
 
     Serial.print(" Lat: ");
-    Serial.print(myGNSS.getNmeaMessageField(msg, "lat")); // Print the latitude
+    Serial.print(myGNSS.getNmeaMessageFieldCallback(msg, "lat")); // Print the latitude
     Serial.print(" ");
-    Serial.print(myGNSS.getNmeaMessageField(msg, "NS")); // Print the North / South indicator
+    Serial.print(myGNSS.getNmeaMessageFieldCallback(msg, "NS")); // Print the North / South indicator
 
     // getNmeaMessageField returns everything as String
     // Use atoi(), atof() or strtod() to convert to numeric types as needed
     Serial.print(" Long: ");
-    float longitude = atof(myGNSS.getNmeaMessageField(msg, "lon").c_str()); // Convert String to float
+    float longitude = atof(myGNSS.getNmeaMessageFieldCallback(msg, "lon").c_str()); // Convert String to float
     Serial.print(longitude, 8); // Print the longitude with 8 decimal places
     Serial.print(" ");
-    Serial.print(myGNSS.getNmeaMessageField(msg, "EW")); // Print the East / West indicator
+    Serial.print(myGNSS.getNmeaMessageFieldCallback(msg, "EW")); // Print the East / West indicator
     Serial.println(" (degrees)");
 }
 
