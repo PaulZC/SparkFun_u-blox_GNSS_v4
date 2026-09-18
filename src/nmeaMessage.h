@@ -30,7 +30,7 @@ class nmeaMessage; // Forward declaration - see nmeaCallbackDataCommon_t below
 // What actually crosses into the user's callback function
 typedef struct
 {
-    const char nmea[4]; // Message name - "GGA" etc. - null-terminated
+    char msgId[4]; // Message name - "GGA" etc. - null-terminated
     nmeaMessage *messagePtr; // Opaque - do not dereference directly. Use getNmeaMessagePtr() /
                             // getNmeaMessageField() to read it.
 } nmeaCallbackDataCommon_t;
@@ -162,7 +162,7 @@ public:
                 value = String("");
                 while (fieldStart < fieldEnd)
                 {
-                    value += String(*fieldStart);
+                    value += String((char)*fieldStart);
                     fieldStart++;
                 }
                 return true;
@@ -216,7 +216,7 @@ public:
             case nmeaDataTypeChar:
             case nmeaDataTypeDigit:
                 fieldStart++;
-                value = String(*fieldStart);
+                value = String((char)*fieldStart);
                 return true;
             case nmeaDataTypeNumeric:
             {
@@ -300,17 +300,3 @@ public:
 
 #include "nmeaMessageRegistry.h" // Message self-registration - see AGENTS.md "Message Class self-registration"
 
-// Factory: extracts a named field from the message a callback just fired for, reading from its
-// _callbackStorage (the copy storePayload() froze when the callback was queued) rather than its
-// live _storage (which may already have been overwritten by newer data by the time the callback
-// actually runs).
-inline String getNmeaMessageFieldCallback(nmeaMessage *theMessage, const char *fieldName)
-{
-    String TODO;
-    return TODO;
-}
-inline String getNmeaMessageField(nmeaMessage *theMessage, const char *fieldName)
-{
-    String TODO;
-    return TODO;
-}

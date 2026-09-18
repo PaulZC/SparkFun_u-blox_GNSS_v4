@@ -49,8 +49,8 @@ void setup()
 void loop()
 {
   // Poll the position, velocity and time (PVT) information.
-  // getPVT() returns true when new data is received.
-  if (myGNSS.getPVT() == true) // Use the helper method getPVT()
+  // getNAVPVT() returns true when new data is received.
+  if (myGNSS.getNAVPVT() == true) // Use the helper method getNAVPVT()
   {
     int32_t latitude = myGNSS.getLatitude(); // Use the helper method
     Serial.print("Lat: ");

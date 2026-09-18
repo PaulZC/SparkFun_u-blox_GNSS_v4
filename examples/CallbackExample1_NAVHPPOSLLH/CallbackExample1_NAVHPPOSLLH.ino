@@ -31,24 +31,26 @@ void printPVTdata(ubxCallbackDataCommon_t *theData)
 {
     Serial.println();
 
-    ubxMessage *theDataStruct = getUbxMessagePtr(theData);
+    ubxMessage *msg = myGNSS.getUbxMessagePtr(theData);
 
     // getUbxMessageField returns everything as double. Cast to other types as needed
-    unsigned long timeOfWeek = (unsigned long)getUbxMessageFieldCallback(theDataStruct, "iTOW");
+    unsigned long timeOfWeek = (unsigned long)myGNSS.getUbxMessageFieldCallback(msg, "iTOW");
     Serial.print("TimeOfWeek: ");
     Serial.print(timeOfWeek); // Print the Time Of Week
     Serial.print(" (ms)");
 
-    long latitude = (long)getUbxMessageFieldCallback(theDataStruct, "lat");
+    long latitude = (long)myGNSS.getUbxMessageFieldCallback(msg, "lat");
     Serial.print(" Lat: ");
     Serial.print(latitude); // Print the latitude
 
-    long longitude = (long)getUbxMessageFieldCallback(theDataStruct, "lon");
+    // Or, we could read the true "I4" (int32_t) directly, without going through double
+    // To do that, we need to use the ubxAnyType struct
+    ubxAnyType ubxAnyTypeLon = myGNSS.getUbxMessageFieldCallback(msg, "lon");
     Serial.print(" Long: ");
-    Serial.print(longitude); // Print the longitude
+    Serial.print(ubxAnyTypeLon.I4); // Print the longitude directly as int32_t
     Serial.print(" (degrees * 10^-7)");
 
-    float hAcc = (float)getUbxMessageFieldCallback(theDataStruct, "hAcc");
+    float hAcc = (float)myGNSS.getUbxMessageFieldCallback(msg, "hAcc");
     Serial.print(" Horiz Acc: ");
     Serial.print(hAcc / 10.0, 1); // Print the horizontal accuracy estimate
     Serial.println(" (mm)");

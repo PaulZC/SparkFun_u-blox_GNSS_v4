@@ -268,106 +268,6 @@ void DevUBLOXGNSS::end(void)
     packetUBXSECSIG = nullptr;
   }
 
-  if (storageNMEAGPGGA != nullptr)
-  {
-    if (storageNMEAGPGGA->callbackCopy != nullptr)
-    {
-      delete storageNMEAGPGGA->callbackCopy;
-    }
-    delete storageNMEAGPGGA;
-    storageNMEAGPGGA = nullptr;
-  }
-
-  if (storageNMEAGNGGA != nullptr)
-  {
-    if (storageNMEAGNGGA->callbackCopy != nullptr)
-    {
-      delete storageNMEAGNGGA->callbackCopy;
-    }
-    delete storageNMEAGNGGA;
-    storageNMEAGNGGA = nullptr;
-  }
-
-  if (storageNMEAGPVTG != nullptr)
-  {
-    if (storageNMEAGPVTG->callbackCopy != nullptr)
-    {
-      delete storageNMEAGPVTG->callbackCopy;
-    }
-    delete storageNMEAGPVTG;
-    storageNMEAGPVTG = nullptr;
-  }
-
-  if (storageNMEAGNVTG != nullptr)
-  {
-    if (storageNMEAGNVTG->callbackCopy != nullptr)
-    {
-      delete storageNMEAGNVTG->callbackCopy;
-    }
-    delete storageNMEAGNVTG;
-    storageNMEAGNVTG = nullptr;
-  }
-
-  if (storageNMEAGPRMC != nullptr)
-  {
-    if (storageNMEAGPRMC->callbackCopy != nullptr)
-    {
-      delete storageNMEAGPRMC->callbackCopy;
-    }
-    delete storageNMEAGPRMC;
-    storageNMEAGPRMC = nullptr;
-  }
-
-  if (storageNMEAGNRMC != nullptr)
-  {
-    if (storageNMEAGNRMC->callbackCopy != nullptr)
-    {
-      delete storageNMEAGNRMC->callbackCopy;
-    }
-    delete storageNMEAGNRMC;
-    storageNMEAGNRMC = nullptr;
-  }
-
-  if (storageNMEAGPZDA != nullptr)
-  {
-    if (storageNMEAGPZDA->callbackCopy != nullptr)
-    {
-      delete storageNMEAGPZDA->callbackCopy;
-    }
-    delete storageNMEAGPZDA;
-    storageNMEAGPZDA = nullptr;
-  }
-
-  if (storageNMEAGNZDA != nullptr)
-  {
-    if (storageNMEAGNZDA->callbackCopy != nullptr)
-    {
-      delete storageNMEAGNZDA->callbackCopy;
-    }
-    delete storageNMEAGNZDA;
-    storageNMEAGNZDA = nullptr;
-  }
-
-  if (storageNMEAGPGST != nullptr)
-  {
-    if (storageNMEAGPGST->callbackCopy != nullptr)
-    {
-      delete storageNMEAGPGST->callbackCopy;
-    }
-    delete storageNMEAGPGST;
-    storageNMEAGPGST = nullptr;
-  }
-
-  if (storageNMEAGNGST != nullptr)
-  {
-    if (storageNMEAGNGST->callbackCopy != nullptr)
-    {
-      delete storageNMEAGNGST->callbackCopy;
-    }
-    delete storageNMEAGNGST;
-    storageNMEAGNGST = nullptr;
-  }
-
   if (_storageNMEA != nullptr)
   {
     if (_storageNMEA->data != nullptr)
@@ -1155,6 +1055,8 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
     storedID = requestedID;
   }
 
+  static char storedNMEAID[4] = { 0,0,0,0 }; // Store the NMEA message ID: e.g. GGA
+
   _outputPort.write(incoming); // Echo this byte to the serial port
 
   if ((currentSentence == SFE_UBLOX_SENTENCE_TYPE_NONE) || (currentSentence == SFE_UBLOX_SENTENCE_TYPE_NMEA))
@@ -1419,38 +1321,38 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
     else if ((nmeaByteCounter >= 0) && (nmeaByteCounter <= 5))
     {
       nmeaAddressField[nmeaByteCounter] = incoming; // Store the start character and NMEA address field
+      if (nmeaByteCounter >= 3)
+        storedNMEAID[nmeaByteCounter - 3] = incoming; // Store just the ID ("GGA" etc.) for quick reference
     }
 
     if (nmeaByteCounter == 5)
     {
       if (!_signsOfLife) // If _signsOfLife is not already true, set _signsOfLife to true if the NMEA header is valid
       {
-        _signsOfLife = isNMEAHeaderValid();
+        _signsOfLife = isNMEAHeaderValid(storedNMEAID);
       }
 
-      // Check if we have automatic storage for this message
-      if (isThisNMEAauto())
+      // Check if we have automatic storage for this message.
+      // We will only copy complete, CRC-checked messages into automatic storage.
+      // In the interim, store the message in the non-Auto storage _storageNMEA.
+      // Note: a polled NMEA message - like ZDA - can have storage but not be periodic.
+      // If it **has storage**, it gets recorded.
+      if (doesThisNMEAHaveStorage(storedNMEAID) || logThisNMEA(storedNMEAID))
       {
-        uint8_t *lengthPtr = getNMEAWorkingLengthPtr(); // Get a pointer to the working copy length
-        uint8_t *nmeaPtr = getNMEAWorkingNMEAPtr();     // Get a pointer to the working copy NMEA data
-        uint8_t nmeaMaxLength = getNMEAMaxLength();
-        *lengthPtr = 6;                           // Set the working copy length
-        memset(nmeaPtr, 0, nmeaMaxLength);        // Clear the working copy
-        memcpy(nmeaPtr, &nmeaAddressField[0], 6); // Copy the start character and address field into the working copy
+        if (initStorageNMEA()) // Check we have (non-Auto) storage for it
+        {
+          _storageNMEA->length = 6; // Set the working copy length
+          memset(_storageNMEA->data, 0, maxNMEAByteCount);     // Clear the working copy
+          memcpy(_storageNMEA->data, &nmeaAddressField[0], 6); // Copy the start character and address field into the working copy
+        }
       }
       else
       {
         // debugPrintln("process: non-auto NMEA message", true); // Important
       }
 
-      // We've just received the end of the address field. Check if it is selected for logging
-      if (logThisNMEA())
-      {
-        memcpy(_storageNMEA->data, &nmeaAddressField[0], 6); // Add start character and address field to the storage
-        _storageNMEA->length = 6;
-      }
       // Check if it should be passed to processNMEA
-      if (processThisNMEA())
+      if (processThisNMEA(storedNMEAID))
       {
         for (uint8_t i = 0; i < 6; i++)
         {
@@ -1465,22 +1367,7 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
 
     if ((nmeaByteCounter > 5) || (nmeaByteCounter < 0)) // Should we add incoming to the file buffer and/or pass it to processNMEA?
     {
-      if (isThisNMEAauto())
-      {
-        uint8_t *lengthPtr = getNMEAWorkingLengthPtr(); // Get a pointer to the working copy length
-        uint8_t *nmeaPtr = getNMEAWorkingNMEAPtr();     // Get a pointer to the working copy NMEA data
-        uint8_t nmeaMaxLength = getNMEAMaxLength();
-        if (*lengthPtr < nmeaMaxLength)
-        {
-          *(nmeaPtr + *lengthPtr) = incoming; // Store the character
-          *lengthPtr = *lengthPtr + 1;        // Increment the length
-          if (*lengthPtr == nmeaMaxLength)
-          {
-            debugPrintln("process: NMEA buffer is full!", true); // Important
-          }
-        }
-      }
-      if (logThisNMEA())
+      if (doesThisNMEAHaveStorage(storedNMEAID) || logThisNMEA(storedNMEAID))
       {
         // This check is probably redundant.
         // currentSentence is set to SFE_UBLOX_SENTENCE_TYPE_NONE below if nmeaByteCounter == maxNMEAByteCount
@@ -1489,8 +1376,12 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
           _storageNMEA->data[_storageNMEA->length] = incoming; // Store the byte
           _storageNMEA->length = _storageNMEA->length + 1;
         }
+        else
+        {
+          debugPrintln("process: NMEA buffer is full!", true); // Important
+        }
       }
-      if (processThisNMEA())
+      if (processThisNMEA(storedNMEAID))
       {
         processNMEA(incoming); // Pass incoming to processNMEA
         // If user has assigned an output port then pipe the characters there,
@@ -1510,76 +1401,8 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
 
     if (nmeaByteCounter == 0) // Check if we are done
     {
-      if (isThisNMEAauto())
-      {
-        uint8_t *workingLengthPtr = getNMEAWorkingLengthPtr(); // Get a pointer to the working copy length
-        uint8_t *workingNMEAPtr = getNMEAWorkingNMEAPtr();     // Get a pointer to the working copy NMEA data
-        uint8_t nmeaMaxLength = getNMEAMaxLength();
-
-        // Check the checksum: the checksum is the exclusive-OR of all characters between the $ and the *
-        uint8_t nmeaChecksum = 0;
-        uint8_t charsChecked = 1; // Start after the $
-        uint8_t thisChar = '\0';
-        while ((charsChecked < (nmeaMaxLength - 1)) && (charsChecked < ((*workingLengthPtr) - 4)) && (thisChar != '*'))
-        {
-          thisChar = *(workingNMEAPtr + charsChecked); // Get a char from the working copy
-          if (thisChar != '*')                         // Ex-or the char into the checksum - but not if it is the '*'
-            nmeaChecksum ^= thisChar;
-          charsChecked++; // Increment the counter
-        }
-        if (thisChar == '*') // Make sure we found the *
-        {
-          uint8_t expectedChecksum1 = (nmeaChecksum >> 4) + '0';
-          if (expectedChecksum1 >= ':') // Handle Hex correctly
-            expectedChecksum1 += 'A' - ':';
-          uint8_t expectedChecksum2 = (nmeaChecksum & 0x0F) + '0';
-          if (expectedChecksum2 >= ':') // Handle Hex correctly
-            expectedChecksum2 += 'A' - ':';
-          if ((expectedChecksum1 == *(workingNMEAPtr + charsChecked)) && (expectedChecksum2 == *(workingNMEAPtr + charsChecked + 1)))
-          {
-            uint8_t *completeLengthPtr = getNMEACompleteLengthPtr();    // Get a pointer to the complete copy length
-            uint8_t *completeNMEAPtr = getNMEACompleteNMEAPtr();        // Get a pointer to the complete copy NMEA data
-            memset(completeNMEAPtr, 0, nmeaMaxLength);                  // Clear the previous complete copy
-            memcpy(completeNMEAPtr, workingNMEAPtr, *workingLengthPtr); // Copy the working copy into the complete copy
-            *completeLengthPtr = *workingLengthPtr;                     // Update the length
-            nmeaAutomaticFlags *flagsPtr = getNMEAFlagsPtr();           // Get a pointer to the flags
-            nmeaAutomaticFlags flagsCopy = *flagsPtr;
-            flagsCopy.flags.bits.completeCopyValid = 1; // Set the complete copy valid flag
-            flagsCopy.flags.bits.completeCopyRead = 0;  // Clear the complete copy read flag
-            *flagsPtr = flagsCopy;                      // Update the flags
-            // Callback
-            if (doesThisNMEAHaveCallback()) // Do we need to copy the data into the callback copy?
-            {
-              if (flagsCopy.flags.bits.callbackCopyValid == 0) // Has the callback copy valid flag been cleared (by checkCallbacks)
-              {
-                uint8_t *callbackLengthPtr = getNMEACallbackLengthPtr();    // Get a pointer to the callback copy length
-                uint8_t *callbackNMEAPtr = getNMEACallbackNMEAPtr();        // Get a pointer to the callback copy NMEA data
-                memset(callbackNMEAPtr, 0, nmeaMaxLength);                  // Clear the previous callback copy
-                memcpy(callbackNMEAPtr, workingNMEAPtr, *workingLengthPtr); // Copy the working copy into the callback copy
-                *callbackLengthPtr = *workingLengthPtr;                     // Update the length
-                flagsCopy.flags.bits.callbackCopyValid = 1;                 // Set the callback copy valid flag
-                *flagsPtr = flagsCopy;                                      // Update the flags
-              }
-            }
-          }
-          else
-          {
-            debugPrint("process: NMEA checksum fail (2)! Expected ", true); // Important
-            char checkHex[3];
-            sprintf(checkHex, "%c%c", expectedChecksum1, expectedChecksum2);
-            debugPrint(checkHex, true);
-            debugPrint(" Got ", true);
-            sprintf(checkHex, "%c%c", *(workingNMEAPtr + charsChecked), *(workingNMEAPtr + charsChecked + 1));
-            debugPrint(checkHex, true);
-            debugPrint("\r\n", true);
-          }
-        }
-        else
-        {
-          debugPrintln("process: NMEA checksum fail (1)!", true); // Important
-        }
-      }
-      if (logThisNMEA())
+      // If this NMEA has Auto storage or is being logged, check the checksum
+      if (doesThisNMEAHaveStorage(storedNMEAID) || logThisNMEA(storedNMEAID))
       {
         // Check the checksum: the checksum is the exclusive-OR of all characters between the $ and the *
         uint8_t nmeaChecksum = 0;
@@ -1602,10 +1425,51 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
             expectedChecksum2 += 'A' - ':';
           if ((expectedChecksum1 == _storageNMEA->data[charsChecked]) && (expectedChecksum2 == _storageNMEA->data[charsChecked + 1]))
           {
-            storeFileBytes(_storageNMEA->data, _storageNMEA->length); // Add NMEA to the file buffer
+            // Message is valid. The checksum was OK.
+            // For Auto messages, copy into the Auto _storage
+            if (doesThisNMEAHaveStorage(storedNMEAID))
+            {
+              nmeaMessage *nmeaMessagePtr = nmeaMessages.find(storedNMEAID);
+              if (nmeaMessagePtr)
+              {
+                uint8_t bytesToCopy = _storageNMEA->length;
+                if (bytesToCopy > maxNMEAByteCount) // Just for safety. Should be impossible
+                  bytesToCopy = maxNMEAByteCount;
+                if (bytesToCopy > nmeaMessagePtr->_messageLength) // Could be possible?
+                {
+                  debugPrint("process: NMEA message length is > nmeaMessagePtr->_messageLength!");
+                  bytesToCopy = nmeaMessagePtr->_messageLength;
+                }
+                memcpy(nmeaMessagePtr->_storage, _storageNMEA->data, bytesToCopy);
+                // We don't need to NULL-terminate. _storageNMEA->data was memset to 0 above.
+                nmeaMessagePtr->_moduleQueried = true; // Mark the data as fresh
+
+                // Callback
+                if (doesThisNMEAHaveCallback(storedNMEAID)) // Do we need to copy the data into the callback copy?
+                {
+                  if (nmeaMessagePtr->_callbackDataValid == false) // Has the callback copy valid flag been cleared (by checkCallbacks)
+                  {
+                    memcpy(nmeaMessagePtr->_callbackStorage, _storageNMEA->data, bytesToCopy);
+                    nmeaMessagePtr->_callbackStorage[bytesToCopy] = 0; // NULL-terminate
+                    nmeaMessagePtr->_callbackDataValid = true; // Mark the data as fresh
+                  }
+                }
+              }
+            }
+            if (logThisNMEA(storedNMEAID))
+              storeFileBytes(_storageNMEA->data, _storageNMEA->length); // Add NMEA to the file buffer
           }
           else
-            debugPrintln("process: _storageNMEA checksum fail!", true); // Important
+          {
+            debugPrint("process: NMEA checksum fail! Expected ", true); // Important
+            char checkHex[3];
+            sprintf(checkHex, "%c%c", expectedChecksum1, expectedChecksum2);
+            debugPrint(checkHex, true);
+            debugPrint(" Got ", true);
+            sprintf(checkHex, "%c%c", _storageNMEA->data[charsChecked], _storageNMEA->data[charsChecked + 1]);
+            debugPrint(checkHex, true);
+            debugPrint("\r\n", true);
+          }
         }
       }
       currentSentence = SFE_UBLOX_SENTENCE_TYPE_NONE; // All done!
@@ -1768,57 +1632,57 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
 }
 
 // PRIVATE: Return true if we should add this NMEA message to the file buffer for logging
-bool DevUBLOXGNSS::logThisNMEA()
+bool DevUBLOXGNSS::logThisNMEA(const char *msgId)
 {
   bool logMe = false;
   if (_logNMEA.bits.all == 1)
     logMe = true;
-  if ((nmeaAddressField[3] == 'D') && (nmeaAddressField[4] == 'T') && (nmeaAddressField[5] == 'M') && (_logNMEA.bits.UBX_NMEA_DTM == 1))
+  if ((msgId[0] == 'D') && (msgId[1] == 'T') && (msgId[2] == 'M') && (_logNMEA.bits.UBX_NMEA_DTM == 1))
     logMe = true;
-  if (nmeaAddressField[3] == 'G')
+  if (msgId[0] == 'G')
   {
-    if ((nmeaAddressField[4] == 'A') && (nmeaAddressField[5] == 'Q') && (_logNMEA.bits.UBX_NMEA_GAQ == 1))
+    if ((msgId[1] == 'A') && (msgId[2] == 'Q') && (_logNMEA.bits.UBX_NMEA_GAQ == 1))
       logMe = true;
-    if ((nmeaAddressField[4] == 'B') && (nmeaAddressField[5] == 'Q') && (_logNMEA.bits.UBX_NMEA_GBQ == 1))
+    if ((msgId[1] == 'B') && (msgId[2] == 'Q') && (_logNMEA.bits.UBX_NMEA_GBQ == 1))
       logMe = true;
-    if ((nmeaAddressField[4] == 'B') && (nmeaAddressField[5] == 'S') && (_logNMEA.bits.UBX_NMEA_GBS == 1))
+    if ((msgId[1] == 'B') && (msgId[2] == 'S') && (_logNMEA.bits.UBX_NMEA_GBS == 1))
       logMe = true;
-    if ((nmeaAddressField[4] == 'G') && (nmeaAddressField[5] == 'A') && (_logNMEA.bits.UBX_NMEA_GGA == 1))
+    if ((msgId[1] == 'G') && (msgId[2] == 'A') && (_logNMEA.bits.UBX_NMEA_GGA == 1))
       logMe = true;
-    if ((nmeaAddressField[4] == 'L') && (nmeaAddressField[5] == 'L') && (_logNMEA.bits.UBX_NMEA_GLL == 1))
+    if ((msgId[1] == 'L') && (msgId[2] == 'L') && (_logNMEA.bits.UBX_NMEA_GLL == 1))
       logMe = true;
-    if ((nmeaAddressField[4] == 'L') && (nmeaAddressField[5] == 'Q') && (_logNMEA.bits.UBX_NMEA_GLQ == 1))
+    if ((msgId[1] == 'L') && (msgId[2] == 'Q') && (_logNMEA.bits.UBX_NMEA_GLQ == 1))
       logMe = true;
-    if ((nmeaAddressField[4] == 'N') && (nmeaAddressField[5] == 'Q') && (_logNMEA.bits.UBX_NMEA_GNQ == 1))
+    if ((msgId[1] == 'N') && (msgId[2] == 'Q') && (_logNMEA.bits.UBX_NMEA_GNQ == 1))
       logMe = true;
-    if ((nmeaAddressField[4] == 'N') && (nmeaAddressField[5] == 'S') && (_logNMEA.bits.UBX_NMEA_GNS == 1))
+    if ((msgId[1] == 'N') && (msgId[2] == 'S') && (_logNMEA.bits.UBX_NMEA_GNS == 1))
       logMe = true;
-    if ((nmeaAddressField[4] == 'P') && (nmeaAddressField[5] == 'Q') && (_logNMEA.bits.UBX_NMEA_GPQ == 1))
+    if ((msgId[1] == 'P') && (msgId[2] == 'Q') && (_logNMEA.bits.UBX_NMEA_GPQ == 1))
       logMe = true;
-    if ((nmeaAddressField[4] == 'Q') && (nmeaAddressField[5] == 'Q') && (_logNMEA.bits.UBX_NMEA_GQQ == 1))
+    if ((msgId[1] == 'Q') && (msgId[2] == 'Q') && (_logNMEA.bits.UBX_NMEA_GQQ == 1))
       logMe = true;
-    if ((nmeaAddressField[4] == 'R') && (nmeaAddressField[5] == 'S') && (_logNMEA.bits.UBX_NMEA_GRS == 1))
+    if ((msgId[1] == 'R') && (msgId[2] == 'S') && (_logNMEA.bits.UBX_NMEA_GRS == 1))
       logMe = true;
-    if ((nmeaAddressField[4] == 'S') && (nmeaAddressField[5] == 'A') && (_logNMEA.bits.UBX_NMEA_GSA == 1))
+    if ((msgId[1] == 'S') && (msgId[2] == 'A') && (_logNMEA.bits.UBX_NMEA_GSA == 1))
       logMe = true;
-    if ((nmeaAddressField[4] == 'S') && (nmeaAddressField[5] == 'T') && (_logNMEA.bits.UBX_NMEA_GST == 1))
+    if ((msgId[1] == 'S') && (msgId[2] == 'T') && (_logNMEA.bits.UBX_NMEA_GST == 1))
       logMe = true;
-    if ((nmeaAddressField[4] == 'S') && (nmeaAddressField[5] == 'V') && (_logNMEA.bits.UBX_NMEA_GSV == 1))
+    if ((msgId[1] == 'S') && (msgId[2] == 'V') && (_logNMEA.bits.UBX_NMEA_GSV == 1))
       logMe = true;
   }
-  if ((nmeaAddressField[3] == 'R') && (nmeaAddressField[4] == 'L') && (nmeaAddressField[5] == 'M') && (_logNMEA.bits.UBX_NMEA_RLM == 1))
+  if ((msgId[0] == 'R') && (msgId[1] == 'L') && (msgId[2] == 'M') && (_logNMEA.bits.UBX_NMEA_RLM == 1))
     logMe = true;
-  if ((nmeaAddressField[3] == 'R') && (nmeaAddressField[4] == 'M') && (nmeaAddressField[5] == 'C') && (_logNMEA.bits.UBX_NMEA_RMC == 1))
+  if ((msgId[0] == 'R') && (msgId[1] == 'M') && (msgId[2] == 'C') && (_logNMEA.bits.UBX_NMEA_RMC == 1))
     logMe = true;
-  if ((nmeaAddressField[3] == 'T') && (nmeaAddressField[4] == 'H') && (nmeaAddressField[5] == 'S') && (_logNMEA.bits.UBX_NMEA_THS == 1))
+  if ((msgId[0] == 'T') && (msgId[1] == 'H') && (msgId[2] == 'S') && (_logNMEA.bits.UBX_NMEA_THS == 1))
     logMe = true;
-  if ((nmeaAddressField[3] == 'T') && (nmeaAddressField[4] == 'X') && (nmeaAddressField[5] == 'T') && (_logNMEA.bits.UBX_NMEA_TXT == 1))
+  if ((msgId[0] == 'T') && (msgId[1] == 'X') && (msgId[2] == 'T') && (_logNMEA.bits.UBX_NMEA_TXT == 1))
     logMe = true;
-  if ((nmeaAddressField[3] == 'V') && (nmeaAddressField[4] == 'L') && (nmeaAddressField[5] == 'W') && (_logNMEA.bits.UBX_NMEA_VLW == 1))
+  if ((msgId[0] == 'V') && (msgId[1] == 'L') && (msgId[2] == 'W') && (_logNMEA.bits.UBX_NMEA_VLW == 1))
     logMe = true;
-  if ((nmeaAddressField[3] == 'V') && (nmeaAddressField[4] == 'T') && (nmeaAddressField[5] == 'G') && (_logNMEA.bits.UBX_NMEA_VTG == 1))
+  if ((msgId[0] == 'V') && (msgId[1] == 'T') && (msgId[2] == 'G') && (_logNMEA.bits.UBX_NMEA_VTG == 1))
     logMe = true;
-  if ((nmeaAddressField[3] == 'Z') && (nmeaAddressField[4] == 'D') && (nmeaAddressField[5] == 'A') && (_logNMEA.bits.UBX_NMEA_ZDA == 1))
+  if ((msgId[0] == 'Z') && (msgId[1] == 'D') && (msgId[2] == 'A') && (_logNMEA.bits.UBX_NMEA_ZDA == 1))
     logMe = true;
 
   if (logMe)                   // Message should be logged.
@@ -1827,113 +1691,109 @@ bool DevUBLOXGNSS::logThisNMEA()
 }
 
 // PRIVATE: Return true if the NMEA header is valid
-bool DevUBLOXGNSS::isNMEAHeaderValid()
+bool DevUBLOXGNSS::isNMEAHeaderValid(const char *msgId)
 {
-  if (nmeaAddressField[0] != '*')
-    return (false);
-  if (nmeaAddressField[1] != 'G')
-    return (false);
-  if ((nmeaAddressField[3] == 'D') && (nmeaAddressField[4] == 'T') && (nmeaAddressField[5] == 'M'))
+  if ((msgId[0] == 'D') && (msgId[1] == 'T') && (msgId[2] == 'M'))
     return (true);
-  if (nmeaAddressField[3] == 'G')
+  if (msgId[0] == 'G')
   {
-    if ((nmeaAddressField[4] == 'A') && (nmeaAddressField[5] == 'Q'))
+    if ((msgId[1] == 'A') && (msgId[2] == 'Q'))
       return (true);
-    if ((nmeaAddressField[4] == 'B') && (nmeaAddressField[5] == 'Q'))
+    if ((msgId[1] == 'B') && (msgId[2] == 'Q'))
       return (true);
-    if ((nmeaAddressField[4] == 'B') && (nmeaAddressField[5] == 'S'))
+    if ((msgId[1] == 'B') && (msgId[2] == 'S'))
       return (true);
-    if ((nmeaAddressField[4] == 'G') && (nmeaAddressField[5] == 'A'))
+    if ((msgId[1] == 'G') && (msgId[2] == 'A'))
       return (true);
-    if ((nmeaAddressField[4] == 'L') && (nmeaAddressField[5] == 'L'))
+    if ((msgId[1] == 'L') && (msgId[2] == 'L'))
       return (true);
-    if ((nmeaAddressField[4] == 'L') && (nmeaAddressField[5] == 'Q'))
+    if ((msgId[1] == 'L') && (msgId[2] == 'Q'))
       return (true);
-    if ((nmeaAddressField[4] == 'N') && (nmeaAddressField[5] == 'Q'))
+    if ((msgId[1] == 'N') && (msgId[2] == 'Q'))
       return (true);
-    if ((nmeaAddressField[4] == 'N') && (nmeaAddressField[5] == 'S'))
+    if ((msgId[1] == 'N') && (msgId[2] == 'S'))
       return (true);
-    if ((nmeaAddressField[4] == 'P') && (nmeaAddressField[5] == 'Q'))
+    if ((msgId[1] == 'P') && (msgId[2] == 'Q'))
       return (true);
-    if ((nmeaAddressField[4] == 'Q') && (nmeaAddressField[5] == 'Q'))
+    if ((msgId[1] == 'Q') && (msgId[2] == 'Q'))
       return (true);
-    if ((nmeaAddressField[4] == 'R') && (nmeaAddressField[5] == 'S'))
+    if ((msgId[1] == 'R') && (msgId[2] == 'S'))
       return (true);
-    if ((nmeaAddressField[4] == 'S') && (nmeaAddressField[5] == 'A'))
+    if ((msgId[1] == 'S') && (msgId[2] == 'A'))
       return (true);
-    if ((nmeaAddressField[4] == 'S') && (nmeaAddressField[5] == 'T'))
+    if ((msgId[1] == 'S') && (msgId[2] == 'T'))
       return (true);
-    if ((nmeaAddressField[4] == 'S') && (nmeaAddressField[5] == 'V'))
+    if ((msgId[1] == 'S') && (msgId[2] == 'V'))
       return (true);
   }
-  if ((nmeaAddressField[3] == 'R') && (nmeaAddressField[4] == 'L') && (nmeaAddressField[5] == 'M'))
+  if ((msgId[0] == 'R') && (msgId[1] == 'L') && (msgId[2] == 'M'))
     return (true);
-  if ((nmeaAddressField[3] == 'R') && (nmeaAddressField[4] == 'M') && (nmeaAddressField[5] == 'C'))
+  if ((msgId[0] == 'R') && (msgId[1] == 'M') && (msgId[2] == 'C'))
     return (true);
-  if ((nmeaAddressField[3] == 'T') && (nmeaAddressField[4] == 'H') && (nmeaAddressField[5] == 'S'))
+  if ((msgId[0] == 'T') && (msgId[1] == 'H') && (msgId[2] == 'S'))
     return (true);
-  if ((nmeaAddressField[3] == 'T') && (nmeaAddressField[4] == 'X') && (nmeaAddressField[5] == 'T'))
+  if ((msgId[0] == 'T') && (msgId[1] == 'X') && (msgId[2] == 'T'))
     return (true);
-  if ((nmeaAddressField[3] == 'V') && (nmeaAddressField[4] == 'L') && (nmeaAddressField[5] == 'W'))
+  if ((msgId[0] == 'V') && (msgId[1] == 'L') && (msgId[2] == 'W'))
     return (true);
-  if ((nmeaAddressField[3] == 'V') && (nmeaAddressField[4] == 'T') && (nmeaAddressField[5] == 'G'))
+  if ((msgId[0] == 'V') && (msgId[1] == 'T') && (msgId[2] == 'G'))
     return (true);
-  if ((nmeaAddressField[3] == 'Z') && (nmeaAddressField[4] == 'D') && (nmeaAddressField[5] == 'A'))
+  if ((msgId[0] == 'Z') && (msgId[1] == 'D') && (msgId[2] == 'A'))
     return (true);
   return (false);
 }
 
 // PRIVATE: Return true if we should pass this NMEA message to processNMEA
-bool DevUBLOXGNSS::processThisNMEA()
+bool DevUBLOXGNSS::processThisNMEA(const char *msgId)
 {
   if (_processNMEA.bits.all == 1)
     return (true);
-  if ((nmeaAddressField[3] == 'D') && (nmeaAddressField[4] == 'T') && (nmeaAddressField[5] == 'M') && (_processNMEA.bits.UBX_NMEA_DTM == 1))
+  if ((msgId[0] == 'D') && (msgId[1] == 'T') && (msgId[2] == 'M') && (_processNMEA.bits.UBX_NMEA_DTM == 1))
     return (true);
-  if (nmeaAddressField[3] == 'G')
+  if (msgId[0] == 'G')
   {
-    if ((nmeaAddressField[4] == 'A') && (nmeaAddressField[5] == 'Q') && (_processNMEA.bits.UBX_NMEA_GAQ == 1))
+    if ((msgId[1] == 'A') && (msgId[2] == 'Q') && (_processNMEA.bits.UBX_NMEA_GAQ == 1))
       return (true);
-    if ((nmeaAddressField[4] == 'B') && (nmeaAddressField[5] == 'Q') && (_processNMEA.bits.UBX_NMEA_GBQ == 1))
+    if ((msgId[1] == 'B') && (msgId[2] == 'Q') && (_processNMEA.bits.UBX_NMEA_GBQ == 1))
       return (true);
-    if ((nmeaAddressField[4] == 'B') && (nmeaAddressField[5] == 'S') && (_processNMEA.bits.UBX_NMEA_GBS == 1))
+    if ((msgId[1] == 'B') && (msgId[2] == 'S') && (_processNMEA.bits.UBX_NMEA_GBS == 1))
       return (true);
-    if ((nmeaAddressField[4] == 'G') && (nmeaAddressField[5] == 'A') && (_processNMEA.bits.UBX_NMEA_GGA == 1))
+    if ((msgId[1] == 'G') && (msgId[2] == 'A') && (_processNMEA.bits.UBX_NMEA_GGA == 1))
       return (true);
-    if ((nmeaAddressField[4] == 'L') && (nmeaAddressField[5] == 'L') && (_processNMEA.bits.UBX_NMEA_GLL == 1))
+    if ((msgId[1] == 'L') && (msgId[2] == 'L') && (_processNMEA.bits.UBX_NMEA_GLL == 1))
       return (true);
-    if ((nmeaAddressField[4] == 'L') && (nmeaAddressField[5] == 'Q') && (_processNMEA.bits.UBX_NMEA_GLQ == 1))
+    if ((msgId[1] == 'L') && (msgId[2] == 'Q') && (_processNMEA.bits.UBX_NMEA_GLQ == 1))
       return (true);
-    if ((nmeaAddressField[4] == 'N') && (nmeaAddressField[5] == 'Q') && (_processNMEA.bits.UBX_NMEA_GNQ == 1))
+    if ((msgId[1] == 'N') && (msgId[2] == 'Q') && (_processNMEA.bits.UBX_NMEA_GNQ == 1))
       return (true);
-    if ((nmeaAddressField[4] == 'N') && (nmeaAddressField[5] == 'S') && (_processNMEA.bits.UBX_NMEA_GNS == 1))
+    if ((msgId[1] == 'N') && (msgId[2] == 'S') && (_processNMEA.bits.UBX_NMEA_GNS == 1))
       return (true);
-    if ((nmeaAddressField[4] == 'P') && (nmeaAddressField[5] == 'Q') && (_processNMEA.bits.UBX_NMEA_GPQ == 1))
+    if ((msgId[1] == 'P') && (msgId[2] == 'Q') && (_processNMEA.bits.UBX_NMEA_GPQ == 1))
       return (true);
-    if ((nmeaAddressField[4] == 'Q') && (nmeaAddressField[5] == 'Q') && (_processNMEA.bits.UBX_NMEA_GQQ == 1))
+    if ((msgId[1] == 'Q') && (msgId[2] == 'Q') && (_processNMEA.bits.UBX_NMEA_GQQ == 1))
       return (true);
-    if ((nmeaAddressField[4] == 'R') && (nmeaAddressField[5] == 'S') && (_processNMEA.bits.UBX_NMEA_GRS == 1))
+    if ((msgId[1] == 'R') && (msgId[2] == 'S') && (_processNMEA.bits.UBX_NMEA_GRS == 1))
       return (true);
-    if ((nmeaAddressField[4] == 'S') && (nmeaAddressField[5] == 'A') && (_processNMEA.bits.UBX_NMEA_GSA == 1))
+    if ((msgId[1] == 'S') && (msgId[2] == 'A') && (_processNMEA.bits.UBX_NMEA_GSA == 1))
       return (true);
-    if ((nmeaAddressField[4] == 'S') && (nmeaAddressField[5] == 'T') && (_processNMEA.bits.UBX_NMEA_GST == 1))
+    if ((msgId[1] == 'S') && (msgId[2] == 'T') && (_processNMEA.bits.UBX_NMEA_GST == 1))
       return (true);
-    if ((nmeaAddressField[4] == 'S') && (nmeaAddressField[5] == 'V') && (_processNMEA.bits.UBX_NMEA_GSV == 1))
+    if ((msgId[1] == 'S') && (msgId[2] == 'V') && (_processNMEA.bits.UBX_NMEA_GSV == 1))
       return (true);
   }
-  if ((nmeaAddressField[3] == 'R') && (nmeaAddressField[4] == 'L') && (nmeaAddressField[5] == 'M') && (_processNMEA.bits.UBX_NMEA_RLM == 1))
+  if ((msgId[0] == 'R') && (msgId[1] == 'L') && (msgId[2] == 'M') && (_processNMEA.bits.UBX_NMEA_RLM == 1))
     return (true);
-  if ((nmeaAddressField[3] == 'R') && (nmeaAddressField[4] == 'M') && (nmeaAddressField[5] == 'C') && (_processNMEA.bits.UBX_NMEA_RMC == 1))
+  if ((msgId[0] == 'R') && (msgId[1] == 'M') && (msgId[2] == 'C') && (_processNMEA.bits.UBX_NMEA_RMC == 1))
     return (true);
-  if ((nmeaAddressField[3] == 'T') && (nmeaAddressField[4] == 'H') && (nmeaAddressField[5] == 'S') && (_processNMEA.bits.UBX_NMEA_THS == 1))
+  if ((msgId[0] == 'T') && (msgId[1] == 'H') && (msgId[2] == 'S') && (_processNMEA.bits.UBX_NMEA_THS == 1))
     return (true);
-  if ((nmeaAddressField[3] == 'T') && (nmeaAddressField[4] == 'X') && (nmeaAddressField[5] == 'T') && (_processNMEA.bits.UBX_NMEA_TXT == 1))
+  if ((msgId[0] == 'T') && (msgId[1] == 'X') && (msgId[2] == 'T') && (_processNMEA.bits.UBX_NMEA_TXT == 1))
     return (true);
-  if ((nmeaAddressField[3] == 'V') && (nmeaAddressField[4] == 'L') && (nmeaAddressField[5] == 'W') && (_processNMEA.bits.UBX_NMEA_VLW == 1))
+  if ((msgId[0] == 'V') && (msgId[1] == 'L') && (msgId[2] == 'W') && (_processNMEA.bits.UBX_NMEA_VLW == 1))
     return (true);
-  if ((nmeaAddressField[3] == 'V') && (nmeaAddressField[4] == 'T') && (nmeaAddressField[5] == 'G') && (_processNMEA.bits.UBX_NMEA_VTG == 1))
+  if ((msgId[0] == 'V') && (msgId[1] == 'T') && (msgId[2] == 'G') && (_processNMEA.bits.UBX_NMEA_VTG == 1))
     return (true);
-  if ((nmeaAddressField[3] == 'Z') && (nmeaAddressField[4] == 'D') && (nmeaAddressField[5] == 'A') && (_processNMEA.bits.UBX_NMEA_ZDA == 1))
+  if ((msgId[0] == 'Z') && (msgId[1] == 'D') && (msgId[2] == 'A') && (_processNMEA.bits.UBX_NMEA_ZDA == 1))
     return (true);
   return (false);
 }
@@ -1946,704 +1806,31 @@ void DevUBLOXGNSS::processNMEA(char incoming)
   (void)incoming;
 }
 
-// Check if the NMEA message (in nmeaAddressField) is "auto" (i.e. has dedicated RAM allocated for it)
-bool DevUBLOXGNSS::isThisNMEAauto()
+// Check if the NMEA message (in nmeaAddressField) is "auto" (i.e. its isAutomatic flag is set)
+bool DevUBLOXGNSS::isThisNMEAauto(const char *msgId)
 {
-  char thisNMEA[] = "GPGGA";
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGPGGA != nullptr)
-      return true;
-  }
+  bool automatic;
+  if (nmeaMessages.isAutomatic(msgId, &automatic) != SFE_UBLOX_STATUS_SUCCESS)
+    return false;
+  return automatic;
+}
 
-  strcpy(thisNMEA, "GNGGA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGNGGA != nullptr)
-      return true;
-  }
-
-  strcpy(thisNMEA, "GPVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGPVTG != nullptr)
-      return true;
-  }
-
-  strcpy(thisNMEA, "GNVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGNVTG != nullptr)
-      return true;
-  }
-
-  strcpy(thisNMEA, "GPRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGPRMC != nullptr)
-      return true;
-  }
-
-  strcpy(thisNMEA, "GNRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGNRMC != nullptr)
-      return true;
-  }
-
-  strcpy(thisNMEA, "GPZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGPZDA != nullptr)
-      return true;
-  }
-
-  strcpy(thisNMEA, "GNZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGNZDA != nullptr)
-      return true;
-  }
-
-  strcpy(thisNMEA, "GPGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGPGST != nullptr)
-      return true;
-  }
-
-  strcpy(thisNMEA, "GNGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGNGST != nullptr)
-      return true;
-  }
-
-  return false;
+// Check if the NMEA message (in nmeaAddressField) has dedicated RAM allocated for it
+bool DevUBLOXGNSS::doesThisNMEAHaveStorage(const char *msgId)
+{
+    nmeaMessage *msg = nmeaMessages.find(msgId);
+    if (msg == nullptr)
+        return false;
+    return msg->_storage != nullptr;
 }
 
 // Do we need to copy the data into the callback copy?
-bool DevUBLOXGNSS::doesThisNMEAHaveCallback()
+bool DevUBLOXGNSS::doesThisNMEAHaveCallback(const char *msgId)
 {
-  char thisNMEA[] = "GPGGA";
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGPGGA != nullptr)
-      if (storageNMEAGPGGA->callbackCopy != nullptr)
-        if (storageNMEAGPGGA->callbackPointerPtr != nullptr)
-          return true;
-  }
-
-  strcpy(thisNMEA, "GNGGA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGNGGA != nullptr)
-      if (storageNMEAGNGGA->callbackCopy != nullptr)
-        if (storageNMEAGNGGA->callbackPointerPtr != nullptr)
-          return true;
-  }
-
-  strcpy(thisNMEA, "GPVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGPVTG != nullptr)
-      if (storageNMEAGPVTG->callbackCopy != nullptr)
-        if (storageNMEAGPVTG->callbackPointerPtr != nullptr)
-          return true;
-  }
-
-  strcpy(thisNMEA, "GNVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGNVTG != nullptr)
-      if (storageNMEAGNVTG->callbackCopy != nullptr)
-        if (storageNMEAGNVTG->callbackPointerPtr != nullptr)
-          return true;
-  }
-
-  strcpy(thisNMEA, "GPRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGPRMC != nullptr)
-      if (storageNMEAGPRMC->callbackCopy != nullptr)
-        if (storageNMEAGPRMC->callbackPointerPtr != nullptr)
-          return true;
-  }
-
-  strcpy(thisNMEA, "GNRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGNRMC != nullptr)
-      if (storageNMEAGNRMC->callbackCopy != nullptr)
-        if (storageNMEAGNRMC->callbackPointerPtr != nullptr)
-          return true;
-  }
-
-  strcpy(thisNMEA, "GPZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGPZDA != nullptr)
-      if (storageNMEAGPZDA->callbackCopy != nullptr)
-        if (storageNMEAGPZDA->callbackPointerPtr != nullptr)
-          return true;
-  }
-
-  strcpy(thisNMEA, "GNZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGNZDA != nullptr)
-      if (storageNMEAGNZDA->callbackCopy != nullptr)
-        if (storageNMEAGNZDA->callbackPointerPtr != nullptr)
-          return true;
-  }
-
-  strcpy(thisNMEA, "GPGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGPGST != nullptr)
-      if (storageNMEAGPGST->callbackCopy != nullptr)
-        if (storageNMEAGPGST->callbackPointerPtr != nullptr)
-          return true;
-  }
-
-  strcpy(thisNMEA, "GNGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    if (storageNMEAGNGST != nullptr)
-      if (storageNMEAGNGST->callbackCopy != nullptr)
-        if (storageNMEAGNGST->callbackPointerPtr != nullptr)
-          return true;
-  }
-
-  return false;
-}
-
-// Get a pointer to the working copy length
-uint8_t *DevUBLOXGNSS::getNMEAWorkingLengthPtr()
-{
-  char thisNMEA[] = "GPGGA";
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGGA->workingCopy.length;
-  }
-
-  strcpy(thisNMEA, "GNGGA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGGA->workingCopy.length;
-  }
-
-  strcpy(thisNMEA, "GPVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPVTG->workingCopy.length;
-  }
-
-  strcpy(thisNMEA, "GNVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNVTG->workingCopy.length;
-  }
-
-  strcpy(thisNMEA, "GPRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPRMC->workingCopy.length;
-  }
-
-  strcpy(thisNMEA, "GNRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNRMC->workingCopy.length;
-  }
-
-  strcpy(thisNMEA, "GPZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPZDA->workingCopy.length;
-  }
-
-  strcpy(thisNMEA, "GNZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNZDA->workingCopy.length;
-  }
-
-  strcpy(thisNMEA, "GPGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGST->workingCopy.length;
-  }
-
-  strcpy(thisNMEA, "GNGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGST->workingCopy.length;
-  }
-
-  return nullptr;
-}
-
-// Get a pointer to the working copy NMEA data
-uint8_t *DevUBLOXGNSS::getNMEAWorkingNMEAPtr()
-{
-  char thisNMEA[] = "GPGGA";
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGGA->workingCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNGGA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGGA->workingCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GPVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPVTG->workingCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNVTG->workingCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GPRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPRMC->workingCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNRMC->workingCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GPZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPZDA->workingCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNZDA->workingCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GPGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGST->workingCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGST->workingCopy.nmea[0];
-  }
-
-  return nullptr;
-}
-
-// Get a pointer to the complete copy length
-uint8_t *DevUBLOXGNSS::getNMEACompleteLengthPtr()
-{
-  char thisNMEA[] = "GPGGA";
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGGA->completeCopy.length;
-  }
-
-  strcpy(thisNMEA, "GNGGA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGGA->completeCopy.length;
-  }
-
-  strcpy(thisNMEA, "GPVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPVTG->completeCopy.length;
-  }
-
-  strcpy(thisNMEA, "GNVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNVTG->completeCopy.length;
-  }
-
-  strcpy(thisNMEA, "GPRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPRMC->completeCopy.length;
-  }
-
-  strcpy(thisNMEA, "GNRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNRMC->completeCopy.length;
-  }
-
-  strcpy(thisNMEA, "GPZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPZDA->completeCopy.length;
-  }
-
-  strcpy(thisNMEA, "GNZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNZDA->completeCopy.length;
-  }
-
-  strcpy(thisNMEA, "GPGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGST->completeCopy.length;
-  }
-
-  strcpy(thisNMEA, "GNGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGST->completeCopy.length;
-  }
-
-  return nullptr;
-}
-
-// Get a pointer to the complete copy NMEA data
-uint8_t *DevUBLOXGNSS::getNMEACompleteNMEAPtr()
-{
-  char thisNMEA[] = "GPGGA";
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGGA->completeCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNGGA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGGA->completeCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GPVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPVTG->completeCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNVTG->completeCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GPRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPRMC->completeCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNRMC->completeCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GPZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPZDA->completeCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNZDA->completeCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GPGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGST->completeCopy.nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGST->completeCopy.nmea[0];
-  }
-
-  return nullptr;
-}
-
-// Get a pointer to the callback copy length
-uint8_t *DevUBLOXGNSS::getNMEACallbackLengthPtr()
-{
-  char thisNMEA[] = "GPGGA";
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGGA->callbackCopy->length;
-  }
-
-  strcpy(thisNMEA, "GNGGA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGGA->callbackCopy->length;
-  }
-
-  strcpy(thisNMEA, "GPVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPVTG->callbackCopy->length;
-  }
-
-  strcpy(thisNMEA, "GNVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNVTG->callbackCopy->length;
-  }
-
-  strcpy(thisNMEA, "GPRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPRMC->callbackCopy->length;
-  }
-
-  strcpy(thisNMEA, "GNRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNRMC->callbackCopy->length;
-  }
-
-  strcpy(thisNMEA, "GPZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPZDA->callbackCopy->length;
-  }
-
-  strcpy(thisNMEA, "GNZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNZDA->callbackCopy->length;
-  }
-
-  strcpy(thisNMEA, "GPGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGST->callbackCopy->length;
-  }
-
-  strcpy(thisNMEA, "GNGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGST->callbackCopy->length;
-  }
-
-  return nullptr;
-}
-
-// Get a pointer to the callback copy NMEA data
-uint8_t *DevUBLOXGNSS::getNMEACallbackNMEAPtr()
-{
-  char thisNMEA[] = "GPGGA";
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGGA->callbackCopy->nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNGGA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGGA->callbackCopy->nmea[0];
-  }
-
-  strcpy(thisNMEA, "GPVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPVTG->callbackCopy->nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNVTG->callbackCopy->nmea[0];
-  }
-
-  strcpy(thisNMEA, "GPRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPRMC->callbackCopy->nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNRMC->callbackCopy->nmea[0];
-  }
-
-  strcpy(thisNMEA, "GPZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPZDA->callbackCopy->nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNZDA->callbackCopy->nmea[0];
-  }
-
-  strcpy(thisNMEA, "GPGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGST->callbackCopy->nmea[0];
-  }
-
-  strcpy(thisNMEA, "GNGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGST->callbackCopy->nmea[0];
-  }
-
-  return nullptr;
-}
-
-// Get the maximum length of this NMEA message
-uint8_t DevUBLOXGNSS::getNMEAMaxLength()
-{
-  char thisNMEA[] = "GPGGA";
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return NMEA_GGA_MAX_LENGTH;
-  }
-
-  strcpy(thisNMEA, "GNGGA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return NMEA_GGA_MAX_LENGTH;
-  }
-
-  strcpy(thisNMEA, "GPVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return NMEA_VTG_MAX_LENGTH;
-  }
-
-  strcpy(thisNMEA, "GNVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return NMEA_VTG_MAX_LENGTH;
-  }
-
-  strcpy(thisNMEA, "GPRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return NMEA_RMC_MAX_LENGTH;
-  }
-
-  strcpy(thisNMEA, "GNRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return NMEA_RMC_MAX_LENGTH;
-  }
-
-  strcpy(thisNMEA, "GPZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return NMEA_ZDA_MAX_LENGTH;
-  }
-
-  strcpy(thisNMEA, "GNZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return NMEA_ZDA_MAX_LENGTH;
-  }
-
-  strcpy(thisNMEA, "GPGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return NMEA_GST_MAX_LENGTH;
-  }
-
-  strcpy(thisNMEA, "GNGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return NMEA_GST_MAX_LENGTH;
-  }
-
-  return 0;
-}
-
-// Get a pointer to the automatic NMEA flags
-nmeaAutomaticFlags *DevUBLOXGNSS::getNMEAFlagsPtr()
-{
-  char thisNMEA[] = "GPGGA";
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGGA->automaticFlags;
-  }
-
-  strcpy(thisNMEA, "GNGGA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGGA->automaticFlags;
-  }
-
-  strcpy(thisNMEA, "GPVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPVTG->automaticFlags;
-  }
-
-  strcpy(thisNMEA, "GNVTG");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNVTG->automaticFlags;
-  }
-
-  strcpy(thisNMEA, "GPRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPRMC->automaticFlags;
-  }
-
-  strcpy(thisNMEA, "GNRMC");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNRMC->automaticFlags;
-  }
-
-  strcpy(thisNMEA, "GPZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPZDA->automaticFlags;
-  }
-
-  strcpy(thisNMEA, "GNZDA");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNZDA->automaticFlags;
-  }
-
-  strcpy(thisNMEA, "GPGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGPGST->automaticFlags;
-  }
-
-  strcpy(thisNMEA, "GNGST");
-  if (memcmp(thisNMEA, &nmeaAddressField[1], 5) == 0)
-  {
-    return &storageNMEAGNGST->automaticFlags;
-  }
-
-  return nullptr;
+    nmeaMessage *msg = nmeaMessages.find(msgId);
+    if (msg == nullptr)
+        return false;
+    return msg->_callbackPtr != nullptr;
 }
 
 // We need to be able to identify an RTCM packet and then the length
@@ -3794,6 +2981,73 @@ sfe_ublox_status_e DevUBLOXGNSS::sendCommand(ubxPacket *outgoingUBX, uint16_t ma
   return retVal;
 }
 
+// Poll a single NMEA message on the current interface using the GN Talker ID
+sfe_ublox_status_e DevUBLOXGNSS::pollNMEA(const char *msgId, uint16_t maxWait)
+{
+  if (!lock())
+    return SFE_UBLOX_STATUS_FAIL;
+
+  unsigned long startTime = millis();
+
+  sfe_ublox_status_e retVal = SFE_UBLOX_STATUS_SUCCESS;
+
+  // Prepare the EIGNQ request, add the checksum and \r\n
+  char pollRequest[strlen("$EIGNQ,RMC*3A\r\n") + 1];
+  snprintf(pollRequest, sizeof(pollRequest), "$EIGNQ,%s*", msgId);
+  uint8_t checksum = 0;
+  for (int x = 1; (pollRequest[x] != '*') && (x < sizeof(pollRequest)); x++)
+    checksum ^= pollRequest[x];
+  char checksumStr[strlen("3A\r\n") + 1];
+  snprintf(checksumStr, sizeof(checksumStr), "%02X\r\n", checksum);
+  strncat(pollRequest, checksumStr, sizeof(pollRequest) - strlen(pollRequest));
+
+  debugPrint("\nSending: ");
+  debugPrint(pollRequest);
+
+  if (_commType == COMM_TYPE_I2C)
+  {
+    if (writeBytes((uint8_t *)pollRequest, strlen(pollRequest)) != strlen(pollRequest))
+      return SFE_UBLOX_STATUS_I2C_COMM_FAILURE;
+  }
+  else if (_commType == COMM_TYPE_SERIAL)
+  {
+    writeBytes((uint8_t *)pollRequest, strlen(pollRequest));
+  }
+  else if (_commType == COMM_TYPE_SPI)
+  {
+    startWriteReadByte();
+    for (int x = 0; x < strlen(pollRequest); x++)
+      spiTransfer(pollRequest[x]);
+    endWriteReadByte();
+  }
+
+  unlock();
+
+  if (maxWait > 0)
+  {
+    // Poll request sent. Wait for the NMEA to arrive
+    bool queried = false;
+    while ((!queried) &&((millis() - startTime) < maxWait))
+    {
+      checkUbloxInternal(&packetCfg, 0, 0); // Hijack packetCfg
+      retVal = nmeaMessages.moduleQueried(msgId, &queried);
+      if (retVal != SFE_UBLOX_STATUS_SUCCESS)
+        return retVal;
+    }
+
+    if (!queried) // Did we time out?
+      retVal = SFE_UBLOX_STATUS_TIMEOUT;
+    else
+      retVal = SFE_UBLOX_STATUS_DATA_RECEIVED;
+  }
+  else
+  {
+    processSpiBuffer(&packetCfg, 0, 0); // Process any SPI data received during the sendSpiCommand - but only if not checking for a response
+  }
+
+  return retVal;
+}
+
 // Returns false if sensor fails to respond to I2C traffic
 sfe_ublox_status_e DevUBLOXGNSS::sendI2cCommand(ubxPacket *outgoingUBX)
 {
@@ -4338,15 +3592,87 @@ sfe_ublox_status_e DevUBLOXGNSS::waitForNoACKResponse(ubxPacket *outgoingUBX, ui
   return (SFE_UBLOX_STATUS_TIMEOUT);
 }
 
+// v4 scaffolding: 
+// Factory: hands back the opaque per-message object a callback's ubxCallbackDataCommon_t* points
+// at, so getUbxMessageField() can navigate its field table and extract a named field's
+// value - see AGENTS.md "getUbxMessagePtr Factory design pattern".
+ubxMessage *DevUBLOXGNSS::getUbxMessagePtr(ubxCallbackDataCommon_t *theData)
+{
+    if (theData == nullptr)
+        return nullptr;
+    return theData->messagePtr;
+}
+
+// v4 scaffolding: 
+// Factory: extracts a named field from the message a callback just fired for, reading from its
+// _callbackStorage (the copy storePayload() froze when the callback was queued) rather than its
+// live _storage (which may already have been overwritten by newer data by the time the callback
+// actually runs). See AGENTS.md "getUbxMessageField will also need to use a Factory
+// method / design pattern to handle the different return types. If this is not possible, identify
+// the nearest alternative strategy which is possible" - see ubxAnyType::operator double() above for
+// why this returns ubxAnyType rather than a genuinely per-field C++ type.
+ubxAnyType DevUBLOXGNSS::getUbxMessageFieldCallback(ubxMessage *theMessage, const char *fieldName)
+{
+    ubxAnyType value;
+    value.ubxDataType = 0xFF; // Sentinel - ubxDataType8bit() can never produce this value; operator double() returns 0.0 for it
+    value.U8 = 0;
+    if (theMessage != nullptr)
+        theMessage->extractFieldFrom(theMessage->_callbackStorage, fieldName, &value);
+    return value;
+}
+
+// v4 scaffolding: 
+// Factory: extracts a named field from the message, reading from its live _storage
+ubxAnyType DevUBLOXGNSS::getUbxMessageField(ubxMessage *theMessage, const char *fieldName)
+{
+    ubxAnyType value;
+    value.ubxDataType = 0xFF; // Sentinel - ubxDataType8bit() can never produce this value; operator double() returns 0.0 for it
+    value.U8 = 0;
+    if (theMessage != nullptr)
+        theMessage->extractFieldFrom(theMessage->_storage, fieldName, &value);
+    return value;
+}
+
+// v4 scaffolding: 
+// Factory: hands back the opaque per-message object a callback's nmeaCallbackDataCommon_t* points
+// at, so getNmeaMessageField() can navigate its field table and extract a named field's
+// value
+nmeaMessage *DevUBLOXGNSS::getNmeaMessagePtr(nmeaCallbackDataCommon_t *theData)
+{
+    if (theData == nullptr)
+        return nullptr;
+    return theData->messagePtr;
+}
+
+// v4 scaffolding: 
+// Factory: extracts a named field from the message a callback just fired for, reading from its
+// _callbackStorage (the copy storePayload() froze when the callback was queued) rather than its
+// live _storage (which may already have been overwritten by newer data by the time the callback
+// actually runs).
+String DevUBLOXGNSS::getNmeaMessageFieldCallback(nmeaMessage *theMessage, const char *fieldName)
+{
+    String value = String("");
+    if (theMessage != nullptr)
+        theMessage->extractFieldFrom(theMessage->_callbackStorage, fieldName, value);
+    return value;
+}
+
+// v4 scaffolding: 
+// Factory: extracts a named field from the message, reading from its live _storage
+String DevUBLOXGNSS::getNmeaMessageField(nmeaMessage *theMessage, const char *fieldName)
+{
+    String value = String("");
+    if (theMessage != nullptr)
+        theMessage->extractFieldFrom(theMessage->_storage, fieldName, value);
+    return value;
+}
+
 // v4 scaffolding: generic replacement for the removed per-message setAuto<MSG>callbackPtr()
 // functions - see AGENTS.md "setAutoCallbackPtr". Finds the registered message by name and wires
 // up the callback; does not itself touch the module's message-output rate (see the declaration's
 // comment in u-blox_GNSS.h and CallbackExample1_NAVHPPOSLLH.ino).
-bool DevUBLOXGNSS::setAutoCallbackPtr(const char *classStr, const char *idStr, void (*callbackPointerPtr)(ubxCallbackDataCommon_t *), uint8_t layer, uint16_t maxWait)
+bool DevUBLOXGNSS::setAutoCallbackPtr(const char *classStr, const char *idStr, void (*callbackPointerPtr)(ubxCallbackDataCommon_t *))
 {
-  (void)layer;   // Reserved for future use - see the declaration's comment in u-blox_GNSS.h
-  (void)maxWait; // Reserved for future use - see the declaration's comment in u-blox_GNSS.h
-
   ubxMessage *msg = ubxMessages.findByName(classStr, idStr);
   if (msg == nullptr) // No message registered under that classStr/idStr
     return false;
@@ -4358,6 +3684,24 @@ bool DevUBLOXGNSS::setAutoCallbackPtr(const char *classStr, const char *idStr, v
     return false;
 
   return (ubxMessages.setCallback(msg->_Class, msg->_ID, callbackPointerPtr) == SFE_UBLOX_STATUS_SUCCESS);
+}
+
+// v4 scaffolding: generic replacement for the removed per-message setNMEA<MSG>callbackPtr()
+// functions. Finds the registered message by name and wires up the callback;
+// does not itself touch the module's message-output rate.
+bool DevUBLOXGNSS::setNmeaCallbackPtr(const char *msgId, void (*callbackPointerPtr)(nmeaCallbackDataCommon_t *))
+{
+  nmeaMessage *msg = nmeaMessages.findByName(msgId);
+  if (msg == nullptr) // No message registered under that classStr/idStr
+    return false;
+
+  if (!msg->initStorage()) // Check that RAM has been allocated for the message data
+    return false;
+
+  if (!msg->initCallbackStorage()) // Check that RAM has been allocated for the callback copy
+    return false;
+
+  return (nmeaMessages.setCallback(msg->_msgId, callbackPointerPtr) == SFE_UBLOX_STATUS_SUCCESS);
 }
 
 // Check if any callbacks are waiting to be processed
@@ -4379,6 +3723,19 @@ void DevUBLOXGNSS::checkCallbacks(void)
       ubxCallbackDataCommon_t commonData;
       commonData.Class = msg->_Class;
       commonData.ID = msg->_ID;
+      commonData.messagePtr = msg;
+      msg->_callbackPtr(&commonData); // Call the callback
+      msg->_callbackDataValid = false; // Mark the callback copy as stale
+    }
+  }
+
+  // v4 scaffolding: generic callback dispatch for every NMEA message registered in the new registry
+  for (auto msg : nmeaMessages.nmeaMessageVectors)
+  {
+    if ((msg->_callbackPtr != nullptr) && msg->_callbackDataValid)
+    {
+      nmeaCallbackDataCommon_t commonData;
+      memcpy(commonData.msgId, msg->_msgId, 3);
       commonData.messagePtr = msg;
       msg->_callbackPtr(&commonData); // Call the callback
       msg->_callbackDataValid = false; // Mark the callback copy as stale
@@ -4553,118 +3910,6 @@ void DevUBLOXGNSS::checkCallbacks(void)
           packetUBXSECSIG->callbackPointerPtr(packetUBXSECSIG->callbackData); // Call the callback
         }
         packetUBXSECSIG->automaticFlags.flags.bits.callbackCopyValid = false; // Mark the data as stale
-      }
-
-  if (storageNMEAGPGGA != nullptr)                                            // If RAM has been allocated for message storage
-    if (storageNMEAGPGGA->callbackCopy != nullptr)                            // If RAM has been allocated for the copy of the data
-      if (storageNMEAGPGGA->automaticFlags.flags.bits.callbackCopyValid == 1) // If the copy of the data is valid
-      {
-        if (storageNMEAGPGGA->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          storageNMEAGPGGA->callbackPointerPtr(storageNMEAGPGGA->callbackCopy); // Call the callback
-        }
-        storageNMEAGPGGA->automaticFlags.flags.bits.callbackCopyValid = 0; // Mark the data as stale
-      }
-
-  if (storageNMEAGNGGA != nullptr)                                            // If RAM has been allocated for message storage
-    if (storageNMEAGNGGA->callbackCopy != nullptr)                            // If RAM has been allocated for the copy of the data
-      if (storageNMEAGNGGA->automaticFlags.flags.bits.callbackCopyValid == 1) // If the copy of the data is valid
-      {
-        if (storageNMEAGNGGA->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          storageNMEAGNGGA->callbackPointerPtr(storageNMEAGNGGA->callbackCopy); // Call the callback
-        }
-        storageNMEAGNGGA->automaticFlags.flags.bits.callbackCopyValid = 0; // Mark the data as stale
-      }
-
-  if (storageNMEAGPVTG != nullptr)                                            // If RAM has been allocated for message storage
-    if (storageNMEAGPVTG->callbackCopy != nullptr)                            // If RAM has been allocated for the copy of the data
-      if (storageNMEAGPVTG->automaticFlags.flags.bits.callbackCopyValid == 1) // If the copy of the data is valid
-      {
-        if (storageNMEAGPVTG->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          storageNMEAGPVTG->callbackPointerPtr(storageNMEAGPVTG->callbackCopy); // Call the callback
-        }
-        storageNMEAGPVTG->automaticFlags.flags.bits.callbackCopyValid = 0; // Mark the data as stale
-      }
-
-  if (storageNMEAGNVTG != nullptr)                                            // If RAM has been allocated for message storage
-    if (storageNMEAGNVTG->callbackCopy != nullptr)                            // If RAM has been allocated for the copy of the data
-      if (storageNMEAGNVTG->automaticFlags.flags.bits.callbackCopyValid == 1) // If the copy of the data is valid
-      {
-        if (storageNMEAGNVTG->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          storageNMEAGNVTG->callbackPointerPtr(storageNMEAGNVTG->callbackCopy); // Call the callback
-        }
-        storageNMEAGNVTG->automaticFlags.flags.bits.callbackCopyValid = 0; // Mark the data as stale
-      }
-
-  if (storageNMEAGPRMC != nullptr)                                            // If RAM has been allocated for message storage
-    if (storageNMEAGPRMC->callbackCopy != nullptr)                            // If RAM has been allocated for the copy of the data
-      if (storageNMEAGPRMC->automaticFlags.flags.bits.callbackCopyValid == 1) // If the copy of the data is valid
-      {
-        if (storageNMEAGPRMC->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          storageNMEAGPRMC->callbackPointerPtr(storageNMEAGPRMC->callbackCopy); // Call the callback
-        }
-        storageNMEAGPRMC->automaticFlags.flags.bits.callbackCopyValid = 0; // Mark the data as stale
-      }
-
-  if (storageNMEAGNRMC != nullptr)                                            // If RAM has been allocated for message storage
-    if (storageNMEAGNRMC->callbackCopy != nullptr)                            // If RAM has been allocated for the copy of the data
-      if (storageNMEAGNRMC->automaticFlags.flags.bits.callbackCopyValid == 1) // If the copy of the data is valid
-      {
-        if (storageNMEAGNRMC->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          storageNMEAGNRMC->callbackPointerPtr(storageNMEAGNRMC->callbackCopy); // Call the callback
-        }
-        storageNMEAGNRMC->automaticFlags.flags.bits.callbackCopyValid = 0; // Mark the data as stale
-      }
-
-  if (storageNMEAGPZDA != nullptr)                                            // If RAM has been allocated for message storage
-    if (storageNMEAGPZDA->callbackCopy != nullptr)                            // If RAM has been allocated for the copy of the data
-      if (storageNMEAGPZDA->automaticFlags.flags.bits.callbackCopyValid == 1) // If the copy of the data is valid
-      {
-        if (storageNMEAGPZDA->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          storageNMEAGPZDA->callbackPointerPtr(storageNMEAGPZDA->callbackCopy); // Call the callback
-        }
-        storageNMEAGPZDA->automaticFlags.flags.bits.callbackCopyValid = 0; // Mark the data as stale
-      }
-
-  if (storageNMEAGNZDA != nullptr)                                            // If RAM has been allocated for message storage
-    if (storageNMEAGNZDA->callbackCopy != nullptr)                            // If RAM has been allocated for the copy of the data
-      if (storageNMEAGNZDA->automaticFlags.flags.bits.callbackCopyValid == 1) // If the copy of the data is valid
-      {
-        if (storageNMEAGNZDA->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          // debugPrintln("checkCallbacks: calling callbackPtr for GNZDA"); // Not important
-          storageNMEAGNZDA->callbackPointerPtr(storageNMEAGNZDA->callbackCopy); // Call the callback
-        }
-        storageNMEAGNZDA->automaticFlags.flags.bits.callbackCopyValid = 0; // Mark the data as stale
-      }
-
-  if (storageNMEAGPGST != nullptr)                                            // If RAM has been allocated for message storage
-    if (storageNMEAGPGST->callbackCopy != nullptr)                            // If RAM has been allocated for the copy of the data
-      if (storageNMEAGPGST->automaticFlags.flags.bits.callbackCopyValid == 1) // If the copy of the data is valid
-      {
-        if (storageNMEAGPGST->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          storageNMEAGPGST->callbackPointerPtr(storageNMEAGPGST->callbackCopy); // Call the callback
-        }
-        storageNMEAGPGST->automaticFlags.flags.bits.callbackCopyValid = 0; // Mark the data as stale
-      }
-
-  if (storageNMEAGNGST != nullptr)                                            // If RAM has been allocated for message storage
-    if (storageNMEAGNGST->callbackCopy != nullptr)                            // If RAM has been allocated for the copy of the data
-      if (storageNMEAGNGST->automaticFlags.flags.bits.callbackCopyValid == 1) // If the copy of the data is valid
-      {
-        if (storageNMEAGNGST->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          // debugPrintln("checkCallbacks: calling callbackPtr for GNGST"); // Not important
-          storageNMEAGNGST->callbackPointerPtr(storageNMEAGNGST->callbackCopy); // Call the callback
-        }
-        storageNMEAGNGST->automaticFlags.flags.bits.callbackCopyValid = 0; // Mark the data as stale
       }
 
   if (storageRTCM1005 != nullptr)                                            // If RAM has been allocated for message storage
@@ -8393,7 +7638,7 @@ uint8_t DevUBLOXGNSS::getCfgValueSizeBytes(const uint32_t key)
 //   1. If setVal8 succeeds: flags reflect the confirmed state
 //   2. If setVal8 fails: read back the actual rate with getVal8 (ground truth)
 //   3. If both fail (e.g. I2C buffer congestion): flags reflect the intended state,
-//      preventing the silent-failure mode where getPVT() etc. return false forever
+//      preventing the silent-failure mode where getNAVPVT() etc. return false forever
 bool DevUBLOXGNSS::setAutoMsgRateVal(uint32_t key, uint8_t rate, bool implicitUpdate, ubxAutomaticFlags &flags, uint8_t layer, uint16_t maxWait)
 {
   bool ok = setVal8(key, rate, layer, maxWait);
@@ -8419,7 +7664,6 @@ bool DevUBLOXGNSS::setAutoMsgRateVal(uint32_t key, uint8_t rate, bool implicitUp
   return ok;
 }
 
-// Get the latest Position/Velocity/Time solution and fill all global variables
 bool DevUBLOXGNSS::getUBX(const char *Class, const char *ID, uint16_t maxWait)
 {
   ubxMessage *msg = ubxMessages.findByName(Class, ID);
@@ -8449,8 +7693,8 @@ bool DevUBLOXGNSS::getUBX(uint8_t Class, uint8_t ID, uint16_t maxWait)
     bool queried;
     if (ubxMessages.moduleQueried(Class, ID, &queried) != SFE_UBLOX_STATUS_SUCCESS)
       return false;
-    if (queried) // Fresh data arrived - report it, then mark it read. A single bool per message,
-      ubxMessages.setModuleQueried(Class, ID, false); // not a per-field bitmask - see AGENTS.md "moduleQueried"
+    if (queried) // Fresh data arrived - report it, then mark it read ("one-shot")
+      ubxMessages.setModuleQueried(Class, ID, false);
     return queried;
   }
   else if (automatic && !implicitUpdate)
@@ -8469,21 +7713,19 @@ bool DevUBLOXGNSS::getUBX(uint8_t Class, uint8_t ID, uint16_t maxWait)
     // The data is parsed as part of processing the response
     sfe_ublox_status_e retVal = sendCommand(&packetCfg, maxWait);
 
-    if (retVal == SFE_UBLOX_STATUS_DATA_RECEIVED)
+    if ((retVal == SFE_UBLOX_STATUS_DATA_RECEIVED) || (retVal == SFE_UBLOX_STATUS_DATA_OVERWRITTEN))
+    {
+      // Again, we should treat this as a one-shot
+      ubxMessages.setModuleQueried(Class, ID, false);
       return true;
-
-    if (retVal == SFE_UBLOX_STATUS_DATA_OVERWRITTEN)
-      return true;
-
-    return false;
+    }
   }
+
+  return false;
 }
 
-bool DevUBLOXGNSS::getUBXfield(uint8_t Class, uint8_t ID, const char *field, ubxAnyType *value, uint16_t maxWait)
+bool DevUBLOXGNSS::getUBXfield(uint8_t Class, uint8_t ID, const char *field, ubxAnyType *value)
 {
-  (void)maxWait; // Reserved: getUBXfield() reads whatever is currently in storage - it does not itself
-                 // poll the module. Call getUBX() (or a wrapper like getPVT()) first to ensure data has
-                 // actually arrived - see AGENTS.md "moduleQueried" for why field getters no longer poll.
   if (ubxMessages.initStorage(Class, ID) != SFE_UBLOX_STATUS_SUCCESS)
     return false;
 
@@ -8530,7 +7772,7 @@ bool DevUBLOXGNSS::setAutoUBXrate(uint8_t Class, uint8_t ID, uint8_t rate, bool 
   //   1. If setVal8 succeeds: flags reflect the confirmed state
   //   2. If setVal8 fails: read back the actual rate with getVal8 (ground truth)
   //   3. If both fail (e.g. I2C buffer congestion): flags reflect the intended state,
-  //      preventing the silent-failure mode where getPVT() etc. return false forever
+  //      preventing the silent-failure mode where getNAVPVT() etc. return false forever
   bool ok = setVal8(key, rate, layer, maxWait);
   if (ok)
   {
@@ -8604,6 +7846,143 @@ void DevUBLOXGNSS::logUBX(const char *Class, const char *ID, bool enabled)
 void DevUBLOXGNSS::logUBX(uint8_t Class, uint8_t ID, bool enabled)
 {
   ubxMessages.setAddToFileBuffer(Class, ID, enabled);
+}
+
+// v4 NMEA scaffolding
+
+bool DevUBLOXGNSS::getNMEA(const char *msgId, uint16_t maxWait)
+{
+  if (nmeaMessages.initStorage(msgId) != SFE_UBLOX_STATUS_SUCCESS)
+    return false;
+
+  bool automatic; // We could / should probably use isThisNMEAauto() here...?
+  if (nmeaMessages.isAutomatic(msgId, &automatic) != SFE_UBLOX_STATUS_SUCCESS)
+    return false;
+
+  bool implicitUpdate;
+  if (nmeaMessages.implicitUpdate(msgId, &implicitUpdate) != SFE_UBLOX_STATUS_SUCCESS)
+    return false;
+
+  if (automatic && implicitUpdate)
+  {
+    // The module is automatically reporting this message; just check whether we got unread data
+    checkUbloxInternal(&packetCfg, 0, 0); // Parse any incoming data. Don't overwrite the requested Class and ID
+    bool queried;
+    if (nmeaMessages.moduleQueried(msgId, &queried) != SFE_UBLOX_STATUS_SUCCESS)
+      return false;
+    if (queried) // Fresh data arrived - report it, then mark it read ("one-shot")
+      nmeaMessages.setModuleQueried(msgId, false);
+    return queried;
+  }
+  else if (automatic && !implicitUpdate)
+  {
+    // Someone else has to call checkUblox for us...
+    return false;
+  }
+  else
+  {
+    // Not automatic - poll explicitly for this specific msgId using the GN talker ID
+
+    // The data is parsed as part of processing the response
+    sfe_ublox_status_e retVal = pollNMEA(msgId, maxWait);
+
+    if ((retVal == SFE_UBLOX_STATUS_DATA_RECEIVED) || (retVal == SFE_UBLOX_STATUS_DATA_OVERWRITTEN))
+    {
+      // Again, we should treat this as a one-shot
+      nmeaMessages.setModuleQueried(msgId, false);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool DevUBLOXGNSS::getNMEAfield(const char *msgId, const char *field, String &value)
+{
+  if (nmeaMessages.initStorage(msgId) != SFE_UBLOX_STATUS_SUCCESS)
+    return false;
+
+  return (nmeaMessages.extractValue(msgId, field, value) == SFE_UBLOX_STATUS_SUCCESS);
+}
+
+bool DevUBLOXGNSS::setAutoNMEA(const char *msgId, bool enabled, uint8_t layer, uint16_t maxWait)
+{
+  return setAutoNMEArate(msgId, enabled ? 1 : 0, true, layer, maxWait);
+}
+bool DevUBLOXGNSS::setAutoNMEA(const char *msgId, bool enabled, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
+{
+  return setAutoNMEArate(msgId, enabled ? 1 : 0, implicitUpdate, layer, maxWait);
+}
+bool DevUBLOXGNSS::setAutoNMEArate(const char *msgId, uint8_t rate, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
+{
+  if (nmeaMessages.initStorage(msgId) != SFE_UBLOX_STATUS_SUCCESS) // Only attempt this if RAM allocation was successful
+    return false;
+
+  if (rate > 127)
+    rate = 127;
+
+  uint32_t key;
+  if (nmeaMessages.getMsgOutKey(msgId, _commType, &key) != SFE_UBLOX_STATUS_SUCCESS)
+    return false;
+
+  // Sets the message output rate and updates automaticFlags with a three-tier strategy:
+  //   1. If setVal8 succeeds: flags reflect the confirmed state
+  //   2. If setVal8 fails: read back the actual rate with getVal8 (ground truth)
+  //   3. If both fail (e.g. I2C buffer congestion): flags reflect the intended state,
+  //      preventing the silent-failure mode where getNAVPVT() etc. return false forever
+  bool ok = setVal8(key, rate, layer, maxWait);
+  if (ok)
+  {
+    nmeaMessages.setModuleQueried(msgId, false);
+    nmeaMessages.setAutomatic(msgId, (rate > 0));
+    nmeaMessages.setImplicitUpdate(msgId, implicitUpdate);
+  }
+  else
+  {
+    uint8_t actualRate;
+    ok = getVal8(key, &actualRate, layer, maxWait);
+    if (ok)
+    {
+      nmeaMessages.setAutomatic(msgId, (actualRate > 0));
+    }
+    else
+    {
+      nmeaMessages.setAutomatic(msgId, (rate > 0));
+    }
+    nmeaMessages.setModuleQueried(msgId, false);
+    nmeaMessages.setImplicitUpdate(msgId, implicitUpdate);
+  }
+  return ok;
+}
+bool DevUBLOXGNSS::assumeAutoNMEA(const char *msgId, bool enabled, bool implicitUpdate)
+{
+  if (nmeaMessages.initStorage(msgId) != SFE_UBLOX_STATUS_SUCCESS) // Only attempt this if RAM allocation was successful
+    return false;
+
+  bool automatic;
+  if (nmeaMessages.isAutomatic(msgId, &automatic) != SFE_UBLOX_STATUS_SUCCESS)
+    return false;
+
+  bool implicit;
+  if (nmeaMessages.implicitUpdate(msgId, &implicit) != SFE_UBLOX_STATUS_SUCCESS)
+    return false;
+
+  bool changes = automatic != enabled || implicit != implicitUpdate;
+  if (changes)
+  {
+    nmeaMessages.setAutomatic(msgId, enabled);
+    nmeaMessages.setImplicitUpdate(msgId, implicitUpdate);
+  }
+
+  return changes;
+}
+void DevUBLOXGNSS::flushNMEA(const char *msgId)
+{
+  nmeaMessages.setModuleQueried(msgId, false);
+}
+void DevUBLOXGNSS::logNMEA(const char *msgId, bool enabled)
+{
+  nmeaMessages.setAddToFileBuffer(msgId, enabled);
 }
 
 // ***** NAV SAT automatic support
@@ -10080,741 +9459,6 @@ uint32_t DevUBLOXGNSS::getProcessNMEAMask()
   return (_processNMEA.all);
 }
 
-// Initiate automatic storage of NMEA GPGGA messages
-
-// Get the most recent GPGGA message
-// Return 0 if the message has not been received from the module
-// Return 1 if the data is valid but has been read before
-// Return 2 if the data is valid and is fresh/unread
-uint8_t DevUBLOXGNSS::getLatestNMEAGPGGA(NMEA_GGA_data_t *data)
-{
-  if (storageNMEAGPGGA == nullptr)
-    initStorageNMEAGPGGA();        // Check that RAM has been allocated for the message
-  if (storageNMEAGPGGA == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-
-  memcpy(data, &storageNMEAGPGGA->completeCopy, sizeof(NMEA_GGA_data_t)); // Copy the complete copy
-
-  uint8_t result = 0;
-  if (storageNMEAGPGGA->automaticFlags.flags.bits.completeCopyValid == 1) // Is the complete copy valid?
-  {
-    result = 1;
-    if (storageNMEAGPGGA->automaticFlags.flags.bits.completeCopyRead == 0) // Has the data already been read?
-    {
-      result = 2;
-      storageNMEAGPGGA->automaticFlags.flags.bits.completeCopyRead = 1; // Mark the data as read
-    }
-  }
-
-  return (result);
-}
-
-// Enable a callback on the arrival of a GPGGA message
-bool DevUBLOXGNSS::setNMEAGPGGAcallbackPtr(void (*callbackPointerPtr)(NMEA_GGA_data_t *))
-{
-  if (storageNMEAGPGGA == nullptr)
-    initStorageNMEAGPGGA();        // Check that RAM has been allocated for the message
-  if (storageNMEAGPGGA == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (storageNMEAGPGGA->callbackCopy == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    storageNMEAGPGGA->callbackCopy = new NMEA_GGA_data_t;
-  }
-
-  if (storageNMEAGPGGA->callbackCopy == nullptr)
-  {
-    debugPrintln("setNMEAGPGGAcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGPGGA->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// Private: allocate RAM for incoming NMEA GPGGA messages and initialize it
-bool DevUBLOXGNSS::initStorageNMEAGPGGA()
-{
-  storageNMEAGPGGA = new NMEA_GPGGA_t; // Allocate RAM for the main struct
-  if (storageNMEAGPGGA == nullptr)
-  {
-    debugPrintln("initStorageNMEAGPGGA: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGPGGA->workingCopy.length = 0;                            // Clear the data length
-  memset(storageNMEAGPGGA->workingCopy.nmea, 0, NMEA_GGA_MAX_LENGTH);  // Clear the nmea storage
-  storageNMEAGPGGA->completeCopy.length = 0;                           // Clear the data length
-  memset(storageNMEAGPGGA->completeCopy.nmea, 0, NMEA_GGA_MAX_LENGTH); // Clear the nmea storage
-
-  storageNMEAGPGGA->callbackPointerPtr = nullptr; // Clear the callback pointers
-  storageNMEAGPGGA->callbackCopy = nullptr;
-
-  storageNMEAGPGGA->automaticFlags.flags.all = 0; // Mark the data as invalid/stale and unread
-
-  return (true);
-}
-
-uint8_t DevUBLOXGNSS::getLatestNMEAGNGGA(NMEA_GGA_data_t *data)
-{
-  if (storageNMEAGNGGA == nullptr)
-    initStorageNMEAGNGGA();        // Check that RAM has been allocated for the message
-  if (storageNMEAGNGGA == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-
-  memcpy(data, &storageNMEAGNGGA->completeCopy, sizeof(NMEA_GGA_data_t)); // Copy the complete copy
-
-  uint8_t result = 0;
-  if (storageNMEAGNGGA->automaticFlags.flags.bits.completeCopyValid == 1) // Is the complete copy valid?
-  {
-    result = 1;
-    if (storageNMEAGNGGA->automaticFlags.flags.bits.completeCopyRead == 0) // Has the data already been read?
-    {
-      result = 2;
-      storageNMEAGNGGA->automaticFlags.flags.bits.completeCopyRead = 1; // Mark the data as read
-    }
-  }
-
-  return (result);
-}
-
-bool DevUBLOXGNSS::setNMEAGNGGAcallbackPtr(void (*callbackPointerPtr)(NMEA_GGA_data_t *))
-{
-  if (storageNMEAGNGGA == nullptr)
-    initStorageNMEAGNGGA();        // Check that RAM has been allocated for the message
-  if (storageNMEAGNGGA == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (storageNMEAGNGGA->callbackCopy == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    storageNMEAGNGGA->callbackCopy = new NMEA_GGA_data_t;
-  }
-
-  if (storageNMEAGNGGA->callbackCopy == nullptr)
-  {
-    debugPrintln("setNMEAGNGGAcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGNGGA->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// Private: allocate RAM for incoming NMEA GNGGA messages and initialize it
-bool DevUBLOXGNSS::initStorageNMEAGNGGA()
-{
-  storageNMEAGNGGA = new NMEA_GNGGA_t; // Allocate RAM for the main struct
-  if (storageNMEAGNGGA == nullptr)
-  {
-    debugPrintln("initStorageNMEAGNGGA: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGNGGA->workingCopy.length = 0;                            // Clear the data length
-  memset(storageNMEAGNGGA->workingCopy.nmea, 0, NMEA_GGA_MAX_LENGTH);  // Clear the nmea storage
-  storageNMEAGNGGA->completeCopy.length = 0;                           // Clear the data length
-  memset(storageNMEAGNGGA->completeCopy.nmea, 0, NMEA_GGA_MAX_LENGTH); // Clear the nmea storage
-
-  storageNMEAGNGGA->callbackPointerPtr = nullptr; // Clear the callback pointers
-  storageNMEAGNGGA->callbackCopy = nullptr;
-
-  storageNMEAGNGGA->automaticFlags.flags.all = 0; // Mark the data as invalid/stale and unread
-
-  return (true);
-}
-
-// Initiate automatic storage of NMEA GPVTG messages
-
-// Get the most recent GPVTG message
-// Return 0 if the message has not been received from the module
-// Return 1 if the data is valid but has been read before
-// Return 2 if the data is valid and is fresh/unread
-uint8_t DevUBLOXGNSS::getLatestNMEAGPVTG(NMEA_VTG_data_t *data)
-{
-  if (storageNMEAGPVTG == nullptr)
-    initStorageNMEAGPVTG();        // Check that RAM has been allocated for the message
-  if (storageNMEAGPVTG == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-
-  memcpy(data, &storageNMEAGPVTG->completeCopy, sizeof(NMEA_VTG_data_t)); // Copy the complete copy
-
-  uint8_t result = 0;
-  if (storageNMEAGPVTG->automaticFlags.flags.bits.completeCopyValid == 1) // Is the complete copy valid?
-  {
-    result = 1;
-    if (storageNMEAGPVTG->automaticFlags.flags.bits.completeCopyRead == 0) // Has the data already been read?
-    {
-      result = 2;
-      storageNMEAGPVTG->automaticFlags.flags.bits.completeCopyRead = 1; // Mark the data as read
-    }
-  }
-
-  return (result);
-}
-
-// Enable a callback on the arrival of a GPVTG message
-bool DevUBLOXGNSS::setNMEAGPVTGcallbackPtr(void (*callbackPointerPtr)(NMEA_VTG_data_t *))
-{
-  if (storageNMEAGPVTG == nullptr)
-    initStorageNMEAGPVTG();        // Check that RAM has been allocated for the message
-  if (storageNMEAGPVTG == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (storageNMEAGPVTG->callbackCopy == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    storageNMEAGPVTG->callbackCopy = new NMEA_VTG_data_t;
-  }
-
-  if (storageNMEAGPVTG->callbackCopy == nullptr)
-  {
-    debugPrintln("setNMEAGPVTGcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGPVTG->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// Private: allocate RAM for incoming NMEA GPVTG messages and initialize it
-bool DevUBLOXGNSS::initStorageNMEAGPVTG()
-{
-  storageNMEAGPVTG = new NMEA_GPVTG_t; // Allocate RAM for the main struct
-  if (storageNMEAGPVTG == nullptr)
-  {
-    debugPrintln("initStorageNMEAGPVTG: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGPVTG->workingCopy.length = 0;                            // Clear the data length
-  memset(storageNMEAGPVTG->workingCopy.nmea, 0, NMEA_VTG_MAX_LENGTH);  // Clear the nmea storage
-  storageNMEAGPVTG->completeCopy.length = 0;                           // Clear the data length
-  memset(storageNMEAGPVTG->completeCopy.nmea, 0, NMEA_VTG_MAX_LENGTH); // Clear the nmea storage
-
-  storageNMEAGPVTG->callbackPointerPtr = nullptr; // Clear the callback pointers
-  storageNMEAGPVTG->callbackCopy = nullptr;
-
-  storageNMEAGPVTG->automaticFlags.flags.all = 0; // Mark the data as invalid/stale and unread
-
-  return (true);
-}
-
-uint8_t DevUBLOXGNSS::getLatestNMEAGNVTG(NMEA_VTG_data_t *data)
-{
-  if (storageNMEAGNVTG == nullptr)
-    initStorageNMEAGNVTG();        // Check that RAM has been allocated for the message
-  if (storageNMEAGNVTG == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-
-  memcpy(data, &storageNMEAGNVTG->completeCopy, sizeof(NMEA_VTG_data_t)); // Copy the complete copy
-
-  uint8_t result = 0;
-  if (storageNMEAGNVTG->automaticFlags.flags.bits.completeCopyValid == 1) // Is the complete copy valid?
-  {
-    result = 1;
-    if (storageNMEAGNVTG->automaticFlags.flags.bits.completeCopyRead == 0) // Has the data already been read?
-    {
-      result = 2;
-      storageNMEAGNVTG->automaticFlags.flags.bits.completeCopyRead = 1; // Mark the data as read
-    }
-  }
-
-  return (result);
-}
-
-bool DevUBLOXGNSS::setNMEAGNVTGcallbackPtr(void (*callbackPointerPtr)(NMEA_VTG_data_t *))
-{
-  if (storageNMEAGNVTG == nullptr)
-    initStorageNMEAGNVTG();        // Check that RAM has been allocated for the message
-  if (storageNMEAGNVTG == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (storageNMEAGNVTG->callbackCopy == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    storageNMEAGNVTG->callbackCopy = new NMEA_VTG_data_t;
-  }
-
-  if (storageNMEAGNVTG->callbackCopy == nullptr)
-  {
-    debugPrintln("setNMEAGNVTGcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGNVTG->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// Private: allocate RAM for incoming NMEA GNVTG messages and initialize it
-bool DevUBLOXGNSS::initStorageNMEAGNVTG()
-{
-  storageNMEAGNVTG = new NMEA_GNVTG_t; // Allocate RAM for the main struct
-  if (storageNMEAGNVTG == nullptr)
-  {
-    debugPrintln("initStorageNMEAGNVTG: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGNVTG->workingCopy.length = 0;                            // Clear the data length
-  memset(storageNMEAGNVTG->workingCopy.nmea, 0, NMEA_VTG_MAX_LENGTH);  // Clear the nmea storage
-  storageNMEAGNVTG->completeCopy.length = 0;                           // Clear the data length
-  memset(storageNMEAGNVTG->completeCopy.nmea, 0, NMEA_VTG_MAX_LENGTH); // Clear the nmea storage
-
-  storageNMEAGNVTG->callbackPointerPtr = nullptr; // Clear the callback pointers
-  storageNMEAGNVTG->callbackCopy = nullptr;
-
-  storageNMEAGNVTG->automaticFlags.flags.all = 0; // Mark the data as invalid/stale and unread
-
-  return (true);
-}
-
-// Initiate automatic storage of NMEA GPRMC messages
-
-// Get the most recent GPRMC message
-// Return 0 if the message has not been received from the module
-// Return 1 if the data is valid but has been read before
-// Return 2 if the data is valid and is fresh/unread
-uint8_t DevUBLOXGNSS::getLatestNMEAGPRMC(NMEA_RMC_data_t *data)
-{
-  if (storageNMEAGPRMC == nullptr)
-    initStorageNMEAGPRMC();        // Check that RAM has been allocated for the message
-  if (storageNMEAGPRMC == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-
-  memcpy(data, &storageNMEAGPRMC->completeCopy, sizeof(NMEA_RMC_data_t)); // Copy the complete copy
-
-  uint8_t result = 0;
-  if (storageNMEAGPRMC->automaticFlags.flags.bits.completeCopyValid == 1) // Is the complete copy valid?
-  {
-    result = 1;
-    if (storageNMEAGPRMC->automaticFlags.flags.bits.completeCopyRead == 0) // Has the data already been read?
-    {
-      result = 2;
-      storageNMEAGPRMC->automaticFlags.flags.bits.completeCopyRead = 1; // Mark the data as read
-    }
-  }
-
-  return (result);
-}
-
-// Enable a callback on the arrival of a GPRMC message
-bool DevUBLOXGNSS::setNMEAGPRMCcallbackPtr(void (*callbackPointerPtr)(NMEA_RMC_data_t *))
-{
-  if (storageNMEAGPRMC == nullptr)
-    initStorageNMEAGPRMC();        // Check that RAM has been allocated for the message
-  if (storageNMEAGPRMC == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (storageNMEAGPRMC->callbackCopy == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    storageNMEAGPRMC->callbackCopy = new NMEA_RMC_data_t;
-  }
-
-  if (storageNMEAGPRMC->callbackCopy == nullptr)
-  {
-    debugPrintln("setNMEAGPRMCcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGPRMC->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// Private: allocate RAM for incoming NMEA GPRMC messages and initialize it
-bool DevUBLOXGNSS::initStorageNMEAGPRMC()
-{
-  storageNMEAGPRMC = new NMEA_GPRMC_t; // Allocate RAM for the main struct
-  if (storageNMEAGPRMC == nullptr)
-  {
-    debugPrintln("initStorageNMEAGPRMC: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGPRMC->workingCopy.length = 0;                            // Clear the data length
-  memset(storageNMEAGPRMC->workingCopy.nmea, 0, NMEA_RMC_MAX_LENGTH);  // Clear the nmea storage
-  storageNMEAGPRMC->completeCopy.length = 0;                           // Clear the data length
-  memset(storageNMEAGPRMC->completeCopy.nmea, 0, NMEA_RMC_MAX_LENGTH); // Clear the nmea storage
-
-  storageNMEAGPRMC->callbackPointerPtr = nullptr; // Clear the callback pointers
-  storageNMEAGPRMC->callbackCopy = nullptr;
-
-  storageNMEAGPRMC->automaticFlags.flags.all = 0; // Mark the data as invalid/stale and unread
-
-  return (true);
-}
-
-uint8_t DevUBLOXGNSS::getLatestNMEAGNRMC(NMEA_RMC_data_t *data)
-{
-  if (storageNMEAGNRMC == nullptr)
-    initStorageNMEAGNRMC();        // Check that RAM has been allocated for the message
-  if (storageNMEAGNRMC == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-
-  memcpy(data, &storageNMEAGNRMC->completeCopy, sizeof(NMEA_RMC_data_t)); // Copy the complete copy
-
-  uint8_t result = 0;
-  if (storageNMEAGNRMC->automaticFlags.flags.bits.completeCopyValid == 1) // Is the complete copy valid?
-  {
-    result = 1;
-    if (storageNMEAGNRMC->automaticFlags.flags.bits.completeCopyRead == 0) // Has the data already been read?
-    {
-      result = 2;
-      storageNMEAGNRMC->automaticFlags.flags.bits.completeCopyRead = 1; // Mark the data as read
-    }
-  }
-
-  return (result);
-}
-
-bool DevUBLOXGNSS::setNMEAGNRMCcallbackPtr(void (*callbackPointerPtr)(NMEA_RMC_data_t *))
-{
-  if (storageNMEAGNRMC == nullptr)
-    initStorageNMEAGNRMC();        // Check that RAM has been allocated for the message
-  if (storageNMEAGNRMC == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (storageNMEAGNRMC->callbackCopy == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    storageNMEAGNRMC->callbackCopy = new NMEA_RMC_data_t;
-  }
-
-  if (storageNMEAGNRMC->callbackCopy == nullptr)
-  {
-    debugPrintln("setNMEAGNRMCcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGNRMC->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// Private: allocate RAM for incoming NMEA GNRMC messages and initialize it
-bool DevUBLOXGNSS::initStorageNMEAGNRMC()
-{
-  storageNMEAGNRMC = new NMEA_GNRMC_t; // Allocate RAM for the main struct
-  if (storageNMEAGNRMC == nullptr)
-  {
-    debugPrintln("initStorageNMEAGNRMC: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGNRMC->workingCopy.length = 0;                            // Clear the data length
-  memset(storageNMEAGNRMC->workingCopy.nmea, 0, NMEA_RMC_MAX_LENGTH);  // Clear the nmea storage
-  storageNMEAGNRMC->completeCopy.length = 0;                           // Clear the data length
-  memset(storageNMEAGNRMC->completeCopy.nmea, 0, NMEA_RMC_MAX_LENGTH); // Clear the nmea storage
-
-  storageNMEAGNRMC->callbackPointerPtr = nullptr; // Clear the callback pointers
-  storageNMEAGNRMC->callbackCopy = nullptr;
-
-  storageNMEAGNRMC->automaticFlags.flags.all = 0; // Mark the data as invalid/stale and unread
-
-  return (true);
-}
-
-// Initiate automatic storage of NMEA GPZDA messages
-
-// Get the most recent GPZDA message
-// Return 0 if the message has not been received from the module
-// Return 1 if the data is valid but has been read before
-// Return 2 if the data is valid and is fresh/unread
-uint8_t DevUBLOXGNSS::getLatestNMEAGPZDA(NMEA_ZDA_data_t *data)
-{
-  if (storageNMEAGPZDA == nullptr)
-    initStorageNMEAGPZDA();        // Check that RAM has been allocated for the message
-  if (storageNMEAGPZDA == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-
-  memcpy(data, &storageNMEAGPZDA->completeCopy, sizeof(NMEA_ZDA_data_t)); // Copy the complete copy
-
-  uint8_t result = 0;
-  if (storageNMEAGPZDA->automaticFlags.flags.bits.completeCopyValid == 1) // Is the complete copy valid?
-  {
-    result = 1;
-    if (storageNMEAGPZDA->automaticFlags.flags.bits.completeCopyRead == 0) // Has the data already been read?
-    {
-      result = 2;
-      storageNMEAGPZDA->automaticFlags.flags.bits.completeCopyRead = 1; // Mark the data as read
-    }
-  }
-
-  return (result);
-}
-
-// Enable a callback on the arrival of a GPZDA message
-bool DevUBLOXGNSS::setNMEAGPZDAcallbackPtr(void (*callbackPointerPtr)(NMEA_ZDA_data_t *))
-{
-  if (storageNMEAGPZDA == nullptr)
-    initStorageNMEAGPZDA();        // Check that RAM has been allocated for the message
-  if (storageNMEAGPZDA == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (storageNMEAGPZDA->callbackCopy == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    storageNMEAGPZDA->callbackCopy = new NMEA_ZDA_data_t;
-  }
-
-  if (storageNMEAGPZDA->callbackCopy == nullptr)
-  {
-    debugPrintln("setNMEAGPZDAcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGPZDA->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// Private: allocate RAM for incoming NMEA GPZDA messages and initialize it
-bool DevUBLOXGNSS::initStorageNMEAGPZDA()
-{
-  storageNMEAGPZDA = new NMEA_GPZDA_t; // Allocate RAM for the main struct
-  if (storageNMEAGPZDA == nullptr)
-  {
-    debugPrintln("initStorageNMEAGPZDA: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGPZDA->workingCopy.length = 0;                            // Clear the data length
-  memset(storageNMEAGPZDA->workingCopy.nmea, 0, NMEA_ZDA_MAX_LENGTH);  // Clear the nmea storage
-  storageNMEAGPZDA->completeCopy.length = 0;                           // Clear the data length
-  memset(storageNMEAGPZDA->completeCopy.nmea, 0, NMEA_ZDA_MAX_LENGTH); // Clear the nmea storage
-
-  storageNMEAGPZDA->callbackPointerPtr = nullptr; // Clear the callback pointers
-  storageNMEAGPZDA->callbackCopy = nullptr;
-
-  storageNMEAGPZDA->automaticFlags.flags.all = 0; // Mark the data as invalid/stale and unread
-
-  return (true);
-}
-
-uint8_t DevUBLOXGNSS::getLatestNMEAGNZDA(NMEA_ZDA_data_t *data)
-{
-  if (storageNMEAGNZDA == nullptr)
-    initStorageNMEAGNZDA();        // Check that RAM has been allocated for the message
-  if (storageNMEAGNZDA == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-
-  memcpy(data, &storageNMEAGNZDA->completeCopy, sizeof(NMEA_ZDA_data_t)); // Copy the complete copy
-
-  uint8_t result = 0;
-  if (storageNMEAGNZDA->automaticFlags.flags.bits.completeCopyValid == 1) // Is the complete copy valid?
-  {
-    result = 1;
-    if (storageNMEAGNZDA->automaticFlags.flags.bits.completeCopyRead == 0) // Has the data already been read?
-    {
-      result = 2;
-      storageNMEAGNZDA->automaticFlags.flags.bits.completeCopyRead = 1; // Mark the data as read
-    }
-  }
-
-  return (result);
-}
-
-bool DevUBLOXGNSS::setNMEAGNZDAcallbackPtr(void (*callbackPointerPtr)(NMEA_ZDA_data_t *))
-{
-  if (storageNMEAGNZDA == nullptr)
-    initStorageNMEAGNZDA();        // Check that RAM has been allocated for the message
-  if (storageNMEAGNZDA == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (storageNMEAGNZDA->callbackCopy == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    storageNMEAGNZDA->callbackCopy = new NMEA_ZDA_data_t;
-  }
-
-  if (storageNMEAGNZDA->callbackCopy == nullptr)
-  {
-    debugPrintln("setNMEAGNZDAcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGNZDA->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// Private: allocate RAM for incoming NMEA GNZDA messages and initialize it
-bool DevUBLOXGNSS::initStorageNMEAGNZDA()
-{
-  storageNMEAGNZDA = new NMEA_GNZDA_t; // Allocate RAM for the main struct
-  if (storageNMEAGNZDA == nullptr)
-  {
-    debugPrintln("initStorageNMEAGNZDA: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGNZDA->workingCopy.length = 0;                            // Clear the data length
-  memset(storageNMEAGNZDA->workingCopy.nmea, 0, NMEA_ZDA_MAX_LENGTH);  // Clear the nmea storage
-  storageNMEAGNZDA->completeCopy.length = 0;                           // Clear the data length
-  memset(storageNMEAGNZDA->completeCopy.nmea, 0, NMEA_ZDA_MAX_LENGTH); // Clear the nmea storage
-
-  storageNMEAGNZDA->callbackPointerPtr = nullptr; // Clear the callback pointers
-  storageNMEAGNZDA->callbackCopy = nullptr;
-
-  storageNMEAGNZDA->automaticFlags.flags.all = 0; // Mark the data as invalid/stale and unread
-
-  return (true);
-}
-
-// Initiate automatic storage of NMEA GPGST messages
-
-// Get the most recent GPGST message
-// Return 0 if the message has not been received from the module
-// Return 1 if the data is valid but has been read before
-// Return 2 if the data is valid and is fresh/unread
-uint8_t DevUBLOXGNSS::getLatestNMEAGPGST(NMEA_GST_data_t *data)
-{
-  if (storageNMEAGPGST == nullptr)
-    initStorageNMEAGPGST();        // Check that RAM has been allocated for the message
-  if (storageNMEAGPGST == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-
-  memcpy(data, &storageNMEAGPGST->completeCopy, sizeof(NMEA_GST_data_t)); // Copy the complete copy
-
-  uint8_t result = 0;
-  if (storageNMEAGPGST->automaticFlags.flags.bits.completeCopyValid == 1) // Is the complete copy valid?
-  {
-    result = 1;
-    if (storageNMEAGPGST->automaticFlags.flags.bits.completeCopyRead == 0) // Has the data already been read?
-    {
-      result = 2;
-      storageNMEAGPGST->automaticFlags.flags.bits.completeCopyRead = 1; // Mark the data as read
-    }
-  }
-
-  return (result);
-}
-
-// Enable a callback on the arrival of a GPGST message
-bool DevUBLOXGNSS::setNMEAGPGSTcallbackPtr(void (*callbackPointerPtr)(NMEA_GST_data_t *))
-{
-  if (storageNMEAGPGST == nullptr)
-    initStorageNMEAGPGST();        // Check that RAM has been allocated for the message
-  if (storageNMEAGPGST == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (storageNMEAGPGST->callbackCopy == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    storageNMEAGPGST->callbackCopy = new NMEA_GST_data_t;
-  }
-
-  if (storageNMEAGPGST->callbackCopy == nullptr)
-  {
-    debugPrintln("setNMEAGPGSTcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGPGST->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// Private: allocate RAM for incoming NMEA GPGST messages and initialize it
-bool DevUBLOXGNSS::initStorageNMEAGPGST()
-{
-  storageNMEAGPGST = new NMEA_GPGST_t; // Allocate RAM for the main struct
-  if (storageNMEAGPGST == nullptr)
-  {
-    debugPrintln("initStorageNMEAGPGST: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGPGST->workingCopy.length = 0;                            // Clear the data length
-  memset(storageNMEAGPGST->workingCopy.nmea, 0, NMEA_GST_MAX_LENGTH);  // Clear the nmea storage
-  storageNMEAGPGST->completeCopy.length = 0;                           // Clear the data length
-  memset(storageNMEAGPGST->completeCopy.nmea, 0, NMEA_GST_MAX_LENGTH); // Clear the nmea storage
-
-  storageNMEAGPGST->callbackPointerPtr = nullptr; // Clear the callback pointers
-  storageNMEAGPGST->callbackCopy = nullptr;
-
-  storageNMEAGPGST->automaticFlags.flags.all = 0; // Mark the data as invalid/stale and unread
-
-  return (true);
-}
-
-uint8_t DevUBLOXGNSS::getLatestNMEAGNGST(NMEA_GST_data_t *data)
-{
-  if (storageNMEAGNGST == nullptr)
-    initStorageNMEAGNGST();        // Check that RAM has been allocated for the message
-  if (storageNMEAGNGST == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-
-  memcpy(data, &storageNMEAGNGST->completeCopy, sizeof(NMEA_GST_data_t)); // Copy the complete copy
-
-  uint8_t result = 0;
-  if (storageNMEAGNGST->automaticFlags.flags.bits.completeCopyValid == 1) // Is the complete copy valid?
-  {
-    result = 1;
-    if (storageNMEAGNGST->automaticFlags.flags.bits.completeCopyRead == 0) // Has the data already been read?
-    {
-      result = 2;
-      storageNMEAGNGST->automaticFlags.flags.bits.completeCopyRead = 1; // Mark the data as read
-    }
-  }
-
-  return (result);
-}
-
-bool DevUBLOXGNSS::setNMEAGNGSTcallbackPtr(void (*callbackPointerPtr)(NMEA_GST_data_t *))
-{
-  if (storageNMEAGNGST == nullptr)
-    initStorageNMEAGNGST();        // Check that RAM has been allocated for the message
-  if (storageNMEAGNGST == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (storageNMEAGNGST->callbackCopy == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    storageNMEAGNGST->callbackCopy = new NMEA_GST_data_t;
-  }
-
-  if (storageNMEAGNGST->callbackCopy == nullptr)
-  {
-    debugPrintln("setNMEAGNGSTcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGNGST->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// Private: allocate RAM for incoming NMEA GNGST messages and initialize it
-bool DevUBLOXGNSS::initStorageNMEAGNGST()
-{
-  storageNMEAGNGST = new NMEA_GNGST_t; // Allocate RAM for the main struct
-  if (storageNMEAGNGST == nullptr)
-  {
-    debugPrintln("initStorageNMEAGNGST: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  storageNMEAGNGST->workingCopy.length = 0;                            // Clear the data length
-  memset(storageNMEAGNGST->workingCopy.nmea, 0, NMEA_GST_MAX_LENGTH);  // Clear the nmea storage
-  storageNMEAGNGST->completeCopy.length = 0;                           // Clear the data length
-  memset(storageNMEAGNGST->completeCopy.nmea, 0, NMEA_GST_MAX_LENGTH); // Clear the nmea storage
-
-  storageNMEAGNGST->callbackPointerPtr = nullptr; // Clear the callback pointers
-  storageNMEAGNGST->callbackCopy = nullptr;
-
-  storageNMEAGNGST->automaticFlags.flags.all = 0; // Mark the data as invalid/stale and unread
-
-  return (true);
-}
-
 // Private: allocate RAM for incoming non-Auto NMEA messages and initialize it
 bool DevUBLOXGNSS::initStorageNMEA()
 {
@@ -11119,177 +9763,187 @@ uint16_t DevUBLOXGNSS::getNavigationRate(uint8_t layer, uint16_t maxWait) // Uns
 
 // ***** DOP Helper Functions
 
-uint16_t DevUBLOXGNSS::getGeometricDOP(uint16_t maxWait)
+bool DevUBLOXGNSS::getNAVDOP(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_DOP, maxWait);
+}
+
+uint16_t DevUBLOXGNSS::getGeometricDOP()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "gDOP", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "gDOP", &value))
     return 0;
   return value.U2;
 }
 
-uint16_t DevUBLOXGNSS::getPositionDOP(uint16_t maxWait)
+uint16_t DevUBLOXGNSS::getPositionDOP()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "pDOP", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "pDOP", &value))
     return 0;
   return value.U2;
 }
 
-uint16_t DevUBLOXGNSS::getTimeDOP(uint16_t maxWait)
+uint16_t DevUBLOXGNSS::getTimeDOP()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "tDOP", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "tDOP", &value))
     return 0;
   return value.U2;
 }
 
-uint16_t DevUBLOXGNSS::getVerticalDOP(uint16_t maxWait)
+uint16_t DevUBLOXGNSS::getVerticalDOP()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "vDOP", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "vDOP", &value))
     return 0;
   return value.U2;
 }
 
-uint16_t DevUBLOXGNSS::getHorizontalDOP(uint16_t maxWait)
+uint16_t DevUBLOXGNSS::getHorizontalDOP()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "hDOP", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "hDOP", &value))
     return 0;
   return value.U2;
 }
 
-uint16_t DevUBLOXGNSS::getNorthingDOP(uint16_t maxWait)
+uint16_t DevUBLOXGNSS::getNorthingDOP()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "nDOP", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "nDOP", &value))
     return 0;
   return value.U2;
 }
 
-uint16_t DevUBLOXGNSS::getEastingDOP(uint16_t maxWait)
+uint16_t DevUBLOXGNSS::getEastingDOP()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "eDOP", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DOP, "eDOP", &value))
     return 0;
   return value.U2;
 }
 
 // ***** ATT Helper Functions
 
-float DevUBLOXGNSS::getATTroll(uint16_t maxWait) // Returned as degrees
+bool DevUBLOXGNSS::getNAVATT(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_ATT, maxWait);
+}
+
+float DevUBLOXGNSS::getATTroll() // Returned as degrees
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_ATT, "roll", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_ATT, "roll", &value))
     return 0;
   return ((float)value.I4 / 100000.0); // Convert to degrees
 }
 
-float DevUBLOXGNSS::getATTpitch(uint16_t maxWait) // Returned as degrees
+float DevUBLOXGNSS::getATTpitch() // Returned as degrees
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_ATT, "pitch", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_ATT, "pitch", &value))
     return 0;
   return ((float)value.I4 / 100000.0); // Convert to degrees
 }
 
-float DevUBLOXGNSS::getATTheading(uint16_t maxWait) // Returned as degrees
+float DevUBLOXGNSS::getATTheading() // Returned as degrees
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_ATT, "heading", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_ATT, "heading", &value))
     return 0;
   return ((float)value.I4 / 100000.0); // Convert to degrees
 }
 
 // ***** PVT Helper Functions
 
-bool DevUBLOXGNSS::getPVT(uint16_t maxWait)
+bool DevUBLOXGNSS::getNAVPVT(uint16_t maxWait)
 {
-  return getUBX("NAV","PVT");
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_PVT, maxWait);
 }
 
-uint32_t DevUBLOXGNSS::getTimeOfWeek(uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getTimeOfWeek()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "iTOW", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "iTOW", &value))
     return 0;
   return value.U4;
 }
 
 // Get the current year
-uint16_t DevUBLOXGNSS::getYear(uint16_t maxWait)
+uint16_t DevUBLOXGNSS::getYear()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "year", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "year", &value))
     return 0;
   return value.U2;
 }
 
 // Get the current month
-uint8_t DevUBLOXGNSS::getMonth(uint16_t maxWait)
+uint8_t DevUBLOXGNSS::getMonth()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "month", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "month", &value))
     return 0;
   return value.U1;
 }
 
 // Get the current day
-uint8_t DevUBLOXGNSS::getDay(uint16_t maxWait)
+uint8_t DevUBLOXGNSS::getDay()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "day", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "day", &value))
     return 0;
   return value.U1;
 }
 
 // Get the current hour
-uint8_t DevUBLOXGNSS::getHour(uint16_t maxWait)
+uint8_t DevUBLOXGNSS::getHour()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "hour", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "hour", &value))
     return 0;
   return value.U1;
 }
 
 // Get the current minute
-uint8_t DevUBLOXGNSS::getMinute(uint16_t maxWait)
+uint8_t DevUBLOXGNSS::getMinute()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "min", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "min", &value))
     return 0;
   return value.U1;
 }
 
 // Get the current second
-uint8_t DevUBLOXGNSS::getSecond(uint16_t maxWait)
+uint8_t DevUBLOXGNSS::getSecond()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "sec", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "sec", &value))
     return 0;
   return value.U1;
 }
 
 // Get the current millisecond
-uint16_t DevUBLOXGNSS::getMillisecond(uint16_t maxWait)
+uint16_t DevUBLOXGNSS::getMillisecond()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "iTOW", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "iTOW", &value))
     return 0;
   return value.U4 % 1000;
 }
 
 // Get the current nanoseconds - includes milliseconds
-int32_t DevUBLOXGNSS::getNanosecond(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getNanosecond()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "nano", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "nano", &value))
     return 0;
   return value.I4;
 }
 
 // Get the current Unix epoch time rounded to the nearest second
-uint32_t DevUBLOXGNSS::getUnixEpoch(uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getUnixEpoch()
 {
   uint32_t t = SFE_UBLOX_DAYS_FROM_1970_TO_2020;                                         // Jan 1st 2020 as days from Jan 1st 1970
   t += (uint32_t)SFE_UBLOX_DAYS_SINCE_2020[getYear() - 2020];                            // Add on the number of days since 2020
@@ -11305,7 +9959,7 @@ uint32_t DevUBLOXGNSS::getUnixEpoch(uint16_t maxWait)
 }
 
 // Get the current Unix epoch including microseconds
-uint32_t DevUBLOXGNSS::getUnixEpoch(uint32_t &microsecond, uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getUnixEpoch(uint32_t &microsecond)
 {
   uint32_t t = SFE_UBLOX_DAYS_FROM_1970_TO_2020;                                         // Jan 1st 2020 as days from Jan 1st 1970
   t += (uint32_t)SFE_UBLOX_DAYS_SINCE_2020[getYear() - 2020];                            // Add on the number of days since 2020
@@ -11329,83 +9983,83 @@ uint32_t DevUBLOXGNSS::getUnixEpoch(uint32_t &microsecond, uint16_t maxWait)
 }
 
 // Get the current date validity
-bool DevUBLOXGNSS::getDateValid(uint16_t maxWait)
+bool DevUBLOXGNSS::getDateValid()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "validDate", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "validDate", &value))
     return 0;
   return value.L;
 }
 
 // Get the current time validity
-bool DevUBLOXGNSS::getTimeValid(uint16_t maxWait)
+bool DevUBLOXGNSS::getTimeValid()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "validTime", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "validTime", &value))
     return 0;
   return value.L;
 }
 
 // Check to see if the UTC time has been fully resolved
-bool DevUBLOXGNSS::getTimeFullyResolved(uint16_t maxWait)
+bool DevUBLOXGNSS::getTimeFullyResolved()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "fullyResolved", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "fullyResolved", &value))
     return 0;
   return value.L;
 }
 
 // Get the confirmed date validity
-bool DevUBLOXGNSS::getConfirmedDate(uint16_t maxWait)
+bool DevUBLOXGNSS::getConfirmedDate()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "confirmedDate", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "confirmedDate", &value))
     return 0;
   return value.L;
 }
 
 // Get the confirmed time validity
-bool DevUBLOXGNSS::getConfirmedTime(uint16_t maxWait)
+bool DevUBLOXGNSS::getConfirmedTime()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "confirmedTime", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "confirmedTime", &value))
     return 0;
   return value.L;
 }
 
 // Get the current fix type
 // 0=no fix, 1=dead reckoning, 2=2D, 3=3D, 4=GNSS, 5=Time fix
-uint8_t DevUBLOXGNSS::getFixType(uint16_t maxWait)
+uint8_t DevUBLOXGNSS::getFixType()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "fixType", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "fixType", &value))
     return 0;
   return value.U1;
 }
 
 // Get whether we have a valid fix (i.e within DOP & accuracy masks)
-bool DevUBLOXGNSS::getGnssFixOk(uint16_t maxWait)
+bool DevUBLOXGNSS::getGnssFixOk()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "gnssFixOK", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "gnssFixOK", &value))
     return 0;
   return value.L;
 }
 
 // Get whether differential corrections were applied
-bool DevUBLOXGNSS::getDiffSoln(uint16_t maxWait)
+bool DevUBLOXGNSS::getDiffSoln()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "diffSoln", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "diffSoln", &value))
     return 0;
   return value.L;
 }
 
 // Get whether head vehicle valid or not
-bool DevUBLOXGNSS::getHeadVehValid(uint16_t maxWait)
+bool DevUBLOXGNSS::getHeadVehValid()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "headVehValid", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "headVehValid", &value))
     return 0;
   return value.L;
 }
@@ -11413,54 +10067,54 @@ bool DevUBLOXGNSS::getHeadVehValid(uint16_t maxWait)
 // Get the carrier phase range solution status
 // Useful when querying module to see if it has high-precision RTK fix
 // 0=No solution, 1=Float solution, 2=Fixed solution
-uint8_t DevUBLOXGNSS::getCarrierSolutionType(uint16_t maxWait)
+uint8_t DevUBLOXGNSS::getCarrierSolutionType()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "carrSoln", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "carrSoln", &value))
     return 0;
   return value.U1;
 }
 
 // Get the number of satellites used in fix
-uint8_t DevUBLOXGNSS::getSIV(uint16_t maxWait)
+uint8_t DevUBLOXGNSS::getSIV()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "numSV", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "numSV", &value))
     return 0;
   return value.U1;
 }
 
 // Get the current longitude in degrees
 // Returns a long representing the number of degrees *10^-7
-int32_t DevUBLOXGNSS::getLongitude(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getLongitude()
 {
   // v4 scaffolding: reads via the generic field accessor instead of packetUBXNAVPVT directly.
-  // No longer self-polls or clears a per-field bit - see AGENTS.md "moduleQueried". Call getPVT()
+  // No longer self-polls or clears a per-field bit - see AGENTS.md "moduleQueried". Call getNAVPVT()
   // first if you need to ensure the value is fresh.
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "lon", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "lon", &value))
     return 0;
   return value.I4;
 }
 
 // Get the current latitude in degrees
 // Returns a long representing the number of degrees *10^-7
-int32_t DevUBLOXGNSS::getLatitude(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getLatitude()
 {
   // v4 scaffolding: reads via the generic field accessor instead of packetUBXNAVPVT directly.
-  // No longer self-polls or clears a per-field bit - see AGENTS.md "moduleQueried". Call getPVT()
+  // No longer self-polls or clears a per-field bit - see AGENTS.md "moduleQueried". Call getNAVPVT()
   // first if you need to ensure the value is fresh.
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "lat", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "lat", &value))
     return 0;
   return value.I4;
 }
 
 // Get the current altitude in mm according to ellipsoid model
-int32_t DevUBLOXGNSS::getAltitude(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getAltitude()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "height", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "height", &value))
     return 0;
   return value.I4;
 }
@@ -11470,137 +10124,135 @@ int32_t DevUBLOXGNSS::getAltitude(uint16_t maxWait)
 // Difference between Ellipsoid Model and Mean Sea Level: https://eos-gnss.com/elevation-for-beginners/
 // Also see: https://portal.u-blox.com/s/question/0D52p00008HKDSkCAP/what-geoid-model-is-used-and-where-is-this-calculated
 // and: https://cddis.nasa.gov/926/egm96/egm96.html on 10x10 degree grid
-int32_t DevUBLOXGNSS::getAltitudeMSL(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getAltitudeMSL()
 {
   // v4 scaffolding: reads via the generic field accessor instead of packetUBXNAVPVT directly.
-  // No longer self-polls or clears a per-field bit - see AGENTS.md "moduleQueried". Call getPVT()
+  // No longer self-polls or clears a per-field bit - see AGENTS.md "moduleQueried". Call getNAVPVT()
   // first if you need to ensure the value is fresh.
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "hMSL", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "hMSL", &value))
     return 0;
   return value.I4;
 }
 
-uint32_t DevUBLOXGNSS::getHorizontalAccEst(uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getHorizontalAccEst()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "hAcc", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "hAcc", &value))
     return 0;
   return value.U4;
 }
 
-uint32_t DevUBLOXGNSS::getVerticalAccEst(uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getVerticalAccEst()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "vAcc", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "vAcc", &value))
     return 0;
   return value.U4;
 }
 
-int32_t DevUBLOXGNSS::getNedNorthVel(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getNedNorthVel()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "velN", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "velN", &value))
     return 0;
   return value.I4;
 }
 
-int32_t DevUBLOXGNSS::getNedEastVel(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getNedEastVel()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "velE", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "velE", &value))
     return 0;
   return value.I4;
 }
 
-int32_t DevUBLOXGNSS::getNedDownVel(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getNedDownVel()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "velD", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "velD", &value))
     return 0;
   return value.I4;
 }
 
 // Get the ground speed in mm/s
-int32_t DevUBLOXGNSS::getGroundSpeed(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getGroundSpeed()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "gSpeed", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "gSpeed", &value))
     return 0;
   return value.I4;
 }
 
 // Get the heading of motion (as opposed to heading of car) in degrees * 10^-5
-int32_t DevUBLOXGNSS::getHeading(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getHeading()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "headMot", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "headMot", &value))
     return 0;
   return value.I4;
 }
 
-uint32_t DevUBLOXGNSS::getSpeedAccEst(uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getSpeedAccEst()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "sAcc", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "sAcc", &value))
     return 0;
   return value.U4;
 }
 
-uint32_t DevUBLOXGNSS::getHeadingAccEst(uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getHeadingAccEst()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "headAcc", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "headAcc", &value))
     return 0;
   return value.U4;
 }
 
 // Get the positional dillution of precision * 10^-2 (dimensionless)
-uint16_t DevUBLOXGNSS::getPDOP(uint16_t maxWait)
+uint16_t DevUBLOXGNSS::getPDOP()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "pDOP", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "pDOP", &value))
     return 0;
   return value.U2;
 }
 
-bool DevUBLOXGNSS::getInvalidLlh(uint16_t maxWait)
+bool DevUBLOXGNSS::getInvalidLlh()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "invalidLlh", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "invalidLlh", &value))
     return 0;
   return value.L;
 }
 
-int32_t DevUBLOXGNSS::getHeadVeh(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getHeadVeh()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "headVeh", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "headVeh", &value))
     return 0;
   return value.I4;
 }
 
-int16_t DevUBLOXGNSS::getMagDec(uint16_t maxWait)
+int16_t DevUBLOXGNSS::getMagDec()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "magDec", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "magDec", &value))
     return 0;
   return value.I2;
 }
 
-uint16_t DevUBLOXGNSS::getMagAcc(uint16_t maxWait)
+uint16_t DevUBLOXGNSS::getMagAcc()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "magAcc", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVT, "magAcc", &value))
     return 0;
   return value.U2;
 }
 
 // getGeoidSeparation is currently redundant. The geoid separation seems to only be provided in NMEA GGA and GNS messages.
-int32_t DevUBLOXGNSS::getGeoidSeparation(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getGeoidSeparation()
 {
-  (void)maxWait; // Do something with maxWait just to get rid of the pesky compiler warning
-
   return (0);
 }
 
@@ -11608,10 +10260,10 @@ int32_t DevUBLOXGNSS::getGeoidSeparation(uint16_t maxWait)
 
 // Get the current 3D high precision positional accuracy - a fun thing to watch
 // Returns a long representing the 3D accuracy in millimeters
-uint32_t DevUBLOXGNSS::getPositionAccuracyPOSECEF(uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getPositionAccuracyPOSECEF()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_POSECEF, "pAcc", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_POSECEF, "pAcc", &value))
     return 0;
   return value.U4;
 }
@@ -11620,10 +10272,10 @@ uint32_t DevUBLOXGNSS::getPositionAccuracyPOSECEF(uint16_t maxWait)
 
 // Get the current 3D high precision positional accuracy - a fun thing to watch
 // Returns a long representing the 3D accuracy in millimeters
-uint32_t DevUBLOXGNSS::getPositionAccuracy(uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getPositionAccuracy()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "pAcc", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "pAcc", &value))
     return 0;
 
   uint32_t tempAccuracy = value.U4;
@@ -11637,218 +10289,223 @@ uint32_t DevUBLOXGNSS::getPositionAccuracy(uint16_t maxWait)
 
 // Get the current 3D high precision X coordinate
 // Returns a long representing the coordinate in cm
-int32_t DevUBLOXGNSS::getHighResECEFX(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getHighResECEFX()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "ecefX", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "ecefX", &value))
     return 0;
   return value.I4;
 }
 
 // Get the current 3D high precision Y coordinate
 // Returns a long representing the coordinate in cm
-int32_t DevUBLOXGNSS::getHighResECEFY(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getHighResECEFY()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "ecefY", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "ecefY", &value))
     return 0;
   return value.I4;
 }
 
 // Get the current 3D high precision Z coordinate
 // Returns a long representing the coordinate in cm
-int32_t DevUBLOXGNSS::getHighResECEFZ(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getHighResECEFZ()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "ecefZ", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "ecefZ", &value))
     return 0;
   return value.I4;
 }
 
 // Get the high precision component of the ECEF X coordinate
 // Returns a signed byte representing the component as 0.1*mm
-int8_t DevUBLOXGNSS::getHighResECEFXHp(uint16_t maxWait)
+int8_t DevUBLOXGNSS::getHighResECEFXHp()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "ecefXHp", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "ecefXHp", &value))
     return 0;
   return value.I1;
 }
 
 // Get the high precision component of the ECEF Y coordinate
 // Returns a signed byte representing the component as 0.1*mm
-int8_t DevUBLOXGNSS::getHighResECEFYHp(uint16_t maxWait)
+int8_t DevUBLOXGNSS::getHighResECEFYHp()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "ecefYHp", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "ecefYHp", &value))
     return 0;
   return value.I1;
 }
 
 // Get the high precision component of the ECEF Z coordinate
 // Returns a signed byte representing the component as 0.1*mm
-int8_t DevUBLOXGNSS::getHighResECEFZHp(uint16_t maxWait)
+int8_t DevUBLOXGNSS::getHighResECEFZHp()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "ecefZHp", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSECEF, "ecefZHp", &value))
     return 0;
   return value.I1;
 }
 
 // ***** HPPOSLLH Helper Functions
 
-uint32_t DevUBLOXGNSS::getTimeOfWeekFromHPPOSLLH(uint16_t maxWait)
+bool DevUBLOXGNSS::getNAVHPPOSLLH(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, maxWait);
+}
+
+uint32_t DevUBLOXGNSS::getTimeOfWeekFromHPPOSLLH()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "iTOW", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "iTOW", &value))
     return 0;
   return value.U4;
 }
 
-int32_t DevUBLOXGNSS::getHighResLongitude(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getHighResLongitude()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "lon", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "lon", &value))
     return 0;
   return value.I4;
 }
 
-int32_t DevUBLOXGNSS::getHighResLatitude(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getHighResLatitude()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "lat", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "lat", &value))
     return 0;
   return value.I4;
 }
 
-int32_t DevUBLOXGNSS::getElipsoid(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getElipsoid()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "height", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "height", &value))
     return 0;
   return value.I4;
 }
 
-int32_t DevUBLOXGNSS::getMeanSeaLevel(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getMeanSeaLevel()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "hMSL", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "hMSL", &value))
     return 0;
   return value.I4;
 }
 
-int8_t DevUBLOXGNSS::getHighResLongitudeHp(uint16_t maxWait)
+int8_t DevUBLOXGNSS::getHighResLongitudeHp()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "lonHp", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "lonHp", &value))
     return 0;
   return value.I1;
 }
 
-int8_t DevUBLOXGNSS::getHighResLatitudeHp(uint16_t maxWait)
+int8_t DevUBLOXGNSS::getHighResLatitudeHp()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "latHp", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "latHp", &value))
     return 0;
   return value.I1;
 }
 
-int8_t DevUBLOXGNSS::getElipsoidHp(uint16_t maxWait)
+int8_t DevUBLOXGNSS::getElipsoidHp()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "heightHp", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "heightHp", &value))
     return 0;
   return value.I1;
 }
 
-int8_t DevUBLOXGNSS::getMeanSeaLevelHp(uint16_t maxWait)
+int8_t DevUBLOXGNSS::getMeanSeaLevelHp()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "hMSLHp", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "hMSLHp", &value))
     return 0;
   return value.I1;
 }
 
-uint32_t DevUBLOXGNSS::getHorizontalAccuracy(uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getHorizontalAccuracy()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "hAcc", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "hAcc", &value))
     return 0;
   return value.U4;
 }
 
-uint32_t DevUBLOXGNSS::getVerticalAccuracy(uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getVerticalAccuracy()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "vAcc", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_HPPOSLLH, "vAcc", &value))
     return 0;
   return value.U4;
 }
 
 // ***** PVAT Helper Functions
 
-int32_t DevUBLOXGNSS::getVehicleRoll(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getVehicleRoll()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVAT, "vehRoll", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVAT, "vehRoll", &value))
     return 0;
   return value.I4;
 }
 
-int32_t DevUBLOXGNSS::getVehiclePitch(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getVehiclePitch()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVAT, "vehPitch", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVAT, "vehPitch", &value))
     return 0;
   return value.I4;
 }
 
-int32_t DevUBLOXGNSS::getVehicleHeading(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getVehicleHeading()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVAT, "vehHeading", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVAT, "vehHeading", &value))
     return 0;
   return value.I4;
 }
 
-int32_t DevUBLOXGNSS::getMotionHeading(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getMotionHeading()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVAT, "motHeading", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_PVAT, "motHeading", &value))
     return 0;
   return value.I4;
 }
 
 // ***** SVIN Helper Functions
 
-bool DevUBLOXGNSS::getSurveyInActive(uint16_t maxWait)
+bool DevUBLOXGNSS::getSurveyInActive()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_SVIN, "active", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_SVIN, "active", &value))
     return 0;
   return value.U1;
 }
 
-bool DevUBLOXGNSS::getSurveyInValid(uint16_t maxWait)
+bool DevUBLOXGNSS::getSurveyInValid()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_SVIN, "valid", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_SVIN, "valid", &value))
     return 0;
   return value.U1;
 }
 
-uint32_t DevUBLOXGNSS::getSurveyInObservationTimeFull(uint16_t maxWait) // Return the full uint32_t
+uint32_t DevUBLOXGNSS::getSurveyInObservationTimeFull() // Return the full uint32_t
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_SVIN, "dur", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_SVIN, "dur", &value))
     return 0;
   return value.U4;
 }
 
-uint16_t DevUBLOXGNSS::getSurveyInObservationTime(uint16_t maxWait) // Truncated to 65535 seconds
+uint16_t DevUBLOXGNSS::getSurveyInObservationTime() // Truncated to 65535 seconds
 {
   // dur (Passed survey-in observation time) is U4 (uint32_t) seconds. Here we truncate to 16 bits
-  uint32_t tmpObsTime = getSurveyInObservationTimeFull(maxWait);
+  uint32_t tmpObsTime = getSurveyInObservationTimeFull();
   if (tmpObsTime <= 0xFFFF)
   {
     return ((uint16_t)tmpObsTime);
@@ -11859,10 +10516,10 @@ uint16_t DevUBLOXGNSS::getSurveyInObservationTime(uint16_t maxWait) // Truncated
   }
 }
 
-float DevUBLOXGNSS::getSurveyInMeanAccuracy(uint16_t maxWait) // Returned as m
+float DevUBLOXGNSS::getSurveyInMeanAccuracy() // Returned as m
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_SVIN, "meanAcc", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_SVIN, "meanAcc", &value))
     return 0;
 
   // meanAcc is U4 (uint32_t) in 0.1mm. We convert this to float.
@@ -11872,169 +10529,169 @@ float DevUBLOXGNSS::getSurveyInMeanAccuracy(uint16_t maxWait) // Returned as m
 
 // ***** TIMELS Helper Functions
 
-int32_t DevUBLOXGNSS::getTimeToLsEvent(uint16_t maxWait)
+int32_t DevUBLOXGNSS::getTimeToLsEvent()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_TIMELS, "timeToLsEvent", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_TIMELS, "timeToLsEvent", &value))
     return 0;
   return value.I4;
 }
 
-int8_t DevUBLOXGNSS::getCurrentLeapSeconds(uint16_t maxWait)
+int8_t DevUBLOXGNSS::getCurrentLeapSeconds()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_TIMELS, "currLs", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_TIMELS, "currLs", &value))
     return 0;
   return value.I1;
 }
 
 // ***** RELPOSNED Helper Functions and automatic support
 
-float DevUBLOXGNSS::getRelPosN(uint16_t maxWait) // Returned as m
+float DevUBLOXGNSS::getRelPosN() // Returned as m
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_RELPOSNED, "relPosN", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_RELPOSNED, "relPosN", &value))
     return 0;
   return (((float)value.I4) / 100.0); // Convert to m
 }
 
-float DevUBLOXGNSS::getRelPosE(uint16_t maxWait) // Returned as m
+float DevUBLOXGNSS::getRelPosE() // Returned as m
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_RELPOSNED, "relPosE", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_RELPOSNED, "relPosE", &value))
     return 0;
   return (((float)value.I4) / 100.0); // Convert to m
 }
 
-float DevUBLOXGNSS::getRelPosD(uint16_t maxWait) // Returned as m
+float DevUBLOXGNSS::getRelPosD() // Returned as m
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_RELPOSNED, "relPosD", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_RELPOSNED, "relPosD", &value))
     return 0;
   return (((float)value.I4) / 100.0); // Convert to m
 }
 
-float DevUBLOXGNSS::getRelPosAccN(uint16_t maxWait) // Returned as m
+float DevUBLOXGNSS::getRelPosAccN() // Returned as m
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_RELPOSNED, "accN", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_RELPOSNED, "accN", &value))
     return 0;
   return (((float)value.U4) / 10000.0); // Convert to m
 }
 
-float DevUBLOXGNSS::getRelPosAccE(uint16_t maxWait) // Returned as m
+float DevUBLOXGNSS::getRelPosAccE() // Returned as m
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_RELPOSNED, "accE", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_RELPOSNED, "accE", &value))
     return 0;
   return (((float)value.U4) / 10000.0); // Convert to m
 }
 
-float DevUBLOXGNSS::getRelPosAccD(uint16_t maxWait) // Returned as m
+float DevUBLOXGNSS::getRelPosAccD() // Returned as m
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_RELPOSNED, "accD", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_RELPOSNED, "accD", &value))
     return 0;
   return (((float)value.U4) / 10000.0); // Convert to m
 }
 
 // ***** AOPSTATUS Helper Functions
 
-uint8_t DevUBLOXGNSS::getAOPSTATUSuseAOP(uint16_t maxWait)
+uint8_t DevUBLOXGNSS::getAOPSTATUSuseAOP()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_AOPSTATUS, "useAOP", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_AOPSTATUS, "useAOP", &value))
     return 0;
   return value.L;
 }
 
-uint8_t DevUBLOXGNSS::getAOPSTATUSstatus(uint16_t maxWait)
+uint8_t DevUBLOXGNSS::getAOPSTATUSstatus()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_AOPSTATUS, "status", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_AOPSTATUS, "status", &value))
     return 0;
   return value.U1;
 }
 
 // ***** DAHEADING Helper Functions and automatic support
 
-float DevUBLOXGNSS::getDAHeadingRelPosN(uint16_t maxWait) // Returned as m
+float DevUBLOXGNSS::getDAHeadingRelPosN() // Returned as m
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DAHEADING, "relPosN", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DAHEADING, "relPosN", &value))
     return 0;
   return (((float)value.I4) / 100.0); // Convert to m
 }
 
-float DevUBLOXGNSS::getDAHeadingRelPosE(uint16_t maxWait) // Returned as m
+float DevUBLOXGNSS::getDAHeadingRelPosE() // Returned as m
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DAHEADING, "relPosE", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DAHEADING, "relPosE", &value))
     return 0;
   return (((float)value.I4) / 100.0); // Convert to m
 }
 
-float DevUBLOXGNSS::getDAHeadingRelPosD(uint16_t maxWait) // Returned as m
+float DevUBLOXGNSS::getDAHeadingRelPosD() // Returned as m
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DAHEADING, "relPosD", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DAHEADING, "relPosD", &value))
     return 0;
   return (((float)value.I4) / 100.0); // Convert to m
 }
 
-float DevUBLOXGNSS::getDAHeadingRelPosAccN(uint16_t maxWait) // Returned as m
+float DevUBLOXGNSS::getDAHeadingRelPosAccN() // Returned as m
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DAHEADING, "accN", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DAHEADING, "accN", &value))
     return 0;
   return (((float)value.U4) / 10000.0); // Convert to m
 }
 
-float DevUBLOXGNSS::getDAHeadingRelPosAccE(uint16_t maxWait) // Returned as m
+float DevUBLOXGNSS::getDAHeadingRelPosAccE() // Returned as m
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DAHEADING, "accE", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DAHEADING, "accE", &value))
     return 0;
   return (((float)value.U4) / 10000.0); // Convert to m
 }
 
-float DevUBLOXGNSS::getDAHeadingRelPosAccD(uint16_t maxWait) // Returned as m
+float DevUBLOXGNSS::getDAHeadingRelPosAccD() // Returned as m
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DAHEADING, "accD", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_NAV, UBX_NAV_DAHEADING, "accD", &value))
     return 0;
   return (((float)value.U4) / 10000.0); // Convert to m
 }
 
 // ***** TIM TP Helper Functions
 
-uint32_t DevUBLOXGNSS::getTIMTPtowMS(uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getTIMTPtowMS()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_TIM, UBX_TIM_TP, "towMS", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_TIM, UBX_TIM_TP, "towMS", &value))
     return 0;
   return value.U4;
 }
 
-uint32_t DevUBLOXGNSS::getTIMTPtowSubMS(uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getTIMTPtowSubMS()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_TIM, UBX_TIM_TP, "towSubMS", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_TIM, UBX_TIM_TP, "towSubMS", &value))
     return 0;
   return value.U4;
 }
 
-uint16_t DevUBLOXGNSS::getTIMTPweek(uint16_t maxWait)
+uint16_t DevUBLOXGNSS::getTIMTPweek()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_TIM, UBX_TIM_TP, "week", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_TIM, UBX_TIM_TP, "week", &value))
     return 0;
   return value.U2;
 }
 
 // Convert TIM TP to Unix epoch including microseconds
 // CAUTION! Assumes the time base is UTC and the week number is GPS
-uint32_t DevUBLOXGNSS::getTIMTPAsEpoch(uint32_t &microsecond, uint16_t maxWait)
+uint32_t DevUBLOXGNSS::getTIMTPAsEpoch(uint32_t &microsecond)
 {
   uint32_t tow = getTIMTPweek() - SFE_UBLOX_JAN_1ST_2020_WEEK; // Calculate the number of weeks since Jan 1st 2020
   tow *= SFE_UBLOX_SECS_PER_WEEK;                              // Convert weeks to seconds
@@ -12103,10 +10760,10 @@ bool DevUBLOXGNSS::getHWstatus(UBX_MON_HW_data_t *data, uint16_t maxWait)
 }
 
 // Return the aStatus: 0=INIT, 1=DONTKNOW, 2=OK, 3=SHORT, 4=OPEN
-sfe_ublox_antenna_status_e DevUBLOXGNSS::getAntennaStatus(uint16_t maxWait)
+sfe_ublox_antenna_status_e DevUBLOXGNSS::getAntennaStatus()
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_MON, UBX_MON_HW, "aStatus", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_MON, UBX_MON_HW, "aStatus", &value))
     return (sfe_ublox_antenna_status_e)0;
   return (sfe_ublox_antenna_status_e)value.U1;
 }
@@ -12131,26 +10788,26 @@ bool DevUBLOXGNSS::setGPSL5HealthOverride(bool override, uint8_t layer, uint16_t
 
 // ***** ESF Helper Functions
 
-float DevUBLOXGNSS::getESFroll(uint16_t maxWait) // Returned as degrees
+float DevUBLOXGNSS::getESFroll() // Returned as degrees
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_ESF, UBX_ESF_ALG, "roll", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_ESF, UBX_ESF_ALG, "roll", &value))
     return 0;
   return (((float)value.I2) / 100.0); // Convert to degrees
 }
 
-float DevUBLOXGNSS::getESFpitch(uint16_t maxWait) // Returned as degrees
+float DevUBLOXGNSS::getESFpitch() // Returned as degrees
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_ESF, UBX_ESF_ALG, "pitch", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_ESF, UBX_ESF_ALG, "pitch", &value))
     return 0;
   return (((float)value.I2) / 100.0); // Convert to degrees
 }
 
-float DevUBLOXGNSS::getESFyaw(uint16_t maxWait) // Returned as degrees
+float DevUBLOXGNSS::getESFyaw() // Returned as degrees
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_ESF, UBX_ESF_ALG, "yaw", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_ESF, UBX_ESF_ALG, "yaw", &value))
     return 0;
   return (((float)value.I2) / 100.0); // Convert to degrees
 }
@@ -12253,26 +10910,26 @@ uint8_t DevUBLOXGNSS::getHNRNavigationRate(uint8_t layer, uint16_t maxWait)
   return (payloadCfg[0]);
 }
 
-float DevUBLOXGNSS::getHNRroll(uint16_t maxWait) // Returned as degrees
+float DevUBLOXGNSS::getHNRroll() // Returned as degrees
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_HNR, UBX_HNR_ATT, "roll", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_HNR, UBX_HNR_ATT, "roll", &value))
     return 0;
   return (((float)value.I4) / 100000.0); // Convert to degrees
 }
 
-float DevUBLOXGNSS::getHNRpitch(uint16_t maxWait) // Returned as degrees
+float DevUBLOXGNSS::getHNRpitch() // Returned as degrees
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_HNR, UBX_HNR_ATT, "pitch", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_HNR, UBX_HNR_ATT, "pitch", &value))
     return 0;
   return (((float)value.I4) / 100000.0); // Convert to degrees
 }
 
-float DevUBLOXGNSS::getHNRheading(uint16_t maxWait) // Returned as degrees
+float DevUBLOXGNSS::getHNRheading() // Returned as degrees
 {
   ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_HNR, UBX_HNR_ATT, "heading", &value, maxWait))
+  if (!getUBXfield(UBX_CLASS_HNR, UBX_HNR_ATT, "heading", &value))
     return 0;
   return (((float)value.I4) / 100000.0); // Convert to degrees
 }

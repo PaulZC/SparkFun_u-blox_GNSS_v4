@@ -46,8 +46,8 @@ void setup()
 void loop()
 {
   // Poll the position, velocity and time (PVT) information.
-  // getPVT() returns true when new data is received.
-  if (myGNSS.getPVT() == true) // Use the helper method getPVT()
+  // getNAVPVT() returns true when new data is received.
+  if (myGNSS.getNAVPVT() == true) // Use the helper method getNAVPVT()
   {
     int32_t latitude = myGNSS.getLatitude(); // Use the helper method
     Serial.print("Lat: ");
@@ -73,16 +73,18 @@ void loop()
     ubxMessage *msg = myGNSS.ubxMessages.findByName("NAV","PVT");
 
     // getUbxMessageField converts everything to double. Convert lat back to uint32_t
-    int32_t latitude = (int32_t)getUbxMessageField(msg, "lat");
+    int32_t latitude = (int32_t)myGNSS.getUbxMessageField(msg, "lat");
     Serial.print("Lat: ");
     Serial.print(latitude);
 
-    int32_t longitude = (int32_t)getUbxMessageField(msg, "lon");
+    // Or, we could read the true "I4" (int32_t) directly, without going through double
+    // To do that, we need to use the ubxAnyType struct
+    ubxAnyType ubxAnyTypeLon = myGNSS.getUbxMessageField(msg, "lon");
     Serial.print(" Long: ");
-    Serial.print(longitude);
+    Serial.print(ubxAnyTypeLon.I4); // Print the longitude directly as int32_t
     Serial.print(" (degrees * 10^-7)");
 
-    int32_t altitude = (int32_t)getUbxMessageField(msg, "hMSL");
+    int32_t altitude = (int32_t)myGNSS.getUbxMessageField(msg, "hMSL");
     Serial.print(" Alt: ");
     Serial.print(altitude);
     Serial.print(" (mm)");

@@ -130,7 +130,7 @@ The `ubxField` is defined in `ubxMessage` and could be something like:
 
 If the user wishes to save memory, they can delete ubxNAVPVT.h. The remainder of the code will compile, but will not provide support for NAV PVT.
 
-`getPVT()`, `getLatitude()`, `getLongitude()` and `getAltitudeMSL()` are simple helper methods defined within the parent `class DevUBLOXGNSS`.
+`getNAVPVT()`, `getLatitude()`, `getLongitude()` and `getAltitudeMSL()` are simple helper methods defined within the parent `class DevUBLOXGNSS`.
 The code for `getLatitude()` could be:
 
 ```
@@ -145,10 +145,10 @@ The code for `getLatitude()` could be:
     }
 ```
 
-By default, `getPVT()` will Poll the NAV\-PVT message. The code for `getPVT()` could be:
+By default, `getNAVPVT()` will Poll the NAV\-PVT message. The code for `getNAVPVT()` could be:
 
 ```
-bool DevUBLOXGNSS::getPVT(uint16_t maxWait)
+bool DevUBLOXGNSS::getNAVPVT(uint16_t maxWait)
 {
     return getUBX(UBX_CLASS_NAV, UBX_NAV_PVT, maxWait);
 }
@@ -166,13 +166,14 @@ The `getUBX()` method is to be provided by the `class DevUBLOXGNSS`. It is a gen
     - Length zero
   - Wait for up to `maxWait` milliseconds for the message to arrive, calling `checkUbloxInternal()` every few 10s of millisconds
   - If the NAV\-PVT message is received within `maxWait`, it is stored in the allocated storage
-  - `getPVT()` returns `true` if a NAV\-PVT message was received within `maxWait`, `false` otherwise
-  - `getPVT()` is blocking in this case. It will wait / stall for the full `maxWait` if needed
+  - `getNAVPVT()` returns `true` if a NAV\-PVT message was received within `maxWait`, `false` otherwise
+  - `getNAVPVT()` is blocking in this case. It will wait / stall for the full `maxWait` if needed
 - If the NAV\-PVT message is periodic:
   - `getUBX()` will call the method `checkUbloxInternal()` to check for the availablelity of new I2C/UART/SPI data
   - If a new NAV\-PVT message has arrived, it is stored in the allocated storage
-  - `getPVT()` returns true if `checkUbloxInternal()` provided a new NAV\-PVT message, `false` otherwise.
-  - `getPVT()` is non\-blocking in this case. After calling `checkUbloxInternal()` once, it returns `true` or `false` immediately. It does not wait for `maxWait` milliseconds.
+  - `getNAVPVT()` returns true if `checkUbloxInternal()` provided a new NAV\-PVT message, `false` otherwise.
+  - In this mode, `getNAVPVT()` acts as a one-shot: `getNAVPVT()` will return `true` once on the arrival of new NAV-PVT data, clearing its internal `_moduleQueried` flag as it does so. The user should 
+  - `getNAVPVT()` is non\-blocking in this case. After calling `checkUbloxInternal()` once, it returns `true` or `false` immediately. It does not wait for `maxWait` milliseconds.
 
 ## Reference Scaffolding (from a preliminary prototype)
 
@@ -393,7 +394,7 @@ and are good models to copy from directly.
   prototype reads `moduleQueried` and returns it, but never clears it afterwards. Under the old per\-field
   bitmask this was masked because each field getter (e.g. `getLatitude()`) cleared its own bit on read; with
   the single `bool _moduleQueried` per message decided in "moduleQueried" below \- and field getters no
-  longer clearing anything \- `getUBX()`/`getPVT()` itself must clear the flag immediately after reporting
+  longer clearing anything \- `getUBX()`/`getNAVPVT()` itself must clear the flag immediately after reporting
   `true`, or the periodic case would report stale data as fresh on every subsequent call.
 - **`getUBXfield()` doesn't return a value and mismatches its own signature** \- it calls
   `ubxMessages.extractValue(Class, ID, field, *value)` (dereferencing `value` instead of passing the pointer)
@@ -446,8 +447,8 @@ If the NAV\-PVT message is not periodic ("automatic") and is being Polled, if th
 
 The behaviour should be as follows:
 
-- If the message is not Periodic ("Automatic") and is being Polled each time, `getPVT()` should Poll (request) the NAV\-PVT message and return `true` if it is received within the `maxWait` timeout. `getLatitude()` will return the most recent `data.lat`, even if it is "stale" (has been read before).
-- If the message is Periodic, `getPVT()` returns `true` if a new NAV\-PVT message has arrived since the last call. `getLatitude()` will return the most recent `data.lat`, even if it is "stale" (has been read before).
+- If the message is not Periodic ("Automatic") and is being Polled each time, `getNAVPVT()` should Poll (request) the NAV\-PVT message and return `true` if it is received within the `maxWait` timeout. `getLatitude()` will return the most recent `data.lat`, even if it is "stale" (has been read before).
+- If the message is Periodic, `getNAVPVT()` returns `true` if a new NAV\-PVT message has arrived since the last call. `getLatitude()` will return the most recent `data.lat`, even if it is "stale" (has been read before).
 
 The code shared from `C:\Users\pc235\Documents\SparkX\SparkFun_u-blox_GNSS_v4` includes `numQueriedWords`. E.g. `const uint8_t numQueriedWords = 2;   // We need this many words (uint32_t) to hold the queried flags`. Again, do not use this approach. Use a single `bool` to indicate if the whole message is fresh or stale.
 
@@ -608,12 +609,12 @@ The "Future work" above has been superseded by a broader change: `autoLookup()` 
 
 **Messages still outside the registry:** `NAV_SAT`, `NAV_SIG` (variable-length, repeated per-SV blocks), `RXM_SFRBX`, `RXM_RAWX`, `RXM_QZSSL6`, `RXM_MEASX`, `RXM_PMP`, `MON_COMMS`, `ESF_MEAS`, `ESF_RAW`, `ESF_STATUS`, `MGA_ACK_DATA0`, `MGA_DBD`, `SEC_SIG` - these have variable-length or repeated-block payloads that the fixed-length, fixed-field-table registry (`ubxField[]` + a single `_messageLength`) doesn't yet model, so they remain on the old per-message `packetUBXxxx` pointers and dedicated parsing code in both `autoLookup()` and `processUBXpacket()`. Extending the registry to support these is future work.
 
-**Legacy per-field getters have been rewritten to use the registry.** Every individual per-field getter for a registered message (`getYear()`, `getMonth()`, `getLatitude()`, `getLongitude()`, `getAltitudeMSL()`, `getHorizontalAccEst()`, `getSIV()`, `getFixType()`, `getRoll()`, `getGeometricDOP()`, etc.) now calls `getUBXfield(Class, ID, "fieldName", &value, maxWait)` and returns the appropriate `ubxAnyType` union member, instead of reading the old `packetUBXxxx->data.xxx` struct field directly. This resolves the "accepted, deliberate migration debt" noted in an earlier revision of this document (the legacy getters returning stale/zero values once `processUBXpacket()` stopped populating the old structs) - the getters now read live registry data like everything else. `getUBXfield()` itself does not poll; the caller is expected to have called `getUBX()` (or a wrapper such as `getPVT()`) first so fresh data is actually in storage.
+**Legacy per-field getters have been rewritten to use the registry.** Every individual per-field getter for a registered message (`getYear()`, `getMonth()`, `getLatitude()`, `getLongitude()`, `getAltitudeMSL()`, `getHorizontalAccEst()`, `getSIV()`, `getFixType()`, `getRoll()`, `getGeometricDOP()`, etc.) now calls `getUBXfield(Class, ID, "fieldName", &value, maxWait)` and returns the appropriate `ubxAnyType` union member, instead of reading the old `packetUBXxxx->data.xxx` struct field directly. This resolves the "accepted, deliberate migration debt" noted in an earlier revision of this document (the legacy getters returning stale/zero values once `processUBXpacket()` stopped populating the old structs) - the getters now read live registry data like everything else. `getUBXfield()` itself does not poll; the caller is expected to have called `getUBX()` (or a wrapper such as `getNAVPVT()`) first so fresh data is actually in storage.
 
 **`getUBX()` and `setAutoUBX()`/`setAutoUBXrate()` are now fully generic**, with no per-struct bookkeeping left:
 - `bool getUBX(uint8_t Class, uint8_t ID, uint16_t maxWait)` drives the poll-vs-automatic decision entirely through `ubxMessages.initStorage()`, `ubxMessages.isAutomatic()`, `ubxMessages.implicitUpdate()`, and `ubxMessages.moduleQueried()`/`setModuleQueried()` - see the numbered steps earlier in this section, which this now matches exactly.
 - A name-based overload, `bool getUBX(const char *Class, const char *ID, uint16_t maxWait)`, looks the message up with `ubxMessages.findByName()` and forwards to the numeric overload. `Example1_PositionVelocityTime.ino` demonstrates this: `myGNSS.getUBX("NAV","PVT")` followed by `ubxMessages.findByName("NAV","PVT")` and `getUbxMessageField(msg, "lat")` (see below).
-- `setAutoUBX(Class, ID, enabled, [implicitUpdate,] layer, maxWait)` (numeric and name-based overloads) and `setAutoUBXrate(Class, ID, rate, implicitUpdate, layer, maxWait)` (numeric and name-based) replace the old per-message `setAutoPVTrate()`-style functions. `setAutoUBXrate()` uses `ubxMessages.getMsgOutKey()` + `setVal8()` to set the message rate, with a three-tier strategy for keeping the registry's `_automatic` flag accurate: (1) if `setVal8()` succeeds, the flag is set from the requested rate; (2) if it fails, the actual rate is read back with `getVal8()` and the flag is set from that instead; (3) if both fail, the flag is set from the requested rate anyway, so a transient write/read failure (e.g. I2C congestion) can't silently strand the flag in a state where `getPVT()`-style wrappers return `false` forever.
+- `setAutoUBX(Class, ID, enabled, [implicitUpdate,] layer, maxWait)` (numeric and name-based overloads) and `setAutoUBXrate(Class, ID, rate, implicitUpdate, layer, maxWait)` (numeric and name-based) replace the old per-message `setAutoPVTrate()`-style functions. `setAutoUBXrate()` uses `ubxMessages.getMsgOutKey()` + `setVal8()` to set the message rate, with a three-tier strategy for keeping the registry's `_automatic` flag accurate: (1) if `setVal8()` succeeds, the flag is set from the requested rate; (2) if it fails, the actual rate is read back with `getVal8()` and the flag is set from that instead; (3) if both fail, the flag is set from the requested rate anyway, so a transient write/read failure (e.g. I2C congestion) can't silently strand the flag in a state where `getNAVPVT()`-style wrappers return `false` forever.
 
 **`getUbxMessageField()` has been split into two functions** in `ubxMessage.h`, both reading through the same shared `extractFieldFrom()` core:
 - `getUbxMessageField(ubxMessage *theMessage, const char *fieldName)` reads from the message's live `_storage` - the counterpart to the new `getUBX()` + `ubxMessages.findByName()` polling pattern shown in `Example1_PositionVelocityTime.ino`.

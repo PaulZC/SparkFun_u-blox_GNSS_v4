@@ -211,6 +211,8 @@ public:
   sfe_ublox_status_e sendSpiCommand(ubxPacket *outgoingUBX);
   void spiTransfer(const uint8_t byteToTransfer);
 
+  sfe_ublox_status_e pollNMEA(const char *msgId, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // The equivalent of sendCommand but for NMEA. Poll a single NMEA message using the GN Talker ID
+
   void printPacket(ubxPacket *packet, bool alwaysPrintPayload = false); // Useful for debugging
 
   // After sending a message to the module, wait for the expected response (data+ACK or just data)
@@ -220,16 +222,6 @@ public:
 
   // Check if any callbacks need to be called
   void checkCallbacks(void);
-
-  // Generic replacement for the old per-message setAuto<MSG>callbackPtr() functions (removed - see
-  // AGENTS.md "setAutoCallbackPtr"): looks up a registered message by its classStr/idStr (e.g.
-  // "NAV", "HPPOSLLH") and wires up the given callback. Unlike the old per-message functions, this
-  // does NOT itself enable the message's automatic output rate - see CallbackExample1_NAVHPPOSLLH.ino,
-  // which calls setCfgValset()/setVal8()-style config first, then setAutoCallbackPtr() to register
-  // the callback. layer/maxWait are accepted for signature symmetry with the old functions and for
-  // future use, but are currently unused (initStorage()/initCallbackStorage() are local, non-blocking
-  // allocations - there is nothing to send to the module here).
-  bool setAutoCallbackPtr(const char *classStr, const char *idStr, void (*callbackPointerPtr)(ubxCallbackDataCommon_t *), uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
   // Push (e.g.) RTCM or Assist Now data directly to the module
   // Warning: this function does not check that the data is valid. It is the user's responsibility to ensure the data is valid before pushing.
@@ -712,13 +704,16 @@ public:
   // then you should use a shorter maxWait. 300msec would be about right: getUBX(300)
 
   // ***** v4 scaffolding - generic (Class, ID)-keyed message access. See AGENTS.md "Reference Scaffolding" *****
+  ubxMessage *getUbxMessagePtr(ubxCallbackDataCommon_t *theData); // Factory: hands back the opaque per-message object a callback's ubxCallbackDataCommon_t* points at
+  ubxAnyType getUbxMessageFieldCallback(ubxMessage *theMessage, const char *fieldName); // Factory: extracts a named field from the message a callback just fired for, reading from its _callbackStorage
+  ubxAnyType getUbxMessageField(ubxMessage *theMessage, const char *fieldName); // Factory: extracts a named field from the message, reading from its _storage
   bool getUBX(const char *Class, const char *ID, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Generic poll-or-check-automatic, by Class/ID
   bool getUBX(uint8_t Class, uint8_t ID, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Generic poll-or-check-automatic, by Class/ID
-  bool getUBXfield(const char *Class, const char *ID, const char *field, ubxAnyType *value, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Generic field read, by Class/ID/name
-  bool getUBXfield(uint8_t Class, uint8_t ID, const char *field, ubxAnyType *value, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Generic field read, by Class/ID/name
+  bool getUBXfield(const char *Class, const char *ID, const char *field, ubxAnyType *value); // Generic field read, by Class/ID/name
+  bool getUBXfield(uint8_t Class, uint8_t ID, const char *field, ubxAnyType *value); // Generic field read, by Class/ID/name
 
-  bool setAutoUBX(const char *Class, const char *ID, bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  bool setAutoUBX(uint8_t Class, uint8_t ID, bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  bool setAutoUBX(const char *Class, const char *ID, bool enabled = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  bool setAutoUBX(uint8_t Class, uint8_t ID, bool enabled = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
   bool setAutoUBX(const char *Class, const char *ID, bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
   bool setAutoUBX(uint8_t Class, uint8_t ID, bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
   bool setAutoUBXrate(const char *Class, const char *ID, uint8_t rate, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
@@ -729,6 +724,8 @@ public:
   void flushUBX(uint8_t Class, uint8_t ID); // Mark the UBX data as read/stale
   void logUBX(const char *Class, const char *ID, bool enabled = true); // Log data to file buffer
   void logUBX(uint8_t Class, uint8_t ID, bool enabled = true); // Log data to file buffer
+  // Generic replacement for the old per-message setAuto<MSG>callbackPtr() functions
+  bool setAutoCallbackPtr(const char *classStr, const char *idStr, void (*callbackPointerPtr)(ubxCallbackDataCommon_t *));
 
   bool getNAVSAT(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                                                                     // Query module for latest AssistNow Autonomous status and load global vars:. If autoNAVSAT is disabled, performs an explicit poll and waits, if enabled does not block. Returns true if new NAVSAT is available.
   bool setAutoNAVSAT(bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                // Enable/disable automatic NAVSAT reports at the navigation frequency
@@ -855,164 +852,170 @@ public:
   uint16_t getNavigationRate(uint8_t layer = VAL_LAYER_RAM, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                       // Unsafe overload
 
   // Helper functions for DOP
-  // For safety, call these inside an if(getDOP())
+  // For safety, call these inside an if(getNAVDOP()) or if(getUBX("NAV","DOP"))
 
-  uint16_t getGeometricDOP(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint16_t getPositionDOP(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint16_t getTimeDOP(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint16_t getVerticalDOP(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint16_t getHorizontalDOP(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint16_t getNorthingDOP(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint16_t getEastingDOP(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  bool getNAVDOP(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+
+  uint16_t getGeometricDOP();
+  uint16_t getPositionDOP();
+  uint16_t getTimeDOP();
+  uint16_t getVerticalDOP();
+  uint16_t getHorizontalDOP();
+  uint16_t getNorthingDOP();
+  uint16_t getEastingDOP();
 
   // Helper functions for ATT
-  // For safety, call these inside an if(getNAVATT())
+  // For safety, call these inside an if(getNAVATT()) or if(getUBX("NAV","ATT"))
 
-  float getATTroll(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);    // Returned as degrees
-  float getATTpitch(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);   // Returned as degrees
-  float getATTheading(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returned as degrees
+  bool getNAVATT(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+
+  float getATTroll();    // Returned as degrees
+  float getATTpitch();   // Returned as degrees
+  float getATTheading(); // Returned as degrees
 
   // Helper functions for PVT
-  // For safety, call these inside an if (getPVT()) or if(getUBX("NAV","PVT"))
+  // For safety, call these inside an if (getNAVPVT()) or if(getUBX("NAV","PVT"))
 
-  bool getPVT(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  bool getNAVPVT(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
-  uint32_t getTimeOfWeek(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint16_t getYear(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint8_t getMonth(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint8_t getDay(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint8_t getHour(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint8_t getMinute(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint8_t getSecond(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint16_t getMillisecond(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int32_t getNanosecond(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint32_t getUnixEpoch(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint32_t getUnixEpoch(uint32_t &microsecond, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  uint32_t getTimeOfWeek();
+  uint16_t getYear();
+  uint8_t getMonth();
+  uint8_t getDay();
+  uint8_t getHour();
+  uint8_t getMinute();
+  uint8_t getSecond();
+  uint16_t getMillisecond();
+  int32_t getNanosecond();
+  uint32_t getUnixEpoch();
+  uint32_t getUnixEpoch(uint32_t &microsecond);
 
-  bool getDateValid(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  bool getTimeValid(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  bool getTimeFullyResolved(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  bool getConfirmedDate(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  bool getConfirmedTime(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  bool getDateValid();
+  bool getTimeValid();
+  bool getTimeFullyResolved();
+  bool getConfirmedDate();
+  bool getConfirmedTime();
 
-  uint8_t getFixType(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returns the type of fix: 0=no, 3=3D, 4=GNSS+Deadreckoning
+  uint8_t getFixType(); // Returns the type of fix: 0=no, 3=3D, 4=GNSS+Deadreckoning
 
-  bool getGnssFixOk(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get whether we have a valid fix (i.e within DOP & accuracy masks)
-  bool getDiffSoln(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);  // Get whether differential corrections were applied
-  bool getHeadVehValid(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint8_t getCarrierSolutionType(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returns RTK solution: 0=no, 1=float solution, 2=fixed solution
+  bool getGnssFixOk(); // Get whether we have a valid fix (i.e within DOP & accuracy masks)
+  bool getDiffSoln();  // Get whether differential corrections were applied
+  bool getHeadVehValid();
+  uint8_t getCarrierSolutionType(); // Returns RTK solution: 0=no, 1=float solution, 2=fixed solution
 
-  uint8_t getSIV(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);         // Returns number of sats used in fix
-  int32_t getLongitude(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);   // Returns the current longitude in degrees * 10-7. Auto selects between HighPrecision and Regular depending on ability of module.
-  int32_t getLatitude(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);    // Returns the current latitude in degrees * 10^-7. Auto selects between HighPrecision and Regular depending on ability of module.
-  int32_t getAltitude(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);    // Returns the current altitude in mm above ellipsoid
-  int32_t getAltitudeMSL(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returns the current altitude in mm above mean sea level
-  uint32_t getHorizontalAccEst(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint32_t getVerticalAccEst(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int32_t getNedNorthVel(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int32_t getNedEastVel(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int32_t getNedDownVel(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int32_t getGroundSpeed(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returns speed in mm/s
-  int32_t getHeading(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);     // Returns heading in degrees * 10^-5
-  uint32_t getSpeedAccEst(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint32_t getHeadingAccEst(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint16_t getPDOP(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returns positional dillution of precision * 10^-2 (dimensionless)
+  uint8_t getSIV();         // Returns number of sats used in fix
+  int32_t getLongitude();   // Returns the current longitude in degrees * 10-7. Auto selects between HighPrecision and Regular depending on ability of module.
+  int32_t getLatitude();    // Returns the current latitude in degrees * 10^-7. Auto selects between HighPrecision and Regular depending on ability of module.
+  int32_t getAltitude();    // Returns the current altitude in mm above ellipsoid
+  int32_t getAltitudeMSL(); // Returns the current altitude in mm above mean sea level
+  uint32_t getHorizontalAccEst();
+  uint32_t getVerticalAccEst();
+  int32_t getNedNorthVel();
+  int32_t getNedEastVel();
+  int32_t getNedDownVel();
+  int32_t getGroundSpeed(); // Returns speed in mm/s
+  int32_t getHeading();     // Returns heading in degrees * 10^-5
+  uint32_t getSpeedAccEst();
+  uint32_t getHeadingAccEst();
+  uint16_t getPDOP(); // Returns positional dillution of precision * 10^-2 (dimensionless)
 
-  bool getInvalidLlh(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  bool getInvalidLlh();
 
-  int32_t getHeadVeh(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int16_t getMagDec(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint16_t getMagAcc(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  int32_t getHeadVeh();
+  int16_t getMagDec();
+  uint16_t getMagAcc();
 
-  int32_t getGeoidSeparation(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  int32_t getGeoidSeparation();
 
   // Helper functions for POSECEF
   // For safety, call these inside an if(getNAVPOSECEF())
 
-  uint32_t getPositionAccuracyPOSECEF(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returns the position accuracy estimate of the current POSECEF solution, in mm (not cm)
+  uint32_t getPositionAccuracyPOSECEF(); // Returns the position accuracy estimate of the current POSECEF solution, in mm (not cm)
 
   // Helper functions for HPPOSECEF
   // For safety, call these inside an if(getNAVHPPOSECEF())
 
-  uint32_t getPositionAccuracy(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returns the 3D accuracy of the current high-precision fix, in mm. Supported on NEO-M8P, ZED-F9P,
-  int32_t getHighResECEFX(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);      // Returns the ECEF X coordinate (cm)
-  int32_t getHighResECEFY(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);      // Returns the ECEF Y coordinate (cm)
-  int32_t getHighResECEFZ(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);      // Returns the ECEF Z coordinate (cm)
-  int8_t getHighResECEFXHp(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);     // Returns the ECEF X coordinate High Precision Component (0.1 mm)
-  int8_t getHighResECEFYHp(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);     // Returns the ECEF Y coordinate High Precision Component (0.1 mm)
-  int8_t getHighResECEFZHp(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);     // Returns the ECEF Z coordinate High Precision Component (0.1 mm)
+  uint32_t getPositionAccuracy(); // Returns the 3D accuracy of the current high-precision fix, in mm. Supported on NEO-M8P, ZED-F9P,
+  int32_t getHighResECEFX();      // Returns the ECEF X coordinate (cm)
+  int32_t getHighResECEFY();      // Returns the ECEF Y coordinate (cm)
+  int32_t getHighResECEFZ();      // Returns the ECEF Z coordinate (cm)
+  int8_t getHighResECEFXHp();     // Returns the ECEF X coordinate High Precision Component (0.1 mm)
+  int8_t getHighResECEFYHp();     // Returns the ECEF Y coordinate High Precision Component (0.1 mm)
+  int8_t getHighResECEFZHp();     // Returns the ECEF Z coordinate High Precision Component (0.1 mm)
 
   // Helper functions for HPPOSLLH
-  // For safety, call these inside an if(getHPPOSLLH())
+  // For safety, call these inside an if(getNAVHPPOSLLH()) or if(getUBX("NAV","HPPOSLLH"))
 
-  uint32_t getTimeOfWeekFromHPPOSLLH(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int32_t getHighResLongitude(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int32_t getHighResLatitude(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int32_t getElipsoid(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int32_t getMeanSeaLevel(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int8_t getHighResLongitudeHp(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int8_t getHighResLatitudeHp(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int8_t getElipsoidHp(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int8_t getMeanSeaLevelHp(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint32_t getHorizontalAccuracy(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint32_t getVerticalAccuracy(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  bool getNAVHPPOSLLH(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+
+  uint32_t getTimeOfWeekFromHPPOSLLH();
+  int32_t getHighResLongitude();
+  int32_t getHighResLatitude();
+  int32_t getElipsoid();
+  int32_t getMeanSeaLevel();
+  int8_t getHighResLongitudeHp();
+  int8_t getHighResLatitudeHp();
+  int8_t getElipsoidHp();
+  int8_t getMeanSeaLevelHp();
+  uint32_t getHorizontalAccuracy();
+  uint32_t getVerticalAccuracy();
 
   // Helper functions for PVAT
   // For safety, call these inside an if(getNAVPVAT())
 
-  int32_t getVehicleRoll(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);    // Returns vehicle roll in degrees * 10^-5
-  int32_t getVehiclePitch(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);   // Returns vehicle pitch in degrees * 10^-5
-  int32_t getVehicleHeading(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returns vehicle heading in degrees * 10^-5
-  int32_t getMotionHeading(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);  // Returns the motion heading in degrees * 10^-5
+  int32_t getVehicleRoll();    // Returns vehicle roll in degrees * 10^-5
+  int32_t getVehiclePitch();   // Returns vehicle pitch in degrees * 10^-5
+  int32_t getVehicleHeading(); // Returns vehicle heading in degrees * 10^-5
+  int32_t getMotionHeading();  // Returns the motion heading in degrees * 10^-5
 
   // Helper functions for SVIN
   // For safety, call these inside an if(getSurveyStatus())
 
-  bool getSurveyInActive(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  bool getSurveyInValid(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  uint16_t getSurveyInObservationTime(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);     // Truncated to 65535 seconds
-  uint32_t getSurveyInObservationTimeFull(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Return the full uint32_t
-  float getSurveyInMeanAccuracy(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);           // Returned as m
+  bool getSurveyInActive();
+  bool getSurveyInValid();
+  uint16_t getSurveyInObservationTime();     // Truncated to 65535 seconds
+  uint32_t getSurveyInObservationTimeFull(); // Return the full uint32_t
+  float getSurveyInMeanAccuracy();           // Returned as m
 
   // Helper functions for TIMELS
   // For safety, call these inside an if(getLeapSecondEvent())
 
-  int32_t getTimeToLsEvent(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  int8_t getCurrentLeapSeconds(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  int32_t getTimeToLsEvent();
+  int8_t getCurrentLeapSeconds();
 
   // Helper functions for RELPOSNED
   // For safety, call these inside an if(getRELPOSNED())
 
-  float getRelPosN(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);    // Returned as m
-  float getRelPosE(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);    // Returned as m
-  float getRelPosD(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);    // Returned as m
-  float getRelPosAccN(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returned as m
-  float getRelPosAccE(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returned as m
-  float getRelPosAccD(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returned as m
+  float getRelPosN();    // Returned as m
+  float getRelPosE();    // Returned as m
+  float getRelPosD();    // Returned as m
+  float getRelPosAccN(); // Returned as m
+  float getRelPosAccE(); // Returned as m
+  float getRelPosAccD(); // Returned as m
 
   // Helper functions for DAHEADING
   // For safety, call these inside an if(getDAHEADING())
 
-  float getDAHeadingRelPosN(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);    // Returned as m
-  float getDAHeadingRelPosE(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);    // Returned as m
-  float getDAHeadingRelPosD(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);    // Returned as m
-  float getDAHeadingRelPosAccN(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returned as m
-  float getDAHeadingRelPosAccE(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returned as m
-  float getDAHeadingRelPosAccD(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returned as m
+  float getDAHeadingRelPosN();    // Returned as m
+  float getDAHeadingRelPosE();    // Returned as m
+  float getDAHeadingRelPosD();    // Returned as m
+  float getDAHeadingRelPosAccN(); // Returned as m
+  float getDAHeadingRelPosAccE(); // Returned as m
+  float getDAHeadingRelPosAccD(); // Returned as m
 
   // Helper functions for AOPSTATUS
   // For safety, call these inside an if(getAOPSTATUS())
 
-  uint8_t getAOPSTATUSuseAOP(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returns the UBX-NAV-AOPSTATUS useAOP flag. Don't confuse this with getAopCfg - which returns the aopCfg byte from UBX-CFG-NAVX5
-  uint8_t getAOPSTATUSstatus(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returns the UBX-NAV-AOPSTATUS status field. A host application can determine the optimal time to shut down the receiver by monitoring the status field for a steady 0.
+  uint8_t getAOPSTATUSuseAOP(); // Returns the UBX-NAV-AOPSTATUS useAOP flag. Don't confuse this with getAopCfg - which returns the aopCfg byte from UBX-CFG-NAVX5
+  uint8_t getAOPSTATUSstatus(); // Returns the UBX-NAV-AOPSTATUS status field. A host application can determine the optimal time to shut down the receiver by monitoring the status field for a steady 0.
 
   // Helper functions for TIM TP
   // For safety, call these inside an if(getTIMTP())
 
-  uint32_t getTIMTPtowMS(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                          // Returns the UBX-TIM-TP towMS time pulse of week (ms)
-  uint32_t getTIMTPtowSubMS(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                       // Returns the UBX-TIM-TP submillisecond part of towMS (ms * 2^-32)
-  uint16_t getTIMTPweek(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                           // Returns the UBX-TIM-TP time pulse week according to time base
-  uint32_t getTIMTPAsEpoch(uint32_t &microsecond, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Convert TIM TP to Unix Epoch - CAUTION! Assumes the time base is UTC and the week number is GPS
+  uint32_t getTIMTPtowMS();                          // Returns the UBX-TIM-TP towMS time pulse of week (ms)
+  uint32_t getTIMTPtowSubMS();                       // Returns the UBX-TIM-TP submillisecond part of towMS (ms * 2^-32)
+  uint16_t getTIMTPweek();                           // Returns the UBX-TIM-TP time pulse week according to time base
+  uint32_t getTIMTPAsEpoch(uint32_t &microsecond); // Convert TIM TP to Unix Epoch - CAUTION! Assumes the time base is UTC and the week number is GPS
 
   // Helper function for MON COMMS
 
@@ -1022,14 +1025,14 @@ public:
   // For safety, call getAntennaStatus inside an if(getMONHW())
 
   bool getHWstatus(UBX_MON_HW_data_t *data = nullptr, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get the hardware status using UBX_MON_HW
-  sfe_ublox_antenna_status_e getAntennaStatus(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);         // Get the antenna status (aStatus) using UBX_MON_HW
+  sfe_ublox_antenna_status_e getAntennaStatus();         // Get the antenna status (aStatus) using UBX_MON_HW
 
   // Helper functions for ESF
   // For safety, call getESFroll/pitch/yaw inside an if(getESFALG())
 
-  float getESFroll(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);  // Returned as degrees
-  float getESFpitch(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returned as degrees
-  float getESFyaw(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);   // Returned as degrees
+  float getESFroll();  // Returned as degrees
+  float getESFpitch(); // Returned as degrees
+  float getESFyaw();   // Returned as degrees
   bool getSensorFusionMeasurement(UBX_ESF_MEAS_sensorData_t *sensorData, UBX_ESF_MEAS_data_t ubxDataStruct, uint8_t sensor);
   bool getRawSensorMeasurement(UBX_ESF_RAW_sensorData_t *sensorData, UBX_ESF_RAW_data_t ubxDataStruct, uint8_t sensor);
   bool getSensorFusionStatus(UBX_ESF_STATUS_sensorStatus_t *sensorStatus, uint8_t sensor, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
@@ -1040,9 +1043,9 @@ public:
 
   bool setHNRNavigationRate(uint8_t rate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Returns true if the setHNRNavigationRate is successful
   uint8_t getHNRNavigationRate(uint8_t layer = VAL_LAYER_RAM, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                // Returns 0 if the getHNRNavigationRate fails
-  float getHNRroll(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                           // Returned as degrees
-  float getHNRpitch(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                          // Returned as degrees
-  float getHNRheading(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                        // Returned as degrees
+  float getHNRroll();                                                           // Returned as degrees
+  float getHNRpitch();                                                          // Returned as degrees
+  float getHNRheading();                                                        // Returned as degrees
 
   // Helper functions for the NEO-F10N
   bool getLNAMode(sfe_ublox_lna_mode_e *mode, uint8_t layer = VAL_LAYER_RAM, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get the LNA mode
@@ -1056,6 +1059,8 @@ public:
   // Enable/Disable NMEA High Precision Mode - include extra decimal places in the Lat and Lon
   bool setHighPrecisionMode(bool enable = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
+  // NMEA
+
   // Helper functions for NMEA logging
   void setNMEALoggingMask(uint32_t messages = SFE_UBLOX_FILTER_NMEA_ALL); // Add selected NMEA messages to file buffer - if enabled. Default to adding ALL messages to the file buffer
   uint32_t getNMEALoggingMask();                                          // Return which NMEA messages are selected for logging to the file buffer - if enabled
@@ -1064,27 +1069,24 @@ public:
   void setProcessNMEAMask(uint32_t messages = SFE_UBLOX_FILTER_NMEA_ALL); // Control which NMEA messages are passed to processNMEA. Default to passing ALL messages
   uint32_t getProcessNMEAMask();                                          // Return which NMEA messages are passed to processNMEA
 
-  // Support for "auto" storage of NMEA messages
-  uint8_t getLatestNMEAGPGGA(NMEA_GGA_data_t *data);                           // Return the most recent GPGGA: 0 = no data, 1 = stale data, 2 = fresh data
-  bool setNMEAGPGGAcallbackPtr(void (*callbackPointerPtr)(NMEA_GGA_data_t *)); // Enable a callback on the arrival of a GPGGA message
-  uint8_t getLatestNMEAGNGGA(NMEA_GGA_data_t *data);                           // Return the most recent GNGGA: 0 = no data, 1 = stale data, 2 = fresh data
-  bool setNMEAGNGGAcallbackPtr(void (*callbackPointerPtr)(NMEA_GGA_data_t *)); // Enable a callback on the arrival of a GNGGA message
-  uint8_t getLatestNMEAGPVTG(NMEA_VTG_data_t *data);                           // Return the most recent GPVTG: 0 = no data, 1 = stale data, 2 = fresh data
-  bool setNMEAGPVTGcallbackPtr(void (*callbackPointerPtr)(NMEA_VTG_data_t *)); // Enable a callback on the arrival of a GPVTG message
-  uint8_t getLatestNMEAGNVTG(NMEA_VTG_data_t *data);                           // Return the most recent GNVTG: 0 = no data, 1 = stale data, 2 = fresh data
-  bool setNMEAGNVTGcallbackPtr(void (*callbackPointerPtr)(NMEA_VTG_data_t *)); // Enable a callback on the arrival of a GNVTG message
-  uint8_t getLatestNMEAGPRMC(NMEA_RMC_data_t *data);                           // Return the most recent GPRMC: 0 = no data, 1 = stale data, 2 = fresh data
-  bool setNMEAGPRMCcallbackPtr(void (*callbackPointerPtr)(NMEA_RMC_data_t *)); // Enable a callback on the arrival of a GPRMC message
-  uint8_t getLatestNMEAGNRMC(NMEA_RMC_data_t *data);                           // Return the most recent GNRMC: 0 = no data, 1 = stale data, 2 = fresh data
-  bool setNMEAGNRMCcallbackPtr(void (*callbackPointerPtr)(NMEA_RMC_data_t *)); // Enable a callback on the arrival of a GNRMC message
-  uint8_t getLatestNMEAGPZDA(NMEA_ZDA_data_t *data);                           // Return the most recent GPZDA: 0 = no data, 1 = stale data, 2 = fresh data
-  bool setNMEAGPZDAcallbackPtr(void (*callbackPointerPtr)(NMEA_ZDA_data_t *)); // Enable a callback on the arrival of a GPZDA message
-  uint8_t getLatestNMEAGNZDA(NMEA_ZDA_data_t *data);                           // Return the most recent GNZDA: 0 = no data, 1 = stale data, 2 = fresh data
-  bool setNMEAGNZDAcallbackPtr(void (*callbackPointerPtr)(NMEA_ZDA_data_t *)); // Enable a callback on the arrival of a GNZDA message
-  uint8_t getLatestNMEAGPGST(NMEA_GST_data_t *data);                           // Return the most recent GPGST: 0 = no data, 1 = stale data, 2 = fresh data
-  bool setNMEAGPGSTcallbackPtr(void (*callbackPointerPtr)(NMEA_GST_data_t *)); // Enable a callback on the arrival of a GPGST message
-  uint8_t getLatestNMEAGNGST(NMEA_GST_data_t *data);                           // Return the most recent GNGST: 0 = no data, 1 = stale data, 2 = fresh data
-  bool setNMEAGNGSTcallbackPtr(void (*callbackPointerPtr)(NMEA_GST_data_t *)); // Enable a callback on the arrival of a GNGST message
+  // ***** v4 scaffolding - generic (Class, ID)-keyed message access. See AGENTS.md "Reference Scaffolding" *****
+  nmeaMessage *getNmeaMessagePtr(nmeaCallbackDataCommon_t *theData); // Factory: hands back the opaque per-message object a callback's nmeaCallbackDataCommon_t* points at
+  String getNmeaMessageFieldCallback(nmeaMessage *theMessage, const char *fieldName); // Factory: extracts a named field from the message a callback just fired for, reading from its _callbackStorage
+  String getNmeaMessageField(nmeaMessage *theMessage, const char *fieldName); // Factory: extracts a named field from the message, reading from its _storage
+
+  nmeaMessageVector nmeaMessages; // v4 scaffolding - the registry of per-message objects
+
+  bool getNMEA(const char *msgId, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Generic poll-or-check-automatic, by message name
+  bool getNMEAfield(const char *msgId, const char *field, String &value); // Generic field read, by Class/ID/name
+
+  bool setAutoNMEA(const char *msgId, bool enabled = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  bool setAutoNMEA(const char *msgId, bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  bool setAutoNMEArate(const char *msgId, uint8_t rate, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
+  bool assumeAutoNMEA(const char *msgId, bool enabled, bool implicitUpdate = true);  // In case no config access to the GPS is possible and NMEA is send cyclically already
+  void flushNMEA(const char *msgId); // Mark the NMEA data as read/stale
+  void logNMEA(const char *msgId, bool enabled = true); // Log data to file buffer
+  // Generic replacement for the old per-message setNMEA<MSG>callbackPtr() functions
+  bool setNmeaCallbackPtr(const char *msgId, void (*callbackPointerPtr)(nmeaCallbackDataCommon_t *));
 
   // RTCM
 
@@ -1148,17 +1150,6 @@ public:
   UBX_MGA_ACK_DATA0_t *packetUBXMGAACK = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_MGA_DBD_t *packetUBXMGADBD = nullptr;       // Pointer to struct. RAM will be allocated for this if/when necessary
 
-  NMEA_GPGGA_t *storageNMEAGPGGA = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
-  NMEA_GNGGA_t *storageNMEAGNGGA = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
-  NMEA_GPVTG_t *storageNMEAGPVTG = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
-  NMEA_GNVTG_t *storageNMEAGNVTG = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
-  NMEA_GPRMC_t *storageNMEAGPRMC = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
-  NMEA_GNRMC_t *storageNMEAGNRMC = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
-  NMEA_GPZDA_t *storageNMEAGPZDA = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
-  NMEA_GNZDA_t *storageNMEAGNZDA = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
-  NMEA_GPGST_t *storageNMEAGPGST = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
-  NMEA_GNGST_t *storageNMEAGNGST = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
-
   RTCM_1005_t *storageRTCM1005 = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
 
   struct
@@ -1212,13 +1203,12 @@ protected:
   bool initGeofenceParams();  // Allocate RAM for currentGeofenceParams and initialize it
   bool initModuleSWVersion(); // Allocate RAM for moduleSWVersion and initialize it
 
-  // The initPacket functions need to be private as they don't check if memory has already been allocated.
-  // Functions like setAutoNAVPOSECEF will check that memory has not been allocated before calling initPacket.
   bool initPacketUBXNAVSAT();           // Allocate RAM for packetUBXNAVSAT and initialize it
   bool initPacketUBXNAVSIG();           // Allocate RAM for packetUBXNAVSIG and initialize it
   bool initPacketUBXRXMPMP();           // Allocate RAM for packetUBXRXMPMP and initialize it
   bool initPacketUBXRXMPMPmessage();    // Allocate RAM for packetUBXRXMPMPRaw and initialize it
   bool initPacketUBXRXMQZSSL6message(); // Allocate RAM for packetUBXRXMQZSSL6raw and initialize it
+  bool initPacketUBXRXMCOR();           // Allocate RAM for packetUBXRXMCOR and initialize it
   bool initPacketUBXRXMSFRBX();         // Allocate RAM for packetUBXRXMSFRBX and initialize it
   bool initPacketUBXRXMRAWX();          // Allocate RAM for packetUBXRXMRAWX and initialize it
   bool initPacketUBXRXMMEASX();         // Allocate RAM for packetUBXRXMMEASX and initialize it
@@ -1229,17 +1219,6 @@ protected:
   bool initPacketUBXSECSIG();           // Allocate RAM for packetUBXSECSIG and initialize it
   bool initPacketUBXMGAACK();           // Allocate RAM for packetUBXMGAACK and initialize it
   bool initPacketUBXMGADBD();           // Allocate RAM for packetUBXMGADBD and initialize it
-
-  bool initStorageNMEAGPGGA(); // Allocate RAM for incoming NMEA GPGGA messages and initialize it
-  bool initStorageNMEAGNGGA(); // Allocate RAM for incoming NMEA GNGGA messages and initialize it
-  bool initStorageNMEAGPVTG(); // Allocate RAM for incoming NMEA GPVTG messages and initialize it
-  bool initStorageNMEAGNVTG(); // Allocate RAM for incoming NMEA GNVTG messages and initialize it
-  bool initStorageNMEAGPRMC(); // Allocate RAM for incoming NMEA GPRMC messages and initialize it
-  bool initStorageNMEAGNRMC(); // Allocate RAM for incoming NMEA GNRMC messages and initialize it
-  bool initStorageNMEAGPZDA(); // Allocate RAM for incoming NMEA GPZDA messages and initialize it
-  bool initStorageNMEAGNZDA(); // Allocate RAM for incoming NMEA GNZDA messages and initialize it
-  bool initStorageNMEAGPGST(); // Allocate RAM for incoming NMEA GPGST messages and initialize it
-  bool initStorageNMEAGNGST(); // Allocate RAM for incoming NMEA GNGST messages and initialize it
 
   bool initStorageRTCM(); // Allocate RAM for incoming RTCM messages and initialize it
   bool initStorageNMEA(); // Allocate RAM for incoming non-Auto NMEA messages and initialize it
@@ -1311,22 +1290,14 @@ protected:
   // The user can adjust maxNMEAByteCount by calling setMaxNMEAByteCount
   int8_t maxNMEAByteCount = SFE_UBLOX_MAX_NMEA_BYTE_COUNT;
   uint8_t nmeaAddressField[6]; // NMEA Address Field - includes the start character (*)
-  bool logThisNMEA();          // Return true if we should log this NMEA message
-  bool processThisNMEA();      // Return true if we should pass this NMEA message to processNMEA
-  bool isNMEAHeaderValid();    // Return true if the six byte NMEA header appears valid. Used to set _signsOfLife
+  bool logThisNMEA(const char *msgId); // Return true if we should log this NMEA message
+  bool processThisNMEA(const char *msgId); // Return true if we should pass this NMEA message to processNMEA
+  bool isNMEAHeaderValid(const char *msgId); // Return true if the six byte NMEA header appears valid. Used to set _signsOfLife
+  bool isThisNMEAauto(const char *msgId); // Return true if msgId is known to be automatic / periodic
+  bool doesThisNMEAHaveStorage(const char *msgId); // Return true if this msgId has "Auto" storage allocated - BUT it may not actually be "Auto"
+  bool doesThisNMEAHaveCallback(const char *msgId); // Return true if this msgId has a callback
 
   NMEA_STORAGE_t *_storageNMEA = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
-
-  bool isThisNMEAauto();                 // Check if the NMEA message (in nmeaAddressField) is "auto" (i.e. has RAM allocated for it)
-  bool doesThisNMEAHaveCallback();       // Do we need to copy the data into the callback copy?
-  uint8_t *getNMEAWorkingLengthPtr();    // Get a pointer to the working copy length
-  uint8_t *getNMEAWorkingNMEAPtr();      // Get a pointer to the working copy NMEA data
-  uint8_t *getNMEACompleteLengthPtr();   // Get a pointer to the complete copy length
-  uint8_t *getNMEACompleteNMEAPtr();     // Get a pointer to the complete copy NMEA data
-  uint8_t *getNMEACallbackLengthPtr();   // Get a pointer to the callback copy length
-  uint8_t *getNMEACallbackNMEAPtr();     // Get a pointer to the callback copy NMEA data
-  uint8_t getNMEAMaxLength();            // Get the maximum length of this NMEA message
-  nmeaAutomaticFlags *getNMEAFlagsPtr(); // Get a pointer to the flags
 
   // RTCM logging
   sfe_ublox_rtcm_filtering_t _logRTCM; // Flags to indicate which NMEA messages should be added to the file buffer for logging

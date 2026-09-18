@@ -26,7 +26,7 @@ public:
     const uint8_t numCallbackCopies = 1;
 
     // NMEA defines a maximum length of 79 characters
-    const uint8_t messageLength = 50;
+    const uint8_t messageLength = NMEA_ZDA_MAX_LENGTH;
 
     static const uint8_t numFields = 7;
 
@@ -37,8 +37,8 @@ public:
     const nmeaField nmeaFields[numFields] = {
         {"xxZDA", nmeaDataTypeString, 0},
         {"time", nmeaDataTypeTime, 1},
-        {"day", nmeaDataTypeNumeric, 2},
-        {"mon", nmeaDataTypeNumeric, 3},
+        {"day", nmeaDataTypeString, 2}, // Use the String type so we record the leading zero correctly
+        {"month", nmeaDataTypeString, 3}, // Use the String type so we record the leading zero correctly
         {"year", nmeaDataTypeNumeric, 4},
         {"ltzh", nmeaDataTypeNumeric, 5},
         {"ltzn", nmeaDataTypeNumeric, 6},

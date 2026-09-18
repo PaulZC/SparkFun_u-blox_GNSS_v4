@@ -23,7 +23,7 @@ public:
     const uint8_t numCallbackCopies = 1;
 
     // NMEA defines a maximum length of 79 characters, but GNSS output can include additional decimal places
-    const uint8_t messageLength = 100;
+    const uint8_t messageLength = NMEA_GGA_MAX_LENGTH;
 
     static const uint8_t numFields = 15;
 

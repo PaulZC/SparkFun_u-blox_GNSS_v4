@@ -26,7 +26,7 @@ public:
     const uint8_t numCallbackCopies = 1;
 
     // NMEA defines a maximum length of 79 characters
-    const uint8_t messageLength = 100;
+    const uint8_t messageLength = NMEA_GNS_MAX_LENGTH;
 
     static const uint8_t numFields = 14;
 
