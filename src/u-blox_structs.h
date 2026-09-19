@@ -1186,7 +1186,7 @@ typedef struct
 
 // UBX-NAV-SIG (0x01 0x43): Signal information
 // Note: length is variable
-const uint8_t UBX_NAV_SIG_MAX_BLOCKS = 92;
+const uint8_t UBX_NAV_SIG_MAX_BLOCKS = 192; // I've seen the X20 output at least 136 signals...
 const uint16_t UBX_NAV_SIG_MAX_LEN = 8 + (16 * UBX_NAV_SIG_MAX_BLOCKS);
 
 typedef struct
@@ -1253,14 +1253,11 @@ typedef struct
   UBX_NAV_SIG_block_t blocks[UBX_NAV_SIG_MAX_BLOCKS];
 } UBX_NAV_SIG_data_t;
 
-typedef struct
-{
-  ubxAutomaticFlags automaticFlags;
-  UBX_NAV_SIG_data_t data;
-  bool moduleQueried;
-  void (*callbackPointerPtr)(UBX_NAV_SIG_data_t *);
-  UBX_NAV_SIG_data_t *callbackData;
-} UBX_NAV_SIG_t;
+// UBX_NAV_SIG_t (the automaticFlags/moduleQueried/callbackPointerPtr/callbackData wrapper) no
+// longer exists - UBX-NAV-SIG is now a registered v4 message (ubxNAVSIG in
+// src/ubxMessages/ubxNAVSIG.h), which carries the same bookkeeping generically via ubxMessage's
+// own members. UBX_NAV_SIG_data_t/_header_t/_block_t above remain, as the documented wire format.
+// See AGENTS.md "Adding the variable-length UBX messages".
 
 // UBX-NAV-SVIN (0x01 0x3B): Survey-in data
 const uint16_t UBX_NAV_SVIN_LEN = 40;

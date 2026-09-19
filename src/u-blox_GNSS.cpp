@@ -122,18 +122,9 @@ void DevUBLOXGNSS::end(void)
     currentGeofenceParams = nullptr;
   }
 
-  // packetUBXNAVSAT no longer exists - ubxNAVSAT is now self-registered and destroyed by
-  // ubxMessageVector's own destructor. See AGENTS.md "Adding the variable-length UBX messages".
-
-  if (packetUBXNAVSIG != nullptr)
-  {
-    if (packetUBXNAVSIG->callbackData != nullptr)
-    {
-      delete packetUBXNAVSIG->callbackData;
-    }
-    delete packetUBXNAVSIG;
-    packetUBXNAVSIG = nullptr;
-  }
+  // packetUBXNAVSAT/packetUBXNAVSIG no longer exist - ubxNAVSAT/ubxNAVSIG are now
+  // self-registered and destroyed by ubxMessageVector's own destructor. See AGENTS.md
+  // "Adding the variable-length UBX messages".
 
   if (packetUBXRXMPMP != nullptr)
   {
@@ -929,14 +920,8 @@ bool DevUBLOXGNSS::autoLookup(uint8_t Class, uint8_t ID, uint16_t *maxSize)
   switch (Class)
   {
   case UBX_CLASS_NAV:
-    // UBX_NAV_SAT is handled above via the registry (ubxNAVSAT is now self-registered) - see
-    // AGENTS.md "Adding the variable-length UBX messages".
-    if (ID == UBX_NAV_SIG)
-    {
-      if (maxSize != nullptr)
-        *maxSize = UBX_NAV_SIG_MAX_LEN;
-      return (packetUBXNAVSIG != nullptr);
-    }
+    // UBX_NAV_SAT and UBX_NAV_SIG are both handled above via the registry (ubxNAVSAT/ubxNAVSIG
+    // are now self-registered) - see AGENTS.md "Adding the variable-length UBX messages".
     break;
   case UBX_CLASS_RXM:
     if (ID == UBX_RXM_SFRBX)
@@ -2142,51 +2127,8 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
     switch (msg->cls)
     {
     case UBX_CLASS_NAV:
-      // UBX_NAV_SAT is handled above via the registry (ubxNAVSAT is now self-registered) - see
-      // AGENTS.md "Adding the variable-length UBX messages".
-      if (msg->id == UBX_NAV_SIG) // Note: length is variable
-      {
-        // Parse various byte fields into storage - but only if we have memory allocated for it
-        if (packetUBXNAVSIG != nullptr)
-        {
-          packetUBXNAVSIG->data.header.iTOW = extractLong(msg, 0);
-          packetUBXNAVSIG->data.header.version = extractByte(msg, 4);
-          packetUBXNAVSIG->data.header.numSigs = extractByte(msg, 5);
-
-          // The NAV SIG message could potentially contain data for 255 signals. (numSigs is uint8_t. UBX_NAV_SIG_MAX_BLOCKS is 92)
-          for (uint16_t i = 0; (i < UBX_NAV_SIG_MAX_BLOCKS) && (i < ((uint16_t)packetUBXNAVSIG->data.header.numSigs)) && ((i * 16) < (msg->len - 8)); i++)
-          {
-            uint16_t offset = (i * 16) + 8;
-            packetUBXNAVSIG->data.blocks[i].gnssId = extractByte(msg, offset + 0);
-            packetUBXNAVSIG->data.blocks[i].svId = extractByte(msg, offset + 1);
-            packetUBXNAVSIG->data.blocks[i].sigId = extractByte(msg, offset + 2);
-            packetUBXNAVSIG->data.blocks[i].freqId = extractByte(msg, offset + 3);
-            packetUBXNAVSIG->data.blocks[i].prRes = extractSignedInt(msg, offset + 4);
-            packetUBXNAVSIG->data.blocks[i].cno = extractByte(msg, offset + 6);
-            packetUBXNAVSIG->data.blocks[i].qualityInd = extractByte(msg, offset + 7);
-            packetUBXNAVSIG->data.blocks[i].corrSource = extractByte(msg, offset + 8);
-            packetUBXNAVSIG->data.blocks[i].ionoModel = extractByte(msg, offset + 9);
-            packetUBXNAVSIG->data.blocks[i].sigFlags.all = extractInt(msg, offset + 10);
-          }
-
-          // Mark all datums as fresh (not read before)
-          packetUBXNAVSIG->moduleQueried = true;
-
-          // Check if we need to copy the data for the callback
-          if ((packetUBXNAVSIG->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-              && (packetUBXNAVSIG->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-          {
-            memcpy(&packetUBXNAVSIG->callbackData->header.iTOW, &packetUBXNAVSIG->data.header.iTOW, sizeof(UBX_NAV_SIG_data_t));
-            packetUBXNAVSIG->automaticFlags.flags.bits.callbackCopyValid = true;
-          }
-
-          // Check if we need to copy the data into the file buffer
-          if (packetUBXNAVSIG->automaticFlags.flags.bits.addToFileBuffer)
-          {
-            addedToFileBuffer = storePacket(msg);
-          }
-        }
-      }
+      // UBX_NAV_SAT and UBX_NAV_SIG are both handled above via the registry (ubxNAVSAT/ubxNAVSIG
+      // are now self-registered) - see AGENTS.md "Adding the variable-length UBX messages".
       break;
     case UBX_CLASS_RXM:
       if (msg->id == UBX_RXM_PMP)
@@ -3737,19 +3679,9 @@ void DevUBLOXGNSS::checkCallbacks(void)
     }
   }
 
-  // UBX_NAV_SAT's callback is dispatched by the generic registry walk above (ubxNAVSAT is now
-  // self-registered) - see AGENTS.md "Adding the variable-length UBX messages".
-
-  if (packetUBXNAVSIG != nullptr)                                               // If RAM has been allocated for message storage
-    if (packetUBXNAVSIG->callbackData != nullptr)                               // If RAM has been allocated for the copy of the data
-      if (packetUBXNAVSIG->automaticFlags.flags.bits.callbackCopyValid == true) // If the copy of the data is valid
-      {
-        if (packetUBXNAVSIG->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          packetUBXNAVSIG->callbackPointerPtr(packetUBXNAVSIG->callbackData); // Call the callback
-        }
-        packetUBXNAVSIG->automaticFlags.flags.bits.callbackCopyValid = false; // Mark the data as stale
-      }
+  // UBX_NAV_SAT's and UBX_NAV_SIG's callbacks are both dispatched by the generic registry walk
+  // above (ubxNAVSAT/ubxNAVSIG are now self-registered) - see AGENTS.md "Adding the
+  // variable-length UBX messages".
 
   if (packetUBXRXMPMP != nullptr)                                               // If RAM has been allocated for message storage
     if (packetUBXRXMPMP->callbackData != nullptr)                               // If RAM has been allocated for the copy of the data
@@ -7983,164 +7915,15 @@ bool DevUBLOXGNSS::getNAVSAT(uint16_t maxWait)
   return getUBX(UBX_CLASS_NAV, UBX_NAV_SAT, maxWait);
 }
 
-// ***** NAV SIG automatic support
-
-// Signal information
-// Returns true if commands was successful
+// UBX-NAV-SIG is now a registered v4 message (ubxNAVSIG) - see AGENTS.md "Adding the
+// variable-length UBX messages". setAutoNAVSIG/setAutoNAVSIGrate/assumeAutoNAVSIG/flushNAVSIG/
+// logNAVSIG/setAutoNAVSIGcallbackPtr/initPacketUBXNAVSIG are retired; the generic
+// setAutoUBX/setAutoUBXrate/assumeAutoUBX/flushUBX/logUBX/setAutoCallbackPtr (by Class/ID
+// UBX_CLASS_NAV/UBX_NAV_SIG, or by name "NAV"/"SIG") do the same job for every registered
+// message, NAV-SIG included, with no per-message code required.
 bool DevUBLOXGNSS::getNAVSIG(uint16_t maxWait)
 {
-  if (packetUBXNAVSIG == nullptr)
-    initPacketUBXNAVSIG();        // Check that RAM has been allocated for the NAVSIG data
-  if (packetUBXNAVSIG == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (packetUBXNAVSIG->automaticFlags.flags.bits.automatic && packetUBXNAVSIG->automaticFlags.flags.bits.implicitUpdate)
-  {
-    // The GPS is automatically reporting, we just check whether we got unread data
-    checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-    return packetUBXNAVSIG->moduleQueried;
-  }
-  else if (packetUBXNAVSIG->automaticFlags.flags.bits.automatic && !packetUBXNAVSIG->automaticFlags.flags.bits.implicitUpdate)
-  {
-    // Someone else has to call checkUblox for us...
-    return (false);
-  }
-  else
-  {
-    // The GPS is not automatically reporting NAVSIG so we have to poll explicitly
-    packetCfg.cls = UBX_CLASS_NAV;
-    packetCfg.id = UBX_NAV_SIG;
-    packetCfg.len = 0;
-    packetCfg.startingSpot = 0;
-
-    // The data is parsed as part of processing the response
-    sfe_ublox_status_e retVal = sendCommand(&packetCfg, maxWait);
-
-    if (retVal == SFE_UBLOX_STATUS_DATA_RECEIVED)
-      return (true);
-
-    if (retVal == SFE_UBLOX_STATUS_DATA_OVERWRITTEN)
-    {
-      return (true);
-    }
-
-    return (false);
-  }
-}
-
-// Enable or disable automatic NAVSIG message generation by the GNSS. This changes the way getNAVSIG
-// works.
-bool DevUBLOXGNSS::setAutoNAVSIG(bool enable, uint8_t layer, uint16_t maxWait)
-{
-  return setAutoNAVSIGrate(enable ? 1 : 0, true, layer, maxWait);
-}
-
-// Enable or disable automatic NAVSIG message generation by the GNSS. This changes the way getNAVSIG
-// works.
-bool DevUBLOXGNSS::setAutoNAVSIG(bool enable, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
-{
-  return setAutoNAVSIGrate(enable ? 1 : 0, implicitUpdate, layer, maxWait);
-}
-
-// Enable or disable automatic NAV SAT message generation by the GNSS. This changes the way getNAVSIG
-// works.
-bool DevUBLOXGNSS::setAutoNAVSIGrate(uint8_t rate, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
-{
-  if (packetUBXNAVSIG == nullptr)
-    initPacketUBXNAVSIG();        // Check that RAM has been allocated for the data
-  if (packetUBXNAVSIG == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  if (rate > 127)
-    rate = 127;
-
-  uint32_t key = UBLOX_CFG_MSGOUT_UBX_NAV_SIG_I2C;
-  if (_commType == COMM_TYPE_SPI)
-    key = UBLOX_CFG_MSGOUT_UBX_NAV_SIG_SPI;
-  else if (_commType == COMM_TYPE_SERIAL)
-  {
-    if (!_UART2)
-      key = UBLOX_CFG_MSGOUT_UBX_NAV_SIG_UART1;
-    else
-      key = UBLOX_CFG_MSGOUT_UBX_NAV_SIG_UART2;
-  }
-
-  bool ok = setAutoMsgRateVal(key, rate, implicitUpdate, packetUBXNAVSIG->automaticFlags, layer, maxWait);
-  packetUBXNAVSIG->moduleQueried = false; // Mark data as stale
-  return ok;
-}
-
-// Enable automatic navigation message generation by the GNSS.
-bool DevUBLOXGNSS::setAutoNAVSIGcallbackPtr(void (*callbackPointerPtr)(UBX_NAV_SIG_data_t *), uint8_t layer, uint16_t maxWait)
-{
-  // Enable auto messages. Set implicitUpdate to false as we expect the user to call checkUblox manually.
-  bool result = setAutoNAVSIG(true, false, layer, maxWait);
-  if (!result)
-    return (result); // Bail if setAuto failed
-
-  if (packetUBXNAVSIG->callbackData == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    packetUBXNAVSIG->callbackData = new UBX_NAV_SIG_data_t; // Allocate RAM for the main struct
-  }
-
-  if (packetUBXNAVSIG->callbackData == nullptr)
-  {
-    debugPrintln("setAutoNAVSIGcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  packetUBXNAVSIG->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// In case no config access to the GNSS is possible and NAV SAT is send cyclically already
-// set config to suitable parameters
-bool DevUBLOXGNSS::assumeAutoNAVSIG(bool enabled, bool implicitUpdate)
-{
-  if (packetUBXNAVSIG == nullptr)
-    initPacketUBXNAVSIG();        // Check that RAM has been allocated for the NAVSIG data
-  if (packetUBXNAVSIG == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  bool changes = packetUBXNAVSIG->automaticFlags.flags.bits.automatic != enabled || packetUBXNAVSIG->automaticFlags.flags.bits.implicitUpdate != implicitUpdate;
-  if (changes)
-  {
-    packetUBXNAVSIG->automaticFlags.flags.bits.automatic = enabled;
-    packetUBXNAVSIG->automaticFlags.flags.bits.implicitUpdate = implicitUpdate;
-  }
-  return changes;
-}
-
-// PRIVATE: Allocate RAM for packetUBXNAVSIG and initialize it
-bool DevUBLOXGNSS::initPacketUBXNAVSIG()
-{
-  packetUBXNAVSIG = new UBX_NAV_SIG_t; // Allocate RAM for the main struct
-  if (packetUBXNAVSIG == nullptr)
-  {
-    debugPrintln("initPacketUBXNAVSIG: RAM alloc failed!", true); // Important
-    return (false);
-  }
-  packetUBXNAVSIG->automaticFlags.flags.all = 0;
-  packetUBXNAVSIG->callbackPointerPtr = nullptr;
-  packetUBXNAVSIG->callbackData = nullptr;
-  packetUBXNAVSIG->moduleQueried = false;
-  return (true);
-}
-
-// Mark all the data as read/stale
-void DevUBLOXGNSS::flushNAVSIG()
-{
-  if (packetUBXNAVSIG == nullptr)
-    return;                               // Bail if RAM has not been allocated (otherwise we could be writing anywhere!)
-  packetUBXNAVSIG->moduleQueried = false; // Mark all datums as stale (read before)
-}
-
-// Log this data in file buffer
-void DevUBLOXGNSS::logNAVSIG(bool enabled)
-{
-  if (packetUBXNAVSIG == nullptr)
-    return; // Bail if RAM has not been allocated (otherwise we could be writing anywhere!)
-  packetUBXNAVSIG->automaticFlags.flags.bits.addToFileBuffer = (uint8_t)enabled;
+  return getUBX(UBX_CLASS_NAV, UBX_NAV_SIG, maxWait);
 }
 
 // ***** RXM PMP automatic support

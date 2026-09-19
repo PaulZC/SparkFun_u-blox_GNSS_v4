@@ -737,14 +737,13 @@ public:
   // thin wrapper, since it is called directly rather than by name.
   bool getNAVSAT(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Query module for latest NAVSAT data. If autoNAVSAT is disabled, performs an explicit poll and waits, if enabled does not block. Returns true if new NAVSAT is available.
 
-  bool getNAVSIG(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                                                                     // Query module for latest AssistNow Autonomous status and load global vars:. If autoNAVSIG is disabled, performs an explicit poll and waits, if enabled does not block. Returns true if new NAVSIG is available.
-  bool setAutoNAVSIG(bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                // Enable/disable automatic NAVSIG reports at the navigation frequency
-  bool setAutoNAVSIG(bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                           // Enable/disable automatic NAVSIG reports at the navigation frequency, with implicitUpdate == false accessing stale data will not issue parsing of data in the rxbuffer of your interface, instead you have to call checkUblox when you want to perform an update
-  bool setAutoNAVSIGrate(uint8_t rate, bool implicitUpdate = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                // Set the rate for automatic NAVSIG reports
-  bool setAutoNAVSIGcallbackPtr(void (*callbackPointerPtr)(UBX_NAV_SIG_data_t *), uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Enable automatic NAVSIG reports at the navigation frequency. Data is accessed from the callback.
-  bool assumeAutoNAVSIG(bool enabled, bool implicitUpdate = true);                                                                                                 // In case no config access to the GPS is possible and NAVSIG is send cyclically already
-  void flushNAVSIG();                                                                                                                                              // Mark all the NAVSIG data as read/stale
-  void logNAVSIG(bool enabled = true);                                                                                                                             // Log data to file buffer
+  // UBX-NAV-SIG is now a registered v4 message (ubxNAVSIG) - see AGENTS.md "Adding the
+  // variable-length UBX messages". setAutoNAVSIG/setAutoNAVSIGrate/assumeAutoNAVSIG/
+  // flushNAVSIG/logNAVSIG/setAutoNAVSIGcallbackPtr are retired; use the generic
+  // setAutoUBX/setAutoUBXrate/assumeAutoUBX/flushUBX/logUBX/setAutoCallbackPtr above instead
+  // (by Class/ID = UBX_CLASS_NAV/UBX_NAV_SIG, or by name "NAV"/"SIG"). getNAVSIG() remains, as a
+  // thin wrapper, since it is called directly rather than by name.
+  bool getNAVSIG(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Query module for latest NAVSIG data. If autoNAVSIG is disabled, performs an explicit poll and waits, if enabled does not block. Returns true if new NAVSIG is available.
 
   // Receiver Manager Messages (RXM)
 
@@ -1175,7 +1174,6 @@ public:
 
   ubxMessageVector ubxMessages; // v4 scaffolding - the registry of per-message objects. See AGENTS.md "Reference Scaffolding"
 
-  UBX_NAV_SIG_t *packetUBXNAVSIG = nullptr;                      // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_RXM_PMP_t *packetUBXRXMPMP = nullptr;                      // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_RXM_PMP_message_t *packetUBXRXMPMPmessage = nullptr;       // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_RXM_QZSSL6_message_t *packetUBXRXMQZSSL6message = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
@@ -1247,7 +1245,6 @@ protected:
   bool initGeofenceParams();  // Allocate RAM for currentGeofenceParams and initialize it
   bool initModuleSWVersion(); // Allocate RAM for moduleSWVersion and initialize it
 
-  bool initPacketUBXNAVSIG();           // Allocate RAM for packetUBXNAVSIG and initialize it
   bool initPacketUBXRXMPMP();           // Allocate RAM for packetUBXRXMPMP and initialize it
   bool initPacketUBXRXMPMPmessage();    // Allocate RAM for packetUBXRXMPMPRaw and initialize it
   bool initPacketUBXRXMQZSSL6message(); // Allocate RAM for packetUBXRXMQZSSL6raw and initialize it

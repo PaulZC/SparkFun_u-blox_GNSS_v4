@@ -47,6 +47,7 @@
 #include "ubxMessages/ubxNAVDAHEADING.h"
 #include "ubxMessages/ubxNAVAOPSTATUS.h"
 #include "ubxMessages/ubxNAVSAT.h" // Variable-length: header + repeated per-SV blocks - see AGENTS.md "Adding the variable-length UBX messages"
+#include "ubxMessages/ubxNAVSIG.h" // Variable-length: header + repeated per-signal blocks - see AGENTS.md "Adding the variable-length UBX messages"
 #include "ubxMessages/ubxNAVEOE.h"
 #include "ubxMessages/ubxRXMCOR.h"
 #include "ubxMessages/ubxMONHW.h"
