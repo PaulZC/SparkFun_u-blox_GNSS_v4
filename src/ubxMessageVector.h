@@ -50,6 +50,8 @@
 #include "ubxMessages/ubxNAVSIG.h" // Variable-length: header + repeated per-signal blocks - see AGENTS.md "Adding the variable-length UBX messages"
 #include "ubxMessages/ubxNAVEOE.h"
 #include "ubxMessages/ubxRXMCOR.h"
+#include "ubxMessages/ubxRXMMEASX.h" // Variable-length: header + repeated per-satellite blocks - see AGENTS.md "Adding the variable-length UBX messages"
+#include "ubxMessages/ubxRXMRAWX.h" // Variable-length: header + repeated per-measurement blocks - see AGENTS.md "Adding the variable-length UBX messages"
 #include "ubxMessages/ubxMONHW.h"
 #include "ubxMessages/ubxMONHW2.h"
 #include "ubxMessages/ubxTIMTM2.h"

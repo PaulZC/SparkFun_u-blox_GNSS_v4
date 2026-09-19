@@ -1115,7 +1115,9 @@ typedef struct
 } UBX_NAV_TIMELS_t;
 
 // UBX-NAV-SAT (0x01 0x35): Satellite Information
-const uint16_t UBX_NAV_SAT_MAX_BLOCKS = 255; // numSvs is 8-bit
+// Typical X20P NAV-SAT messages contain 50-60 blocks
+// For v4.0.0: settting UBX_NAV_SAT_MAX_BLOCKS to 128. 255 is too many, wasting RAM.
+const uint16_t UBX_NAV_SAT_MAX_BLOCKS = 128; // numSvs is 8-bit
 const uint16_t UBX_NAV_SAT_MAX_LEN = 8 + (12 * UBX_NAV_SAT_MAX_BLOCKS);
 
 typedef struct
@@ -1186,7 +1188,8 @@ typedef struct
 
 // UBX-NAV-SIG (0x01 0x43): Signal information
 // Note: length is variable
-const uint8_t UBX_NAV_SIG_MAX_BLOCKS = 192; // I've seen the X20 output at least 136 signals...
+// The ZED-X20P NAV-SIG messages typically contain 140 blocks. Setting this to 192 for v4.0.0
+const uint8_t UBX_NAV_SIG_MAX_BLOCKS = 192;
 const uint16_t UBX_NAV_SIG_MAX_LEN = 8 + (16 * UBX_NAV_SIG_MAX_BLOCKS);
 
 typedef struct
@@ -1233,7 +1236,7 @@ typedef struct
     uint16_t all;
     struct
     {
-      uint16_t health : 1;     // Signal health flag: 0 = unknown; 1 = healthy; 2 = unhealthy
+      uint16_t health : 2;     // Signal health flag: 0 = unknown; 1 = healthy; 2 = unhealthy
       uint16_t prSmoothed : 1; // 1 = Pseudorange has been smoothed
       uint16_t prUsed : 1;     // 1 = Pseudorange has been used for this signal
       uint16_t crUsed : 1;     // 1 = Carrier range has been used for this signal
@@ -1692,21 +1695,18 @@ typedef struct
   UBX_RXM_MEASX_block_t blocks[UBX_RXM_MEASX_MAX_BLOCKS];
 } UBX_RXM_MEASX_data_t;
 
-typedef struct
-{
-  ubxAutomaticFlags automaticFlags;
-  UBX_RXM_MEASX_data_t data;
-  bool moduleQueried;
-  void (*callbackPointerPtr)(UBX_RXM_MEASX_data_t *);
-  UBX_RXM_MEASX_data_t *callbackData;
-} UBX_RXM_MEASX_t;
+// UBX_RXM_MEASX_t (the automaticFlags/moduleQueried/callbackPointerPtr/callbackData wrapper) no
+// longer exists - UBX-RXM-MEASX is now a registered v4 message (ubxRXMMEASX in
+// src/ubxMessages/ubxRXMMEASX.h), which carries the same bookkeeping generically via
+// ubxMessage's own members. UBX_RXM_MEASX_data_t/_header_t/_block_t above remain, as the
+// documented wire format. See AGENTS.md "Adding the variable-length UBX messages".
 
 // UBX-RXM-RAWX (0x02 0x15): Multi-GNSS raw measurement data
 // Note: length is variable
 // Up to v3.1.14, UBX_RXM_RAWX_MAX_BLOCKS was 92. This was set in v2 of the library (Oct 20 2021)
-// As documented in issue #98, 92 is no longer adequate. X20P RAWX messages can contain 112+ blocks
-// Increasing this to 120 for v3.1.15. Increases the memory usage by 896 Bytes...
-const uint8_t UBX_RXM_RAWX_MAX_BLOCKS = 120;
+// As documented in issue #98, 92 is no longer adequate. X20P RAWX messages can contain 122+ blocks
+// Increasing this to 140 for v4.0.0. Increases the memory usage...
+const uint8_t UBX_RXM_RAWX_MAX_BLOCKS = 140;
 const uint16_t UBX_RXM_RAWX_MAX_LEN = 16 + (32 * UBX_RXM_RAWX_MAX_BLOCKS);
 
 typedef struct
@@ -1762,14 +1762,11 @@ typedef struct
   UBX_RXM_RAWX_block_t blocks[UBX_RXM_RAWX_MAX_BLOCKS];
 } UBX_RXM_RAWX_data_t;
 
-typedef struct
-{
-  ubxAutomaticFlags automaticFlags;
-  UBX_RXM_RAWX_data_t data;
-  bool moduleQueried;
-  void (*callbackPointerPtr)(UBX_RXM_RAWX_data_t *);
-  UBX_RXM_RAWX_data_t *callbackData;
-} UBX_RXM_RAWX_t;
+// UBX_RXM_RAWX_t (the automaticFlags/moduleQueried/callbackPointerPtr/callbackData wrapper) no
+// longer exists - UBX-RXM-RAWX is now a registered v4 message (ubxRXMRAWX in
+// src/ubxMessages/ubxRXMRAWX.h), which carries the same bookkeeping generically via
+// ubxMessage's own members. UBX_RXM_RAWX_data_t/_header_t/_block_t above remain, as the
+// documented wire format. See AGENTS.md "Adding the variable-length UBX messages".
 
 // UBX-RXM-COR (0x02 0x34): Differential correction input status
 const uint16_t UBX_RXM_COR_LEN = 12;

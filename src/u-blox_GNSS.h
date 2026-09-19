@@ -772,23 +772,15 @@ public:
   void flushRXMSFRBX();                                                                                                                                                // Mark all the data as read/stale
   void logRXMSFRBX(bool enabled = true);                                                                                                                               // Log data to file buffer
 
-  bool getRXMRAWX(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                                                                      // RXM RAWX
-  bool setAutoRXMRAWX(bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                 // Enable/disable automatic RXM RAWX reports at the navigation frequency
-  bool setAutoRXMRAWX(bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                            // Enable/disable automatic RXM RAWX reports at the navigation frequency, with implicitUpdate == false accessing stale data will not issue parsing of data in the rxbuffer of your interface, instead you have to call checkUblox when you want to perform an update
-  bool setAutoRXMRAWXrate(uint8_t rate, bool implicitUpdate = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                 // Set the rate for automatic RAWX reports
-  bool setAutoRXMRAWXcallbackPtr(void (*callbackPointerPtr)(UBX_RXM_RAWX_data_t *), uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Enable automatic RAWX reports at the navigation frequency. Data is accessed from the callback.
-  bool assumeAutoRXMRAWX(bool enabled, bool implicitUpdate = true);                                                                                                  // In case no config access to the GPS is possible and RXM RAWX is send cyclically already
-  void flushRXMRAWX();                                                                                                                                               // Mark all the data as read/stale
-  void logRXMRAWX(bool enabled = true);                                                                                                                              // Log data to file buffer
-
-  bool getRXMMEASX(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                                                                       // RXM MEASX
-  bool setAutoRXMMEASX(bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                  // Enable/disable automatic RXM MEASX reports at the navigation frequency
-  bool setAutoRXMMEASX(bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                             // Enable/disable automatic RXM MEASX reports at the navigation frequency, with implicitUpdate == false accessing stale data will not issue parsing of data in the rxbuffer of your interface, instead you have to call checkUblox when you want to perform an update
-  bool setAutoRXMMEASXrate(uint8_t rate, bool implicitUpdate = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                  // Set the rate for automatic MEASX reports
-  bool setAutoRXMMEASXcallbackPtr(void (*callbackPointerPtr)(UBX_RXM_MEASX_data_t *), uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Enable automatic MEASX reports at the navigation frequency. Data is accessed from the callback.
-  bool assumeAutoRXMMEASX(bool enabled, bool implicitUpdate = true);                                                                                                   // In case no config access to the GPS is possible and RXM MEASX is send cyclically already
-  void flushRXMMEASX();                                                                                                                                                // Mark all the data as read/stale
-  void logRXMMEASX(bool enabled = true);                                                                                                                               // Log data to file buffer
+  // UBX-RXM-RAWX and UBX-RXM-MEASX are now registered v4 messages (ubxRXMRAWX/ubxRXMMEASX) -
+  // see AGENTS.md "Adding the variable-length UBX messages". setAutoRXMRAWX/setAutoRXMRAWXrate/
+  // assumeAutoRXMRAWX/flushRXMRAWX/logRXMRAWX/setAutoRXMRAWXcallbackPtr and their RXM-MEASX
+  // equivalents are retired; use the generic setAutoUBX/setAutoUBXrate/assumeAutoUBX/flushUBX/
+  // logUBX/setAutoCallbackPtr above instead (by Class/ID = UBX_CLASS_RXM/UBX_RXM_RAWX or
+  // UBX_CLASS_RXM/UBX_RXM_MEASX, or by name "RXM"/"RAWX" or "RXM"/"MEASX"). getRXMRAWX()/
+  // getRXMMEASX() remain, as thin wrappers, since they are called directly rather than by name.
+  bool getRXMRAWX(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);   // Query module for latest RXM RAWX data. If autoRXMRAWX is disabled, performs an explicit poll and waits, if enabled does not block. Returns true if new RXM RAWX is available.
+  bool getRXMMEASX(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Query module for latest RXM MEASX data. If autoRXMMEASX is disabled, performs an explicit poll and waits, if enabled does not block. Returns true if new RXM MEASX is available.
 
   // Receiver status (MON)
 
@@ -1178,8 +1170,8 @@ public:
   UBX_RXM_PMP_message_t *packetUBXRXMPMPmessage = nullptr;       // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_RXM_QZSSL6_message_t *packetUBXRXMQZSSL6message = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_RXM_SFRBX_t *packetUBXRXMSFRBX = nullptr;                  // Pointer to struct. RAM will be allocated for this if/when necessary
-  UBX_RXM_RAWX_t *packetUBXRXMRAWX = nullptr;                    // Pointer to struct. RAM will be allocated for this if/when necessary
-  UBX_RXM_MEASX_t *packetUBXRXMMEASX = nullptr;                  // Pointer to struct. RAM will be allocated for this if/when necessary
+  // packetUBXRXMRAWX/packetUBXRXMMEASX no longer exist - ubxRXMRAWX/ubxRXMMEASX are now
+  // self-registered - see AGENTS.md "Adding the variable-length UBX messages".
 
   UBX_MON_COMMS_t *packetUBXMONCOMMS = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
 
@@ -1249,8 +1241,6 @@ protected:
   bool initPacketUBXRXMPMPmessage();    // Allocate RAM for packetUBXRXMPMPRaw and initialize it
   bool initPacketUBXRXMQZSSL6message(); // Allocate RAM for packetUBXRXMQZSSL6raw and initialize it
   bool initPacketUBXRXMSFRBX();         // Allocate RAM for packetUBXRXMSFRBX and initialize it
-  bool initPacketUBXRXMRAWX();          // Allocate RAM for packetUBXRXMRAWX and initialize it
-  bool initPacketUBXRXMMEASX();         // Allocate RAM for packetUBXRXMMEASX and initialize it
   bool initPacketUBXMONCOMMS();         // Allocate RAM for packetUBXMONCOMMS and initialize it
   bool initPacketUBXESFSTATUS();        // Allocate RAM for packetUBXESFSTATUS and initialize it
   bool initPacketUBXESFMEAS();          // Allocate RAM for packetUBXESFMEAS and initialize it
@@ -1345,7 +1335,10 @@ protected:
   void crc24q(uint8_t incoming, uint32_t *checksum); // Add incoming to checksum as per CRC-24Q
 
   // Define the maximum possible message length for packetAuto and enableUBXlogging
-  // UBX_NAV_SAT_MAX_LEN is just > UBX_RXM_RAWX_MAX_LEN
+  // On the ZED-X20P, we see:
+  //   RXM-RAWX messages containing 3920 bytes (122 blocks)
+  //   NAV-SAT messages containing 644 bytes (53 blocks)
+  //   NAV-SIG messages containing 2248 bytes (140 blocks)
   const uint16_t SFE_UBX_MAX_LENGTH = UBX_NAV_SAT_MAX_LEN;
 
   // UBX logging

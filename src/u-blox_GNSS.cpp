@@ -170,25 +170,9 @@ void DevUBLOXGNSS::end(void)
     packetUBXRXMSFRBX = nullptr;
   }
 
-  if (packetUBXRXMRAWX != nullptr)
-  {
-    if (packetUBXRXMRAWX->callbackData != nullptr)
-    {
-      delete packetUBXRXMRAWX->callbackData;
-    }
-    delete packetUBXRXMRAWX;
-    packetUBXRXMRAWX = nullptr;
-  }
-
-  if (packetUBXRXMMEASX != nullptr)
-  {
-    if (packetUBXRXMMEASX->callbackData != nullptr)
-    {
-      delete packetUBXRXMMEASX->callbackData;
-    }
-    delete packetUBXRXMMEASX;
-    packetUBXRXMMEASX = nullptr;
-  }
+  // packetUBXRXMRAWX/packetUBXRXMMEASX no longer exist - ubxRXMRAWX/ubxRXMMEASX are now
+  // self-registered and destroyed by ubxMessageVector's own destructor. See AGENTS.md
+  // "Adding the variable-length UBX messages".
 
   if (packetUBXMONCOMMS != nullptr)
   {
@@ -930,23 +914,14 @@ bool DevUBLOXGNSS::autoLookup(uint8_t Class, uint8_t ID, uint16_t *maxSize)
         *maxSize = UBX_RXM_SFRBX_MAX_LEN;
       return (packetUBXRXMSFRBX != nullptr);
     }
-    else if (ID == UBX_RXM_RAWX)
-    {
-      if (maxSize != nullptr)
-        *maxSize = UBX_RXM_RAWX_MAX_LEN;
-      return (packetUBXRXMRAWX != nullptr);
-    }
+    // UBX_RXM_RAWX and UBX_RXM_MEASX are both handled above via the registry (ubxRXMRAWX/
+    // ubxRXMMEASX are now self-registered) - see AGENTS.md "Adding the variable-length UBX
+    // messages".
     else if (ID == UBX_RXM_QZSSL6)
     {
       if (maxSize != nullptr)
         *maxSize = UBX_RXM_QZSSL6_MAX_LEN;
       return (packetUBXRXMQZSSL6message != nullptr);
-    }
-    else if (ID == UBX_RXM_MEASX)
-    {
-      if (maxSize != nullptr)
-        *maxSize = UBX_RXM_MEASX_MAX_LEN;
-      return (packetUBXRXMMEASX != nullptr);
     }
     else if (ID == UBX_RXM_PMP)
     {
@@ -2290,114 +2265,9 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
           }
         }
       }
-      else if (msg->id == UBX_RXM_RAWX)
-      // Note: length is variable
-      {
-        // Parse various byte fields into storage - but only if we have memory allocated for it
-        if (packetUBXRXMRAWX != nullptr)
-        {
-          for (uint8_t i = 0; i < 8; i++)
-          {
-            packetUBXRXMRAWX->data.header.rcvTow[i] = extractByte(msg, i);
-          }
-          packetUBXRXMRAWX->data.header.week = extractInt(msg, 8);
-          packetUBXRXMRAWX->data.header.leapS = extractSignedChar(msg, 10);
-          packetUBXRXMRAWX->data.header.numMeas = extractByte(msg, 11);
-          packetUBXRXMRAWX->data.header.recStat.all = extractByte(msg, 12);
-          packetUBXRXMRAWX->data.header.version = extractByte(msg, 13);
-
-          for (uint8_t i = 0; (i < UBX_RXM_RAWX_MAX_BLOCKS) && (i < packetUBXRXMRAWX->data.header.numMeas) && ((((uint16_t)i) * 32) < (msg->len - 16)); i++)
-          {
-            uint16_t offset = (((uint16_t)i) * 32) + 16;
-            for (uint8_t j = 0; j < 8; j++)
-            {
-              packetUBXRXMRAWX->data.blocks[i].prMes[j] = extractByte(msg, offset + j);
-              packetUBXRXMRAWX->data.blocks[i].cpMes[j] = extractByte(msg, offset + 8 + j);
-              if (j < 4)
-                packetUBXRXMRAWX->data.blocks[i].doMes[j] = extractByte(msg, offset + 16 + j);
-            }
-            packetUBXRXMRAWX->data.blocks[i].gnssId = extractByte(msg, offset + 20);
-            packetUBXRXMRAWX->data.blocks[i].svId = extractByte(msg, offset + 21);
-            packetUBXRXMRAWX->data.blocks[i].sigId = extractByte(msg, offset + 22);
-            packetUBXRXMRAWX->data.blocks[i].freqId = extractByte(msg, offset + 23);
-            packetUBXRXMRAWX->data.blocks[i].lockTime = extractInt(msg, offset + 24);
-            packetUBXRXMRAWX->data.blocks[i].cno = extractByte(msg, offset + 26);
-            packetUBXRXMRAWX->data.blocks[i].prStdev = extractByte(msg, offset + 27);
-            packetUBXRXMRAWX->data.blocks[i].cpStdev = extractByte(msg, offset + 28);
-            packetUBXRXMRAWX->data.blocks[i].doStdev = extractByte(msg, offset + 29);
-            packetUBXRXMRAWX->data.blocks[i].trkStat.all = extractByte(msg, offset + 30);
-          }
-
-          // Mark all datums as fresh (not read before)
-          packetUBXRXMRAWX->moduleQueried = true;
-
-          // Check if we need to copy the data for the callback
-          if ((packetUBXRXMRAWX->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-              && (packetUBXRXMRAWX->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-          {
-            memcpy(&packetUBXRXMRAWX->callbackData->header.rcvTow[0], &packetUBXRXMRAWX->data.header.rcvTow[0], sizeof(UBX_RXM_RAWX_data_t));
-            packetUBXRXMRAWX->automaticFlags.flags.bits.callbackCopyValid = true;
-          }
-
-          // Check if we need to copy the data into the file buffer
-          if (packetUBXRXMRAWX->automaticFlags.flags.bits.addToFileBuffer)
-          {
-            addedToFileBuffer = storePacket(msg);
-          }
-        }
-      }
-      else if (msg->id == UBX_RXM_MEASX)
-      // Note: length is variable
-      {
-        // Parse various byte fields into storage - but only if we have memory allocated for it
-        if (packetUBXRXMMEASX != nullptr)
-        {
-          packetUBXRXMMEASX->data.header.version = extractByte(msg, 0);
-          packetUBXRXMMEASX->data.header.gpsTOW = extractLong(msg, 4);
-          packetUBXRXMMEASX->data.header.gloTOW = extractLong(msg, 8);
-          packetUBXRXMMEASX->data.header.bdsTOW = extractLong(msg, 12);
-          packetUBXRXMMEASX->data.header.qzssTOW = extractLong(msg, 20);
-          packetUBXRXMMEASX->data.header.gpsTOWacc = extractInt(msg, 24);
-          packetUBXRXMMEASX->data.header.gloTOWacc = extractInt(msg, 26);
-          packetUBXRXMMEASX->data.header.bdsTOWacc = extractInt(msg, 28);
-          packetUBXRXMMEASX->data.header.qzssTOWacc = extractInt(msg, 32);
-          packetUBXRXMMEASX->data.header.numSV = extractByte(msg, 34);
-          packetUBXRXMMEASX->data.header.flags.all = extractByte(msg, 35);
-
-          for (uint8_t i = 0; (i < UBX_RXM_MEASX_MAX_BLOCKS) && (i < packetUBXRXMMEASX->data.header.numSV) && ((((uint16_t)i) * 24) < (msg->len - 44)); i++)
-          {
-            uint16_t offset = (((uint16_t)i) * 24) + 44;
-            packetUBXRXMMEASX->data.blocks[i].gnssId = extractByte(msg, offset + 0);
-            packetUBXRXMMEASX->data.blocks[i].svId = extractByte(msg, offset + 1);
-            packetUBXRXMMEASX->data.blocks[i].cNo = extractByte(msg, offset + 2);
-            packetUBXRXMMEASX->data.blocks[i].mpathIndic = extractByte(msg, offset + 3);
-            packetUBXRXMMEASX->data.blocks[i].dopplerMS = extractSignedLong(msg, offset + 4);
-            packetUBXRXMMEASX->data.blocks[i].dopplerHz = extractSignedLong(msg, offset + 8);
-            packetUBXRXMMEASX->data.blocks[i].wholeChips = extractInt(msg, offset + 12);
-            packetUBXRXMMEASX->data.blocks[i].fracChips = extractInt(msg, offset + 14);
-            packetUBXRXMMEASX->data.blocks[i].codePhase = extractLong(msg, offset + 16);
-            packetUBXRXMMEASX->data.blocks[i].intCodePhase = extractByte(msg, offset + 20);
-            packetUBXRXMMEASX->data.blocks[i].pseuRangeRMSErr = extractByte(msg, offset + 21);
-          }
-
-          // Mark all datums as fresh (not read before)
-          packetUBXRXMMEASX->moduleQueried = true;
-
-          // Check if we need to copy the data for the callback
-          if ((packetUBXRXMMEASX->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-              && (packetUBXRXMMEASX->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-          {
-            memcpy(&packetUBXRXMMEASX->callbackData->header.version, &packetUBXRXMMEASX->data.header.version, sizeof(UBX_RXM_MEASX_data_t));
-            packetUBXRXMMEASX->automaticFlags.flags.bits.callbackCopyValid = true;
-          }
-
-          // Check if we need to copy the data into the file buffer
-          if (packetUBXRXMMEASX->automaticFlags.flags.bits.addToFileBuffer)
-          {
-            addedToFileBuffer = storePacket(msg);
-          }
-        }
-      }
+      // UBX_RXM_RAWX and UBX_RXM_MEASX are both handled above via the registry (ubxRXMRAWX/
+      // ubxRXMMEASX are now self-registered) - see AGENTS.md "Adding the variable-length UBX
+      // messages".
       break;
     case UBX_CLASS_MON:
       if (msg->id == UBX_MON_COMMS && msg->len <= UBX_MON_COMMS_MAX_LEN)
@@ -3751,27 +3621,9 @@ void DevUBLOXGNSS::checkCallbacks(void)
     }
   }
 
-  if (packetUBXRXMRAWX != nullptr)                                               // If RAM has been allocated for message storage
-    if (packetUBXRXMRAWX->callbackData != nullptr)                               // If RAM has been allocated for the copy of the data
-      if (packetUBXRXMRAWX->automaticFlags.flags.bits.callbackCopyValid == true) // If the copy of the data is valid
-      {
-        if (packetUBXRXMRAWX->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          packetUBXRXMRAWX->callbackPointerPtr(packetUBXRXMRAWX->callbackData); // Call the callback
-        }
-        packetUBXRXMRAWX->automaticFlags.flags.bits.callbackCopyValid = false; // Mark the data as stale
-      }
-
-  if (packetUBXRXMMEASX != nullptr)                                               // If RAM has been allocated for message storage
-    if (packetUBXRXMMEASX->callbackData != nullptr)                               // If RAM has been allocated for the copy of the data
-      if (packetUBXRXMMEASX->automaticFlags.flags.bits.callbackCopyValid == true) // If the copy of the data is valid
-      {
-        if (packetUBXRXMMEASX->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          packetUBXRXMMEASX->callbackPointerPtr(packetUBXRXMMEASX->callbackData); // Call the callback
-        }
-        packetUBXRXMMEASX->automaticFlags.flags.bits.callbackCopyValid = false; // Mark the data as stale
-      }
+  // UBX_RXM_RAWX's and UBX_RXM_MEASX's callbacks are both dispatched by the generic registry
+  // walk above (ubxRXMRAWX/ubxRXMMEASX are now self-registered) - see AGENTS.md "Adding the
+  // variable-length UBX messages".
 
   if (packetUBXMONCOMMS != nullptr)                                               // If RAM has been allocated for message storage
     if (packetUBXMONCOMMS->callbackData != nullptr)                               // If RAM has been allocated for the copy of the data
@@ -8233,320 +8085,21 @@ void DevUBLOXGNSS::logRXMSFRBX(bool enabled)
   packetUBXRXMSFRBX->automaticFlags.flags.bits.addToFileBuffer = (uint8_t)enabled;
 }
 
-// ***** RXM RAWX automatic support
-
+// UBX-RXM-RAWX and UBX-RXM-MEASX are now registered v4 messages (ubxRXMRAWX/ubxRXMMEASX) - see
+// AGENTS.md "Adding the variable-length UBX messages". setAutoRXMRAWX/setAutoRXMRAWXrate/
+// assumeAutoRXMRAWX/flushRXMRAWX/logRXMRAWX/setAutoRXMRAWXcallbackPtr and their RXM-MEASX
+// equivalents are retired; the generic setAutoUBX/setAutoUBXrate/assumeAutoUBX/flushUBX/logUBX/
+// setAutoCallbackPtr (by Class/ID UBX_CLASS_RXM/UBX_RXM_RAWX or UBX_CLASS_RXM/UBX_RXM_MEASX, or
+// by name "RXM"/"RAWX" or "RXM"/"MEASX") do the same job for every registered message, RAWX and
+// MEASX included, with no per-message code required.
 bool DevUBLOXGNSS::getRXMRAWX(uint16_t maxWait)
 {
-  if (packetUBXRXMRAWX == nullptr)
-    initPacketUBXRXMRAWX();        // Check that RAM has been allocated for the RAWX data
-  if (packetUBXRXMRAWX == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (packetUBXRXMRAWX->automaticFlags.flags.bits.automatic && packetUBXRXMRAWX->automaticFlags.flags.bits.implicitUpdate)
-  {
-    // The GPS is automatically reporting, we just check whether we got unread data
-    checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-    return packetUBXRXMRAWX->moduleQueried;
-  }
-  else if (packetUBXRXMRAWX->automaticFlags.flags.bits.automatic && !packetUBXRXMRAWX->automaticFlags.flags.bits.implicitUpdate)
-  {
-    // Someone else has to call checkUblox for us...
-    return (false);
-  }
-  else
-  {
-    // The GPS is not automatically reporting navigation position so we have to poll explicitly
-    packetCfg.cls = UBX_CLASS_RXM;
-    packetCfg.id = UBX_RXM_RAWX;
-    packetCfg.len = 0;
-    packetCfg.startingSpot = 0;
-
-    // The data is parsed as part of processing the response
-    sfe_ublox_status_e retVal = sendCommand(&packetCfg, maxWait);
-
-    if (retVal == SFE_UBLOX_STATUS_DATA_RECEIVED)
-      return (true);
-
-    if (retVal == SFE_UBLOX_STATUS_DATA_OVERWRITTEN)
-    {
-      return (true);
-    }
-
-    return (false);
-  }
+  return getUBX(UBX_CLASS_RXM, UBX_RXM_RAWX, maxWait);
 }
-
-// Enable or disable automatic navigation message generation by the GNSS. This changes the way getRXMRAWX
-// works.
-bool DevUBLOXGNSS::setAutoRXMRAWX(bool enable, uint8_t layer, uint16_t maxWait)
-{
-  return setAutoRXMRAWXrate(enable ? 1 : 0, true, layer, maxWait);
-}
-
-// Enable or disable automatic navigation message generation by the GNSS. This changes the way getRXMRAWX
-// works.
-bool DevUBLOXGNSS::setAutoRXMRAWX(bool enable, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
-{
-  return setAutoRXMRAWXrate(enable ? 1 : 0, implicitUpdate, layer, maxWait);
-}
-
-// Enable or disable automatic navigation message generation by the GNSS. This changes the way getRXMRAWX
-// works.
-bool DevUBLOXGNSS::setAutoRXMRAWXrate(uint8_t rate, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
-{
-  if (packetUBXRXMRAWX == nullptr)
-    initPacketUBXRXMRAWX();        // Check that RAM has been allocated for the data
-  if (packetUBXRXMRAWX == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  if (rate > 127)
-    rate = 127;
-
-  uint32_t key = UBLOX_CFG_MSGOUT_UBX_RXM_RAWX_I2C;
-  if (_commType == COMM_TYPE_SPI)
-    key = UBLOX_CFG_MSGOUT_UBX_RXM_RAWX_SPI;
-  else if (_commType == COMM_TYPE_SERIAL)
-  {
-    if (!_UART2)
-      key = UBLOX_CFG_MSGOUT_UBX_RXM_RAWX_UART1;
-    else
-      key = UBLOX_CFG_MSGOUT_UBX_RXM_RAWX_UART2;
-  }
-
-  bool ok = setAutoMsgRateVal(key, rate, implicitUpdate, packetUBXRXMRAWX->automaticFlags, layer, maxWait);
-  packetUBXRXMRAWX->moduleQueried = false;
-  return ok;
-}
-
-// Enable automatic navigation message generation by the GNSS.
-bool DevUBLOXGNSS::setAutoRXMRAWXcallbackPtr(void (*callbackPointerPtr)(UBX_RXM_RAWX_data_t *), uint8_t layer, uint16_t maxWait)
-{
-  // Enable auto messages. Set implicitUpdate to false as we expect the user to call checkUblox manually.
-  bool result = setAutoRXMRAWX(true, false, layer, maxWait);
-  if (!result)
-    return (result); // Bail if setAuto failed
-
-  if (packetUBXRXMRAWX->callbackData == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    packetUBXRXMRAWX->callbackData = new UBX_RXM_RAWX_data_t; // Allocate RAM for the main struct
-  }
-
-  if (packetUBXRXMRAWX->callbackData == nullptr)
-  {
-    debugPrintln("setAutoRXMRAWXcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  packetUBXRXMRAWX->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// In case no config access to the GNSS is possible and VELNED is send cyclically already
-// set config to suitable parameters
-bool DevUBLOXGNSS::assumeAutoRXMRAWX(bool enabled, bool implicitUpdate)
-{
-  if (packetUBXRXMRAWX == nullptr)
-    initPacketUBXRXMRAWX();        // Check that RAM has been allocated for the data
-  if (packetUBXRXMRAWX == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  bool changes = packetUBXRXMRAWX->automaticFlags.flags.bits.automatic != enabled || packetUBXRXMRAWX->automaticFlags.flags.bits.implicitUpdate != implicitUpdate;
-  if (changes)
-  {
-    packetUBXRXMRAWX->automaticFlags.flags.bits.automatic = enabled;
-    packetUBXRXMRAWX->automaticFlags.flags.bits.implicitUpdate = implicitUpdate;
-  }
-  return changes;
-}
-
-// PRIVATE: Allocate RAM for packetUBXRXMRAWX and initialize it
-bool DevUBLOXGNSS::initPacketUBXRXMRAWX()
-{
-  packetUBXRXMRAWX = new UBX_RXM_RAWX_t; // Allocate RAM for the main struct
-  if (packetUBXRXMRAWX == nullptr)
-  {
-    debugPrintln("initPacketUBXRXMRAWX: RAM alloc failed!", true); // Important
-    return (false);
-  }
-  packetUBXRXMRAWX->automaticFlags.flags.all = 0;
-  packetUBXRXMRAWX->callbackPointerPtr = nullptr;
-  packetUBXRXMRAWX->callbackData = nullptr;
-  packetUBXRXMRAWX->moduleQueried = false;
-  return (true);
-}
-
-// Mark all the data as read/stale
-void DevUBLOXGNSS::flushRXMRAWX()
-{
-  if (packetUBXRXMRAWX == nullptr)
-    return;                                // Bail if RAM has not been allocated (otherwise we could be writing anywhere!)
-  packetUBXRXMRAWX->moduleQueried = false; // Mark all datums as stale (read before)
-}
-
-// Log this data in file buffer
-void DevUBLOXGNSS::logRXMRAWX(bool enabled)
-{
-  if (packetUBXRXMRAWX == nullptr)
-    return; // Bail if RAM has not been allocated (otherwise we could be writing anywhere!)
-  packetUBXRXMRAWX->automaticFlags.flags.bits.addToFileBuffer = (uint8_t)enabled;
-}
-
-// ***** RXM MEASX automatic support
 
 bool DevUBLOXGNSS::getRXMMEASX(uint16_t maxWait)
 {
-  if (packetUBXRXMMEASX == nullptr)
-    initPacketUBXRXMMEASX();        // Check that RAM has been allocated for the MEASX data
-  if (packetUBXRXMMEASX == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (packetUBXRXMMEASX->automaticFlags.flags.bits.automatic && packetUBXRXMMEASX->automaticFlags.flags.bits.implicitUpdate)
-  {
-    // The GPS is automatically reporting, we just check whether we got unread data
-    checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-    return packetUBXRXMMEASX->moduleQueried;
-  }
-  else if (packetUBXRXMMEASX->automaticFlags.flags.bits.automatic && !packetUBXRXMMEASX->automaticFlags.flags.bits.implicitUpdate)
-  {
-    // Someone else has to call checkUblox for us...
-    return (false);
-  }
-  else
-  {
-    // The GPS is not automatically reporting navigation position so we have to poll explicitly
-    packetCfg.cls = UBX_CLASS_RXM;
-    packetCfg.id = UBX_RXM_MEASX;
-    packetCfg.len = 0;
-    packetCfg.startingSpot = 0;
-
-    // The data is parsed as part of processing the response
-    sfe_ublox_status_e retVal = sendCommand(&packetCfg, maxWait);
-
-    if (retVal == SFE_UBLOX_STATUS_DATA_RECEIVED)
-      return (true);
-
-    if (retVal == SFE_UBLOX_STATUS_DATA_OVERWRITTEN)
-    {
-      return (true);
-    }
-
-    return (false);
-  }
-}
-
-// Enable or disable automatic navigation message generation by the GNSS. This changes the way getRXMMEASX
-// works.
-bool DevUBLOXGNSS::setAutoRXMMEASX(bool enable, uint8_t layer, uint16_t maxWait)
-{
-  return setAutoRXMMEASXrate(enable ? 1 : 0, true, layer, maxWait);
-}
-
-// Enable or disable automatic navigation message generation by the GNSS. This changes the way getRXMMEASX
-// works.
-bool DevUBLOXGNSS::setAutoRXMMEASX(bool enable, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
-{
-  return setAutoRXMMEASXrate(enable ? 1 : 0, implicitUpdate, layer, maxWait);
-}
-
-// Enable or disable automatic navigation message generation by the GNSS. This changes the way getRXMMEASX
-// works.
-bool DevUBLOXGNSS::setAutoRXMMEASXrate(uint8_t rate, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
-{
-  if (packetUBXRXMMEASX == nullptr)
-    initPacketUBXRXMMEASX();        // Check that RAM has been allocated for the data
-  if (packetUBXRXMMEASX == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  if (rate > 127)
-    rate = 127;
-
-  uint32_t key = UBLOX_CFG_MSGOUT_UBX_RXM_MEASX_I2C;
-  if (_commType == COMM_TYPE_SPI)
-    key = UBLOX_CFG_MSGOUT_UBX_RXM_MEASX_SPI;
-  else if (_commType == COMM_TYPE_SERIAL)
-  {
-    if (!_UART2)
-      key = UBLOX_CFG_MSGOUT_UBX_RXM_MEASX_UART1;
-    else
-      key = UBLOX_CFG_MSGOUT_UBX_RXM_MEASX_UART2;
-  }
-
-  bool ok = setAutoMsgRateVal(key, rate, implicitUpdate, packetUBXRXMMEASX->automaticFlags, layer, maxWait);
-  packetUBXRXMMEASX->moduleQueried = false;
-  return ok;
-}
-
-// Enable automatic navigation message generation by the GNSS.
-bool DevUBLOXGNSS::setAutoRXMMEASXcallbackPtr(void (*callbackPointerPtr)(UBX_RXM_MEASX_data_t *), uint8_t layer, uint16_t maxWait)
-{
-  // Enable auto messages. Set implicitUpdate to false as we expect the user to call checkUblox manually.
-  bool result = setAutoRXMMEASX(true, false, layer, maxWait);
-  if (!result)
-    return (result); // Bail if setAuto failed
-
-  if (packetUBXRXMMEASX->callbackData == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    packetUBXRXMMEASX->callbackData = new UBX_RXM_MEASX_data_t; // Allocate RAM for the main struct
-  }
-
-  if (packetUBXRXMMEASX->callbackData == nullptr)
-  {
-    debugPrintln("setAutoRXMMEASXcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  packetUBXRXMMEASX->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// In case no config access to the GNSS is possible and VELNED is send cyclically already
-// set config to suitable parameters
-bool DevUBLOXGNSS::assumeAutoRXMMEASX(bool enabled, bool implicitUpdate)
-{
-  if (packetUBXRXMMEASX == nullptr)
-    initPacketUBXRXMMEASX();        // Check that RAM has been allocated for the data
-  if (packetUBXRXMMEASX == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  bool changes = packetUBXRXMMEASX->automaticFlags.flags.bits.automatic != enabled || packetUBXRXMMEASX->automaticFlags.flags.bits.implicitUpdate != implicitUpdate;
-  if (changes)
-  {
-    packetUBXRXMMEASX->automaticFlags.flags.bits.automatic = enabled;
-    packetUBXRXMMEASX->automaticFlags.flags.bits.implicitUpdate = implicitUpdate;
-  }
-  return changes;
-}
-
-// PRIVATE: Allocate RAM for packetUBXRXMMEASX and initialize it
-bool DevUBLOXGNSS::initPacketUBXRXMMEASX()
-{
-  packetUBXRXMMEASX = new UBX_RXM_MEASX_t; // Allocate RAM for the main struct
-  if (packetUBXRXMMEASX == nullptr)
-  {
-    debugPrintln("initPacketUBXRXMMEASX: RAM alloc failed!", true); // Important
-    return (false);
-  }
-  packetUBXRXMMEASX->automaticFlags.flags.all = 0;
-  packetUBXRXMMEASX->callbackPointerPtr = nullptr;
-  packetUBXRXMMEASX->callbackData = nullptr;
-  packetUBXRXMMEASX->moduleQueried = false;
-  return (true);
-}
-
-// Mark all the data as read/stale
-void DevUBLOXGNSS::flushRXMMEASX()
-{
-  if (packetUBXRXMMEASX == nullptr)
-    return;                                 // Bail if RAM has not been allocated (otherwise we could be writing anywhere!)
-  packetUBXRXMMEASX->moduleQueried = false; // Mark all datums as stale (read before)
-}
-
-// Log this data in file buffer
-void DevUBLOXGNSS::logRXMMEASX(bool enabled)
-{
-  if (packetUBXRXMMEASX == nullptr)
-    return; // Bail if RAM has not been allocated (otherwise we could be writing anywhere!)
-  packetUBXRXMMEASX->automaticFlags.flags.bits.addToFileBuffer = (uint8_t)enabled;
+  return getUBX(UBX_CLASS_RXM, UBX_RXM_MEASX, maxWait);
 }
 
 // ***** MON COMMS automatic support
