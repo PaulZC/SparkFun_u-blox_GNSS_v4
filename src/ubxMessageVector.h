@@ -256,11 +256,11 @@ public:
                 // _head "if space is available"). Every individual SFRBX/ESF-MEAS message matters to
                 // a downstream decoder, so silently replacing a buffered-but-unread one would be the
                 // wrong failure mode here - this only happens if checkCallbacks() falls behind.
-                debugPrint("storePayload: Class 0x", true);
-                debugPrint(Class, HEX);
-                debugPrint(" ID 0x");
-                debugPrint(ID, HEX);
-                debugPrintln(" _callbackStorage ring buffer full. Message lost.")
+                debugPrint("storePayload: Class 0x", true); // Important
+                debugPrint(Class, HEX, true);
+                debugPrint(" ID 0x", true);
+                debugPrint(ID, HEX, true);
+                debugPrintln(" _callbackStorage ring buffer full. Message lost.", true);
             }
         }
 
