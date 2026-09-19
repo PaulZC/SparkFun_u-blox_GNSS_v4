@@ -707,6 +707,8 @@ public:
   ubxMessage *getUbxMessagePtr(ubxCallbackDataCommon_t *theData); // Factory: hands back the opaque per-message object a callback's ubxCallbackDataCommon_t* points at
   ubxAnyType getUbxMessageFieldCallback(ubxMessage *theMessage, const char *fieldName); // Factory: extracts a named field from the message a callback just fired for, reading from its _callbackStorage
   ubxAnyType getUbxMessageField(ubxMessage *theMessage, const char *fieldName); // Factory: extracts a named field from the message, reading from its _storage
+  ubxAnyType getUbxMessageBlockFieldCallback(ubxMessage *theMessage, uint16_t blockIndex, const char *fieldName); // Factory: extracts a named field from repeated block 'blockIndex' of a variable-length message (e.g. NAV-SAT), reading from its _callbackStorage
+  ubxAnyType getUbxMessageBlockField(ubxMessage *theMessage, uint16_t blockIndex, const char *fieldName); // Factory: extracts a named field from repeated block 'blockIndex' of a variable-length message (e.g. NAV-SAT), reading from its _storage
   bool getUBX(const char *Class, const char *ID, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Generic poll-or-check-automatic, by Class/ID
   bool getUBX(uint8_t Class, uint8_t ID, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Generic poll-or-check-automatic, by Class/ID
   bool getUBXfield(const char *Class, const char *ID, const char *field, ubxAnyType *value); // Generic field read, by Class/ID/name
@@ -727,14 +729,13 @@ public:
   // Generic replacement for the old per-message setAuto<MSG>callbackPtr() functions
   bool setAutoCallbackPtr(const char *classStr, const char *idStr, void (*callbackPointerPtr)(ubxCallbackDataCommon_t *));
 
-  bool getNAVSAT(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                                                                     // Query module for latest AssistNow Autonomous status and load global vars:. If autoNAVSAT is disabled, performs an explicit poll and waits, if enabled does not block. Returns true if new NAVSAT is available.
-  bool setAutoNAVSAT(bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                // Enable/disable automatic NAVSAT reports at the navigation frequency
-  bool setAutoNAVSAT(bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                           // Enable/disable automatic NAVSAT reports at the navigation frequency, with implicitUpdate == false accessing stale data will not issue parsing of data in the rxbuffer of your interface, instead you have to call checkUblox when you want to perform an update
-  bool setAutoNAVSATrate(uint8_t rate, bool implicitUpdate = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                // Set the rate for automatic NAVSAT reports
-  bool setAutoNAVSATcallbackPtr(void (*callbackPointerPtr)(UBX_NAV_SAT_data_t *), uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Enable automatic NAVSAT reports at the navigation frequency. Data is accessed from the callback.
-  bool assumeAutoNAVSAT(bool enabled, bool implicitUpdate = true);                                                                                                 // In case no config access to the GPS is possible and NAVSAT is send cyclically already
-  void flushNAVSAT();                                                                                                                                              // Mark all the NAVSAT data as read/stale
-  void logNAVSAT(bool enabled = true);                                                                                                                             // Log data to file buffer
+  // UBX-NAV-SAT is now a registered v4 message (ubxNAVSAT) - see AGENTS.md "Adding the
+  // variable-length UBX messages". setAutoNAVSAT/setAutoNAVSATrate/assumeAutoNAVSAT/
+  // flushNAVSAT/logNAVSAT/setAutoNAVSATcallbackPtr are retired; use the generic
+  // setAutoUBX/setAutoUBXrate/assumeAutoUBX/flushUBX/logUBX/setAutoCallbackPtr above instead
+  // (by Class/ID = UBX_CLASS_NAV/UBX_NAV_SAT, or by name "NAV"/"SAT"). getNAVSAT() remains, as a
+  // thin wrapper, since it is called directly rather than by name.
+  bool getNAVSAT(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Query module for latest NAVSAT data. If autoNAVSAT is disabled, performs an explicit poll and waits, if enabled does not block. Returns true if new NAVSAT is available.
 
   bool getNAVSIG(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                                                                     // Query module for latest AssistNow Autonomous status and load global vars:. If autoNAVSIG is disabled, performs an explicit poll and waits, if enabled does not block. Returns true if new NAVSIG is available.
   bool setAutoNAVSIG(bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                // Enable/disable automatic NAVSIG reports at the navigation frequency
@@ -1174,7 +1175,6 @@ public:
 
   ubxMessageVector ubxMessages; // v4 scaffolding - the registry of per-message objects. See AGENTS.md "Reference Scaffolding"
 
-  UBX_NAV_SAT_t *packetUBXNAVSAT = nullptr;                      // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_NAV_SIG_t *packetUBXNAVSIG = nullptr;                      // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_RXM_PMP_t *packetUBXRXMPMP = nullptr;                      // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_RXM_PMP_message_t *packetUBXRXMPMPmessage = nullptr;       // Pointer to struct. RAM will be allocated for this if/when necessary
@@ -1247,7 +1247,6 @@ protected:
   bool initGeofenceParams();  // Allocate RAM for currentGeofenceParams and initialize it
   bool initModuleSWVersion(); // Allocate RAM for moduleSWVersion and initialize it
 
-  bool initPacketUBXNAVSAT();           // Allocate RAM for packetUBXNAVSAT and initialize it
   bool initPacketUBXNAVSIG();           // Allocate RAM for packetUBXNAVSIG and initialize it
   bool initPacketUBXRXMPMP();           // Allocate RAM for packetUBXRXMPMP and initialize it
   bool initPacketUBXRXMPMPmessage();    // Allocate RAM for packetUBXRXMPMPRaw and initialize it

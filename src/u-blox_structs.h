@@ -1178,14 +1178,11 @@ typedef struct
   UBX_NAV_SAT_block_t blocks[UBX_NAV_SAT_MAX_BLOCKS];
 } UBX_NAV_SAT_data_t;
 
-typedef struct
-{
-  ubxAutomaticFlags automaticFlags;
-  UBX_NAV_SAT_data_t data;
-  bool moduleQueried;
-  void (*callbackPointerPtr)(UBX_NAV_SAT_data_t *);
-  UBX_NAV_SAT_data_t *callbackData;
-} UBX_NAV_SAT_t;
+// UBX_NAV_SAT_t (the automaticFlags/moduleQueried/callbackPointerPtr/callbackData wrapper) no
+// longer exists - UBX-NAV-SAT is now a registered v4 message (ubxNAVSAT in
+// src/ubxMessages/ubxNAVSAT.h), which carries the same bookkeeping generically via ubxMessage's
+// own members. UBX_NAV_SAT_data_t/_header_t/_block_t above remain, as the documented wire format.
+// See AGENTS.md "Adding the variable-length UBX messages".
 
 // UBX-NAV-SIG (0x01 0x43): Signal information
 // Note: length is variable

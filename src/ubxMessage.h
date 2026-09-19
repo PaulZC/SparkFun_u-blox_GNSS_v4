@@ -226,13 +226,22 @@ public:
     // getUbxMessageField() below). This is the shared core that used to be duplicated
     // between the live-read path and the (new) callback-read path; ubxMessageVector::extractValue()
     // delegates to this too.
-    bool extractFieldFrom(const uint8_t *buffer, const char *fieldName, ubxAnyType *value) const
+    // 'fieldsOverride'/'numFieldsOverride' let a caller search a field table other than this
+    // object's own _fields/_numFields - specifically, a repeated block's own field table (see
+    // _blockFields/_numBlockFields below and DevUBLOXGNSS::getUbxMessageBlockField() /
+    // getUbxMessageBlockFieldCallback() in u-blox_GNSS.cpp), for a message such as UBX-NAV-SAT
+    // that has a header (described by _fields) plus a variable number of identically-shaped
+    // repeated blocks (each described by _blockFields). Every existing caller omits these two
+    // arguments and gets exactly today's behavior.
+    bool extractFieldFrom(const uint8_t *buffer, const char *fieldName, ubxAnyType *value,
+                           const ubxField *fieldsOverride = nullptr, uint8_t numFieldsOverride = 0) const
     {
         if (buffer == nullptr)
             return false;
 
-        const ubxField *fields = (const ubxField *)_fields;
-        for (uint8_t i = 0; i < _numFields; i++)
+        const ubxField *fields = fieldsOverride ? fieldsOverride : (const ubxField *)_fields;
+        uint8_t numFields = fieldsOverride ? numFieldsOverride : _numFields;
+        for (uint8_t i = 0; i < numFields; i++)
         {
             if (strncmp(fields[i].fieldName, fieldName, sizeof(fields[i].fieldName)) != 0)
                 continue;
@@ -302,9 +311,17 @@ public:
 
     // Called once, from the subclass's own constructor, to register its identity/metadata into
     // the base class.
+    // 'blockFields'/'numBlockFields'/'blockHeaderLength'/'blockLength'/'maxBlocks' describe a
+    // variable-length message made of a fixed-size header (already described by 'ubxFields'
+    // above) followed by 0..'maxBlocks' identically-shaped repeated blocks - e.g. UBX-NAV-SAT's
+    // per-SV blocks. They default to nullptr/0, so every existing message subclass (which passes
+    // exactly today's 9 arguments) is unaffected. See AGENTS.md "Adding the variable-length UBX
+    // messages".
     void addClassID(uint8_t Class, uint8_t ID, const char *classStr, const char *idStr,
                      uint16_t messageLength, uint8_t numCallbackCopies, uint8_t numFields,
-                     const void *ubxFields, const uint32_t *msgOutKeys)
+                     const void *ubxFields, const uint32_t *msgOutKeys,
+                     const void *blockFields = nullptr, uint8_t numBlockFields = 0,
+                     uint16_t blockHeaderLength = 0, uint16_t blockLength = 0, uint16_t maxBlocks = 0)
     {
         _Class = Class;
         _ID = ID;
@@ -314,6 +331,11 @@ public:
         _numCallbackCopies = numCallbackCopies;
         _numFields = numFields;
         _fields = ubxFields;
+        _blockFields = blockFields;
+        _numBlockFields = numBlockFields;
+        _blockHeaderLength = blockHeaderLength;
+        _blockLength = blockLength;
+        _maxBlocks = maxBlocks;
         _storage = nullptr; // Only allocated when needed - see initStorage()
         _callbackStorage = nullptr; // Only allocated when needed - see initCallbackStorage()
         _moduleQueried = false;
@@ -337,6 +359,14 @@ public:
     // message, not a per-field bitmask - see AGENTS.md "moduleQueried".
     bool _moduleQueried = false;
     const void *_fields = nullptr; // Points at the subclass's own, permanently-lived `ubxFields[]` table
+    // Variable-length/repeated-block support (e.g. UBX-NAV-SAT's per-SV blocks) - see AGENTS.md
+    // "Adding the variable-length UBX messages". _blockFields is nullptr for every ordinary,
+    // fixed-shape message; a message made of a header plus repeated blocks sets all five.
+    const void *_blockFields = nullptr;   // Points at the subclass's own `ubxBlockFields[]` table; nullptr => no repeated blocks
+    uint8_t _numBlockFields = 0;          // Number of entries in _blockFields
+    uint16_t _blockHeaderLength = 0;      // Bytes before the first repeated block (e.g. 8 for NAV-SAT)
+    uint16_t _blockLength = 0;            // Bytes per repeated block (e.g. 12 for NAV-SAT)
+    uint16_t _maxBlocks = 0;              // Upper bound on the number of repeated blocks (e.g. UBX_NAV_SAT_MAX_BLOCKS)
     uint8_t *_callbackStorage = nullptr; // Storage for the callback copy / copies - nullptr until initCallbackStorage() is called
     // Called by DevUBLOXGNSS::checkCallbacks() (via the generic registry walk) once fresh data is
     // waiting - see AGENTS.md "setAutoCallbackPtr". Takes a ubxCallbackDataCommon_t*, not a raw

@@ -282,6 +282,8 @@ setCfgValset	KEYWORD2
 getUbxMessagePtr	KEYWORD2
 getUbxMessageField	KEYWORD2
 getUbxMessageFieldCallback	KEYWORD2
+getUbxMessageBlockField	KEYWORD2
+getUbxMessageBlockFieldCallback	KEYWORD2
 findByName	KEYWORD2
 
 getDAHeadingRelPosN	KEYWORD2
@@ -291,12 +293,6 @@ getDAHeadingRelPosAccN	KEYWORD2
 getDAHeadingRelPosAccE	KEYWORD2
 getDAHeadingRelPosAccD	KEYWORD2
 getNAVSAT	KEYWORD2
-setAutoNAVSAT	KEYWORD2
-setAutoNAVSATrate	KEYWORD2
-setAutoNAVSATcallbackPtr	KEYWORD2
-assumeAutoNAVSAT	KEYWORD2
-flushNAVSAT	KEYWORD2
-logNAVSAT	KEYWORD2
 
 getNAVSIG	KEYWORD2
 setAutoNAVSIG	KEYWORD2
