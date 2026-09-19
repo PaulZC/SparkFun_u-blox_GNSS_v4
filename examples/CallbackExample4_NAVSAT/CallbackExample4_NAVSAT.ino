@@ -52,6 +52,7 @@ void newNAVSAT(ubxCallbackDataCommon_t *theData)
       case 4: Serial.print(F("IMES    ")); break;
       case 5: Serial.print(F("QZSS    ")); break;
       case 6: Serial.print(F("GLONASS ")); break;
+      case 7: Serial.print(F("NAVIC   ")); break;
       default: Serial.print(F("UNKNOWN ")); break;
     }
 
