@@ -75,7 +75,6 @@ void setup()
   // Enable the NAV HPPOSLLH Message on I2C at the navigation rate
   myGNSS.setCfgValset(UBLOX_CFG_MSGOUT_UBX_NAV_HPPOSLLH_I2C, 1);
 
-  // Enable automatic NAV HPPOSLLH messages with callback to printPVTdata
   // Set up a callback for NAV HPPOSLLH messages. Call printPVTdata() each time one arrives.
   // Note: this does not enable the HPPOSLLH message. The message is assumed to be periodic.
   // All this does is register the callback.
