@@ -52,6 +52,7 @@
 #include "ubxMessages/ubxRXMCOR.h"
 #include "ubxMessages/ubxRXMMEASX.h" // Variable-length: header + repeated per-satellite blocks - see AGENTS.md "Adding the variable-length UBX messages"
 #include "ubxMessages/ubxRXMRAWX.h" // Variable-length: header + repeated per-measurement blocks - see AGENTS.md "Adding the variable-length UBX messages"
+#include "ubxMessages/ubxRXMSFRBX.h" // Variable-length: header + repeated 4-byte data words, ring-buffered callback storage (numCallbackCopies=14) - see AGENTS.md "Adding support for RXM-SFRBX"
 #include "ubxMessages/ubxMONHW.h"
 #include "ubxMessages/ubxMONHW2.h"
 #include "ubxMessages/ubxTIMTM2.h"
@@ -226,18 +227,40 @@ public:
 
         // v4 scaffolding: if a callback has been registered (see DevUBLOXGNSS::setAutoCallbackPtr()
         // / AGENTS.md "setAutoCallbackPtr"), also freeze this payload into the message's separate
-        // _callbackStorage and mark it pending, so DevUBLOXGNSS::checkCallbacks() has a stable copy
-        // to hand the user's callback even if _storage gets overwritten by the next message before
-        // checkCallbacks() next runs - see AGENTS.md "class ubxMessage needs separate callback
-        // storage" and "Future work". Only a single callback copy is kept (matches
-        // _numCallbackCopies == 1 for every currently-registered message); ring-buffered multi-copy
-        // support for RXM-SFRBX/ESF-MEAS is still future work, per AGENTS.md.
-        if (msg->_callbackPtr != nullptr)
+        // _callbackStorage - a ring buffer of _numCallbackCopies slots - so DevUBLOXGNSS::checkCallbacks()
+        // has stable copies to hand the user's callback even if _storage gets overwritten by the next
+        // message before checkCallbacks() next runs, and so a burst of several messages arriving in one
+        // checkUblox() call (e.g. RXM-SFRBX) isn't collapsed down to just the latest one - see AGENTS.md
+        // "class ubxMessage needs separate callback storage" and "Adding support for RXM-SFRBX".
+        if ((msg->_callbackPtr != nullptr) && msg->initCallbackStorage())
         {
-            if (msg->initCallbackStorage())
+            if (msg->_numCallbackCopies <= 1)
             {
+                // Unchanged from the original single-slot behavior: always overwrite the one slot
+                // with the newest data (latest wins) - the right behavior for a "give me the latest"
+                // message like NAV-PVT. This is every message registered so far except RXM-SFRBX.
                 memcpy(msg->_callbackStorage, payload, len);
-                msg->_callbackDataValid = true;
+                msg->_callbackCount = 1; // head/tail stay at 0 - a degenerate 1-slot ring
+            }
+            else if (msg->_callbackCount < msg->_numCallbackCopies) // Ring has a free slot
+            {
+                uint8_t *slot = msg->_callbackStorage + ((uint32_t)msg->_callbackHead * msg->_messageLength);
+                memcpy(slot, payload, len);
+                msg->_callbackHead = (uint8_t)((msg->_callbackHead + 1) % msg->_numCallbackCopies);
+                msg->_callbackCount++;
+            }
+            else
+            {
+                // Ring is full - drop this one and keep what's already buffered, rather than
+                // overwriting unread data (per AGENTS.md "Adding support for RXM-SFRBX": write to
+                // _head "if space is available"). Every individual SFRBX/ESF-MEAS message matters to
+                // a downstream decoder, so silently replacing a buffered-but-unread one would be the
+                // wrong failure mode here - this only happens if checkCallbacks() falls behind.
+                debugPrint("storePayload: Class 0x", true);
+                debugPrint(Class, HEX);
+                debugPrint(" ID 0x");
+                debugPrint(ID, HEX);
+                debugPrintln(" _callbackStorage ring buffer full. Message lost.")
             }
         }
 

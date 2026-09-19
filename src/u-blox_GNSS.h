@@ -761,16 +761,13 @@ public:
   bool setRXMQZSSL6messageCallbackPtr(void (*callbackPointerPtr)(UBX_RXM_QZSSL6_message_data_t *)); // Use this if you want all of the QZSSL6 message (including sync chars, checksum, etc.) to push to a GNSS
 
 
-  // Note: RXM-SFRBX is output-only. It cannot be polled. Strictly getRXMSFRBX should be deprecated
-  bool getRXMSFRBX(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                                                                       // RXM SFRBX
-  bool setAutoRXMSFRBX(bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                  // Enable/disable automatic RXM SFRBX reports at the navigation frequency
-  bool setAutoRXMSFRBX(bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                             // Enable/disable automatic RXM SFRBX reports at the navigation frequency, with implicitUpdate == false accessing stale data will not issue parsing of data in the rxbuffer of your interface, instead you have to call checkUblox when you want to perform an update
-  bool setAutoRXMSFRBXrate(uint8_t rate, bool implicitUpdate = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                  // Set the rate for automatic SFRBX reports
-  bool setAutoRXMSFRBXcallbackPtr(void (*callbackPointerPtr)(UBX_RXM_SFRBX_data_t *), uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Enable automatic SFRBX reports at the navigation frequency. Data is accessed from the callback.
-  bool setAutoRXMSFRBXmessageCallbackPtr(void (*callbackMessagePointerPtr)(UBX_RXM_SFRBX_message_data_t *), uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Use this if you want all of the SFRBX message (including sync chars, checksum, etc.) to push to the PointPerfect Library
-  bool assumeAutoRXMSFRBX(bool enabled, bool implicitUpdate = true);                                                                                                   // In case no config access to the GPS is possible and RXM SFRBX is send cyclically already
-  void flushRXMSFRBX();                                                                                                                                                // Mark all the data as read/stale
-  void logRXMSFRBX(bool enabled = true);                                                                                                                               // Log data to file buffer
+  // UBX-RXM-SFRBX is now a registered v4 message (ubxRXMSFRBX) - see AGENTS.md "Adding support
+  // for RXM-SFRBX". setAutoRXMSFRBX/setAutoRXMSFRBXrate/setAutoRXMSFRBXcallbackPtr/
+  // setAutoRXMSFRBXmessageCallbackPtr/assumeAutoRXMSFRBX/flushRXMSFRBX/logRXMSFRBX are retired -
+  // see the comment above getRXMSFRBX()'s definition in u-blox_GNSS.cpp. getRXMSFRBX is kept as a
+  // thin wrapper for backward compatibility, though it should strictly be deprecated (SFRBX is
+  // output-only and cannot be polled - see issue #167).
+  bool getRXMSFRBX(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // RXM SFRBX
 
   // UBX-RXM-RAWX and UBX-RXM-MEASX are now registered v4 messages (ubxRXMRAWX/ubxRXMMEASX) -
   // see AGENTS.md "Adding the variable-length UBX messages". setAutoRXMRAWX/setAutoRXMRAWXrate/
@@ -1169,7 +1166,8 @@ public:
   UBX_RXM_PMP_t *packetUBXRXMPMP = nullptr;                      // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_RXM_PMP_message_t *packetUBXRXMPMPmessage = nullptr;       // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_RXM_QZSSL6_message_t *packetUBXRXMQZSSL6message = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
-  UBX_RXM_SFRBX_t *packetUBXRXMSFRBX = nullptr;                  // Pointer to struct. RAM will be allocated for this if/when necessary
+  // packetUBXRXMSFRBX no longer exists - ubxRXMSFRBX is now self-registered - see AGENTS.md
+  // "Adding support for RXM-SFRBX".
   // packetUBXRXMRAWX/packetUBXRXMMEASX no longer exist - ubxRXMRAWX/ubxRXMMEASX are now
   // self-registered - see AGENTS.md "Adding the variable-length UBX messages".
 
@@ -1240,7 +1238,6 @@ protected:
   bool initPacketUBXRXMPMP();           // Allocate RAM for packetUBXRXMPMP and initialize it
   bool initPacketUBXRXMPMPmessage();    // Allocate RAM for packetUBXRXMPMPRaw and initialize it
   bool initPacketUBXRXMQZSSL6message(); // Allocate RAM for packetUBXRXMQZSSL6raw and initialize it
-  bool initPacketUBXRXMSFRBX();         // Allocate RAM for packetUBXRXMSFRBX and initialize it
   bool initPacketUBXMONCOMMS();         // Allocate RAM for packetUBXMONCOMMS and initialize it
   bool initPacketUBXESFSTATUS();        // Allocate RAM for packetUBXESFSTATUS and initialize it
   bool initPacketUBXESFMEAS();          // Allocate RAM for packetUBXESFMEAS and initialize it

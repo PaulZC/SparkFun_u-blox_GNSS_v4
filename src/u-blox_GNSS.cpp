@@ -156,19 +156,8 @@ void DevUBLOXGNSS::end(void)
     packetUBXRXMQZSSL6message = nullptr;
   }
 
-  if (packetUBXRXMSFRBX != nullptr)
-  {
-    if (packetUBXRXMSFRBX->callbackData != nullptr)
-    {
-      delete packetUBXRXMSFRBX->callbackData;
-    }
-    if (packetUBXRXMSFRBX->callbackMessageData != nullptr)
-    {
-      delete[] packetUBXRXMSFRBX->callbackMessageData;
-    }
-    delete packetUBXRXMSFRBX;
-    packetUBXRXMSFRBX = nullptr;
-  }
+  // packetUBXRXMSFRBX no longer exists - ubxRXMSFRBX is now self-registered and destroyed by
+  // ubxMessageVector's own destructor. See AGENTS.md "Adding support for RXM-SFRBX".
 
   // packetUBXRXMRAWX/packetUBXRXMMEASX no longer exist - ubxRXMRAWX/ubxRXMMEASX are now
   // self-registered and destroyed by ubxMessageVector's own destructor. See AGENTS.md
@@ -908,16 +897,10 @@ bool DevUBLOXGNSS::autoLookup(uint8_t Class, uint8_t ID, uint16_t *maxSize)
     // are now self-registered) - see AGENTS.md "Adding the variable-length UBX messages".
     break;
   case UBX_CLASS_RXM:
-    if (ID == UBX_RXM_SFRBX)
-    {
-      if (maxSize != nullptr)
-        *maxSize = UBX_RXM_SFRBX_MAX_LEN;
-      return (packetUBXRXMSFRBX != nullptr);
-    }
-    // UBX_RXM_RAWX and UBX_RXM_MEASX are both handled above via the registry (ubxRXMRAWX/
-    // ubxRXMMEASX are now self-registered) - see AGENTS.md "Adding the variable-length UBX
-    // messages".
-    else if (ID == UBX_RXM_QZSSL6)
+    // UBX_RXM_SFRBX, UBX_RXM_RAWX and UBX_RXM_MEASX are all handled above via the registry
+    // (ubxRXMSFRBX/ubxRXMRAWX/ubxRXMMEASX are now self-registered) - see AGENTS.md "Adding the
+    // variable-length UBX messages" and "Adding support for RXM-SFRBX".
+    if (ID == UBX_RXM_QZSSL6)
     {
       if (maxSize != nullptr)
         *maxSize = UBX_RXM_QZSSL6_MAX_LEN;
@@ -2079,7 +2062,8 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
     //  copies the payload into storage - correctly truncating the length if needed
     //  marks the data as fresh (_moduleQueried = true)
     //  if the _callbackPtr is not nullptr:
-    //   it also copies the payload into _callbackStorage and sets _callbackDataValid
+    //   it also copies the payload into a free slot of _callbackStorage's ring buffer, advancing
+    //   _callbackHead and _callbackCount - see AGENTS.md "Adding support for RXM-SFRBX"
     if (ubxMessages.storePayload(msg->cls, msg->id, msg->payload, msg->len) != SFE_UBLOX_STATUS_SUCCESS)
     {
       debugPrint("processUBXpacket: storePayload failed for msg Class ");
@@ -2196,75 +2180,10 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
           }
         }
       }
-      else if (msg->id == UBX_RXM_SFRBX)
-      // Note: length is variable
-      // Note: on protocol version 17: numWords is (0..16)
-      //       on protocol version 18+: numWords is (0..10)
-      {
-        // Parse various byte fields into storage - but only if we have memory allocated for it
-        if (packetUBXRXMSFRBX != nullptr)
-        {
-          packetUBXRXMSFRBX->data.gnssId = extractByte(msg, 0);
-          packetUBXRXMSFRBX->data.svId = extractByte(msg, 1);
-          packetUBXRXMSFRBX->data.freqId = extractByte(msg, 3);
-          packetUBXRXMSFRBX->data.numWords = extractByte(msg, 4);
-          packetUBXRXMSFRBX->data.chn = extractByte(msg, 5);
-          packetUBXRXMSFRBX->data.version = extractByte(msg, 6);
-
-          for (uint8_t i = 0; (i < UBX_RXM_SFRBX_MAX_WORDS) && (i < packetUBXRXMSFRBX->data.numWords) && ((i * 4) < (msg->len - 8)); i++)
-          {
-            packetUBXRXMSFRBX->data.dwrd[i] = extractLong(msg, 8 + (i * 4));
-          }
-
-          // Mark all datums as fresh (not read before)
-          packetUBXRXMSFRBX->moduleQueried = true;
-
-          // Check if we need to copy the data for the callback
-          if (packetUBXRXMSFRBX->callbackData != nullptr) // If RAM has been allocated for the copies of the data
-          {
-            for (uint32_t i = 0; i < UBX_RXM_SFRBX_CALLBACK_BUFFERS; i++) // Check all available buffers
-            {
-              if ((packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackCopyValid & (1 << i)) == 0) // AND the buffer is empty
-              {
-                memcpy(&packetUBXRXMSFRBX->callbackData[i].gnssId, &packetUBXRXMSFRBX->data.gnssId, sizeof(UBX_RXM_SFRBX_data_t));
-                packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackCopyValid |= (1 << i);
-                break; // Only copy once - into first available buffer
-              }
-            }
-          }
-
-          // Check if we need to copy the data for the message callbacks
-          if (packetUBXRXMSFRBX->callbackMessageData != nullptr) // If RAM has been allocated for the copies of the data
-          {
-            for (uint32_t i = 0; i < UBX_RXM_SFRBX_CALLBACK_BUFFERS; i++) // Check all available buffers
-            {
-              if ((packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackMessageCopyValid & (1 << i)) == 0) // AND the buffer is empty
-              {
-                packetUBXRXMSFRBX->callbackMessageData[i].sync1 = UBX_SYNCH_1;
-                packetUBXRXMSFRBX->callbackMessageData[i].sync2 = UBX_SYNCH_2;
-                packetUBXRXMSFRBX->callbackMessageData[i].cls = UBX_CLASS_RXM;
-                packetUBXRXMSFRBX->callbackMessageData[i].ID = UBX_RXM_SFRBX;
-                packetUBXRXMSFRBX->callbackMessageData[i].lengthLSB = msg->len & 0xFF;
-                packetUBXRXMSFRBX->callbackMessageData[i].lengthMSB = msg->len >> 8;
-
-                memcpy(&packetUBXRXMSFRBX->callbackMessageData[i].payload, msg->payload, msg->len);
-
-                packetUBXRXMSFRBX->callbackMessageData[i].checksumA = msg->checksumA;
-                packetUBXRXMSFRBX->callbackMessageData[i].checksumB = msg->checksumB;
-
-                packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackMessageCopyValid |= (1 << i);
-                break; // Only copy once - into first available buffer
-              }
-            }
-          }
-
-          // Check if we need to copy the data into the file buffer
-          if (packetUBXRXMSFRBX->automaticFlags.flags.bits.addToFileBuffer)
-          {
-            addedToFileBuffer = storePacket(msg);
-          }
-        }
-      }
+      // UBX_RXM_SFRBX is now a registered v4 message (ubxRXMSFRBX) - see AGENTS.md "Adding
+      // support for RXM-SFRBX". processUBXpacket() no longer parses it here; the registry-first
+      // branch at the top of this function (ubxMessages.storePayload()) does that generically,
+      // including writing into the ring-buffered _callbackStorage.
       // UBX_RXM_RAWX and UBX_RXM_MEASX are both handled above via the registry (ubxRXMRAWX/
       // ubxRXMMEASX are now self-registered) - see AGENTS.md "Adding the variable-length UBX
       // messages".
@@ -3377,13 +3296,21 @@ ubxMessage *DevUBLOXGNSS::getUbxMessagePtr(ubxCallbackDataCommon_t *theData)
 // method / design pattern to handle the different return types. If this is not possible, identify
 // the nearest alternative strategy which is possible" - see ubxAnyType::operator double() above for
 // why this returns ubxAnyType rather than a genuinely per-field C++ type.
+// _callbackStorage may hold several buffered slots (see AGENTS.md "Adding support for
+// RXM-SFRBX"); checkCallbacks() sets _callbackReadIndex to the slot this firing is for immediately
+// before calling the callback, so this reads that slot rather than always offset 0. For
+// _numCallbackCopies <= 1, _callbackReadIndex is always 0, so this is unchanged for every other
+// message.
 ubxAnyType DevUBLOXGNSS::getUbxMessageFieldCallback(ubxMessage *theMessage, const char *fieldName)
 {
     ubxAnyType value;
     value.ubxDataType = 0xFF; // Sentinel - ubxDataType8bit() can never produce this value; operator double() returns 0.0 for it
     value.U8 = 0;
-    if (theMessage != nullptr)
-        theMessage->extractFieldFrom(theMessage->_callbackStorage, fieldName, &value);
+    if ((theMessage != nullptr) && (theMessage->_callbackStorage != nullptr))
+    {
+        const uint8_t *slot = theMessage->_callbackStorage + ((uint32_t)theMessage->_callbackReadIndex * theMessage->_messageLength);
+        theMessage->extractFieldFrom(slot, fieldName, &value);
+    }
     return value;
 }
 
@@ -3413,7 +3340,10 @@ ubxAnyType DevUBLOXGNSS::getUbxMessageBlockFieldCallback(ubxMessage *theMessage,
     value.U8 = 0;
     if ((theMessage != nullptr) && (theMessage->_blockFields != nullptr) && (theMessage->_callbackStorage != nullptr))
     {
-        const uint8_t *blockBuffer = theMessage->_callbackStorage + theMessage->_blockHeaderLength
+        // See getUbxMessageFieldCallback() above - _callbackReadIndex selects which buffered slot
+        // this callback firing is for (always 0 for a _numCallbackCopies <= 1 message).
+        const uint8_t *slotBase = theMessage->_callbackStorage + ((uint32_t)theMessage->_callbackReadIndex * theMessage->_messageLength);
+        const uint8_t *blockBuffer = slotBase + theMessage->_blockHeaderLength
                                       + ((uint32_t)blockIndex * theMessage->_blockLength);
         theMessage->extractFieldFrom(blockBuffer, fieldName, &value, (const ubxMessage::ubxField *)theMessage->_blockFields,
                                      theMessage->_numBlockFields);
@@ -3525,14 +3455,21 @@ void DevUBLOXGNSS::checkCallbacks(void)
   // keep using their own dedicated block further down.
   for (auto msg : ubxMessages.ubxMessageVectors)
   {
-    if ((msg->_callbackPtr != nullptr) && msg->_callbackDataValid)
+    // Drain every buffered slot for this message, oldest first (FIFO). Most messages have only
+    // one slot (_numCallbackCopies == 1), so this runs at most once, exactly as before. RXM-SFRBX/
+    // ESF-MEAS can have several buffered messages waiting after a burst arrived in a single
+    // checkUblox() call - see AGENTS.md "Adding support for RXM-SFRBX" and
+    // ubxMessageVector::storePayload() (the write side of this same ring buffer).
+    while ((msg->_callbackPtr != nullptr) && (msg->_callbackCount > 0))
     {
+      msg->_callbackReadIndex = msg->_callbackTail; // Tell the getters which slot this firing reads
       ubxCallbackDataCommon_t commonData;
       commonData.Class = msg->_Class;
       commonData.ID = msg->_ID;
       commonData.messagePtr = msg;
       msg->_callbackPtr(&commonData); // Call the callback
-      msg->_callbackDataValid = false; // Mark the callback copy as stale
+      msg->_callbackTail = (uint8_t)((msg->_callbackTail + 1) % msg->_numCallbackCopies);
+      msg->_callbackCount--; // One fewer fresh slot waiting
     }
   }
 
@@ -3589,38 +3526,10 @@ void DevUBLOXGNSS::checkCallbacks(void)
         }
       }
 
-  if (packetUBXRXMSFRBX != nullptr) // If RAM has been allocated for message storage
-  {
-    if (packetUBXRXMSFRBX->callbackData != nullptr) // If RAM has been allocated for the copies of the data
-    {
-      for (uint32_t i = 0; i < UBX_RXM_SFRBX_CALLBACK_BUFFERS; i++)
-      {
-        if ((packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackCopyValid & (1 << i)) != 0) // If the copy of the data is valid
-        {
-          if (packetUBXRXMSFRBX->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-          {
-            packetUBXRXMSFRBX->callbackPointerPtr(&packetUBXRXMSFRBX->callbackData[i]); // Call the callback
-          }
-          packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackCopyValid &= ~(1 << i); // Mark the data as stale
-        }
-      }
-    }
-    if (packetUBXRXMSFRBX->callbackMessageData != nullptr) // If RAM has been allocated for the copies of the data
-    {
-      for (uint32_t i = 0; i < UBX_RXM_SFRBX_CALLBACK_BUFFERS; i++)
-      {
-        if ((packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackMessageCopyValid & (1 << i)) != 0) // If the copy of the data is valid
-        {
-          if (packetUBXRXMSFRBX->callbackMessagePointerPtr != nullptr) // If the pointer to the callback has been defined
-          {
-            packetUBXRXMSFRBX->callbackMessagePointerPtr(&packetUBXRXMSFRBX->callbackMessageData[i]); // Call the callback
-          }
-          packetUBXRXMSFRBX->automaticFlags.flags.bits.callbackMessageCopyValid &= ~(1 << i); // Mark the data as stale
-        }
-      }
-    }
-  }
-
+  // UBX_RXM_SFRBX's callback is now dispatched by the generic registry walk above
+  // (ubxRXMSFRBX is now self-registered, with its own ring-buffered _callbackStorage) - see
+  // AGENTS.md "Adding support for RXM-SFRBX". The old raw-full-message callback
+  // (setAutoRXMSFRBXmessageCallbackPtr) is retired - see the comment above getRXMSFRBX().
   // UBX_RXM_RAWX's and UBX_RXM_MEASX's callbacks are both dispatched by the generic registry
   // walk above (ubxRXMRAWX/ubxRXMMEASX are now self-registered) - see AGENTS.md "Adding the
   // variable-length UBX messages".
@@ -7896,194 +7805,29 @@ bool DevUBLOXGNSS::initPacketUBXRXMQZSSL6message()
   return (true);
 }
 
-// ***** RXM SFRBX automatic support
+// UBX-RXM-SFRBX is now a registered v4 message (ubxRXMSFRBX) - see AGENTS.md "Adding support
+// for RXM-SFRBX". setAutoRXMSFRBX/setAutoRXMSFRBXrate/setAutoRXMSFRBXcallbackPtr/
+// assumeAutoRXMSFRBX/flushRXMSFRBX/logRXMSFRBX are retired; the generic setAutoUBX/
+// setAutoUBXrate/assumeAutoUBX/flushUBX/logUBX/setAutoCallbackPtr (by Class/ID
+// UBX_CLASS_RXM/UBX_RXM_SFRBX, or by name "RXM"/"SFRBX") do the same job, with the addition of
+// a genuine multi-message ring buffer (numCallbackCopies == 14, see ubxRXMSFRBX.h) so a burst
+// of SFRBX messages arriving within one checkUblox() call is no longer collapsed down to just
+// the latest one.
+//
+// setAutoRXMSFRBXmessageCallbackPtr (the separate raw-full-message callback, for pushing the
+// whole packet - including sync/checksum bytes - to e.g. the PointPerfect library) is also
+// retired, per the RXM-SFRBX proposal's Part 3: registering ubxRXMSFRBX bypasses the legacy
+// switch-based dispatch this callback relied on entirely, so it would otherwise keep compiling
+// but silently never fire again. Nothing in examples/ used it. A ring-buffered replacement,
+// following the same pattern as the parsed-field callback above, is future work if it's needed.
 
+// Note: RXM-SFRBX is output-only. It cannot be polled. Strictly getRXMSFRBX should be
+// deprecated - see issue #167 - but is kept, as a thin wrapper, for backward compatibility.
 bool DevUBLOXGNSS::getRXMSFRBX(uint16_t maxWait)
 {
-  if (packetUBXRXMSFRBX == nullptr)
-    initPacketUBXRXMSFRBX();        // Check that RAM has been allocated for the SFRBX data
-  if (packetUBXRXMSFRBX == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (packetUBXRXMSFRBX->automaticFlags.flags.bits.automatic && packetUBXRXMSFRBX->automaticFlags.flags.bits.implicitUpdate)
-  {
-    // The GPS is automatically reporting, we just check whether we got unread data
-    checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-    return packetUBXRXMSFRBX->moduleQueried;
-  }
-  else if (packetUBXRXMSFRBX->automaticFlags.flags.bits.automatic && !packetUBXRXMSFRBX->automaticFlags.flags.bits.implicitUpdate)
-  {
-    // Someone else has to call checkUblox for us...
-    return (false);
-  }
-  else
-  {
-    // SFRBX is output-only. It cannot be polled...
-    // Strictly, getRXMSFRBX should be deprecated. But, to keep the library backward compatible, return(false) here.
-    // See issue #167 for details
-    (void)maxWait;
-    return (false);
-  }
+  return getUBX(UBX_CLASS_RXM, UBX_RXM_SFRBX, maxWait);
 }
 
-// Enable or disable automatic navigation message generation by the GNSS. This changes the way getRXMSFRBX
-// works.
-bool DevUBLOXGNSS::setAutoRXMSFRBX(bool enable, uint8_t layer, uint16_t maxWait)
-{
-  return setAutoRXMSFRBXrate(enable ? 1 : 0, true, layer, maxWait);
-}
-
-// Enable or disable automatic navigation message generation by the GNSS. This changes the way getRXMSFRBX
-// works.
-bool DevUBLOXGNSS::setAutoRXMSFRBX(bool enable, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
-{
-  return setAutoRXMSFRBXrate(enable ? 1 : 0, implicitUpdate, layer, maxWait);
-}
-
-// Enable or disable automatic navigation message generation by the GNSS. This changes the way getRXMSFRBX
-// works.
-bool DevUBLOXGNSS::setAutoRXMSFRBXrate(uint8_t rate, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
-{
-  if (packetUBXRXMSFRBX == nullptr)
-    initPacketUBXRXMSFRBX();        // Check that RAM has been allocated for the data
-  if (packetUBXRXMSFRBX == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  if (rate > 127)
-    rate = 127;
-
-  uint32_t key = UBLOX_CFG_MSGOUT_UBX_RXM_SFRBX_I2C;
-  if (_commType == COMM_TYPE_SPI)
-    key = UBLOX_CFG_MSGOUT_UBX_RXM_SFRBX_SPI;
-  else if (_commType == COMM_TYPE_SERIAL)
-  {
-    if (!_UART2)
-      key = UBLOX_CFG_MSGOUT_UBX_RXM_SFRBX_UART1;
-    else
-      key = UBLOX_CFG_MSGOUT_UBX_RXM_SFRBX_UART2;
-  }
-
-  // RXM-SFRBX uses ubxSFRBXAutomaticFlags (wider bitfield), so inline the three-tier logic
-  bool ok = setVal8(key, rate, layer, maxWait);
-  if (ok)
-  {
-    packetUBXRXMSFRBX->automaticFlags.flags.bits.automatic = (rate > 0);
-    packetUBXRXMSFRBX->automaticFlags.flags.bits.implicitUpdate = implicitUpdate;
-  }
-  else
-  {
-    uint8_t actualRate;
-    ok = getVal8(key, &actualRate, layer, maxWait);
-    if (ok)
-    {
-      packetUBXRXMSFRBX->automaticFlags.flags.bits.automatic = (actualRate > 0);
-    }
-    else
-    {
-      packetUBXRXMSFRBX->automaticFlags.flags.bits.automatic = (rate > 0);
-    }
-    packetUBXRXMSFRBX->automaticFlags.flags.bits.implicitUpdate = implicitUpdate;
-  }
-  packetUBXRXMSFRBX->moduleQueried = false;
-  return ok;
-}
-
-// Enable automatic navigation message generation by the GNSS.
-bool DevUBLOXGNSS::setAutoRXMSFRBXcallbackPtr(void (*callbackPointerPtr)(UBX_RXM_SFRBX_data_t *), uint8_t layer, uint16_t maxWait)
-{
-  // Enable auto messages. Set implicitUpdate to false as we expect the user to call checkUblox manually.
-  bool result = setAutoRXMSFRBX(true, false, layer, maxWait);
-  if (!result)
-    return (result); // Bail if setAuto failed
-
-  if (packetUBXRXMSFRBX->callbackData == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    packetUBXRXMSFRBX->callbackData = new UBX_RXM_SFRBX_data_t[UBX_RXM_SFRBX_CALLBACK_BUFFERS]; // Allocate RAM for the main struct
-  }
-
-  if (packetUBXRXMSFRBX->callbackData == nullptr)
-  {
-    debugPrintln("setAutoRXMSFRBXcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  packetUBXRXMSFRBX->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-// Use this if you want all of the SFRBX message (including sync chars, checksum, etc.) to push to the PointPerfect Library
-bool DevUBLOXGNSS::setAutoRXMSFRBXmessageCallbackPtr(void (*callbackMessagePointerPtr)(UBX_RXM_SFRBX_message_data_t *), uint8_t layer, uint16_t maxWait)
-{
-  // Enable auto messages. Set implicitUpdate to false as we expect the user to call checkUblox manually.
-  bool result = setAutoRXMSFRBX(true, false, layer, maxWait);
-  if (!result)
-    return (result); // Bail if setAuto failed
-
-  if (packetUBXRXMSFRBX->callbackMessageData == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    packetUBXRXMSFRBX->callbackMessageData = new UBX_RXM_SFRBX_message_data_t[UBX_RXM_SFRBX_CALLBACK_BUFFERS]; // Allocate RAM for the main struct
-  }
-
-  if (packetUBXRXMSFRBX->callbackMessageData == nullptr)
-  {
-    debugPrintln("setAutoRXMSFRBXmessageCallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  packetUBXRXMSFRBX->callbackMessagePointerPtr = callbackMessagePointerPtr;
-  return (true);
-}
-
-// In case no config access to the GNSS is possible and SFRBX is send cyclically already
-// set config to suitable parameters
-bool DevUBLOXGNSS::assumeAutoRXMSFRBX(bool enabled, bool implicitUpdate)
-{
-  if (packetUBXRXMSFRBX == nullptr)
-    initPacketUBXRXMSFRBX();        // Check that RAM has been allocated for the data
-  if (packetUBXRXMSFRBX == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  bool changes = packetUBXRXMSFRBX->automaticFlags.flags.bits.automatic != enabled || packetUBXRXMSFRBX->automaticFlags.flags.bits.implicitUpdate != implicitUpdate;
-  if (changes)
-  {
-    packetUBXRXMSFRBX->automaticFlags.flags.bits.automatic = enabled;
-    packetUBXRXMSFRBX->automaticFlags.flags.bits.implicitUpdate = implicitUpdate;
-  }
-  return changes;
-}
-
-// PRIVATE: Allocate RAM for packetUBXRXMSFRBX and initialize it
-bool DevUBLOXGNSS::initPacketUBXRXMSFRBX()
-{
-  packetUBXRXMSFRBX = new UBX_RXM_SFRBX_t; // Allocate RAM for the main struct
-  if (packetUBXRXMSFRBX == nullptr)
-  {
-    debugPrintln("initPacketUBXRXMSFRBX: RAM alloc failed!", true); // Important
-    return (false);
-  }
-  packetUBXRXMSFRBX->automaticFlags.flags.all = 0;
-  packetUBXRXMSFRBX->callbackPointerPtr = nullptr;
-  packetUBXRXMSFRBX->callbackData = nullptr;
-  packetUBXRXMSFRBX->callbackMessagePointerPtr = nullptr;
-  packetUBXRXMSFRBX->callbackMessageData = nullptr;
-  packetUBXRXMSFRBX->moduleQueried = false;
-  return (true);
-}
-
-// Mark all the data as read/stale
-void DevUBLOXGNSS::flushRXMSFRBX()
-{
-  if (packetUBXRXMSFRBX == nullptr)
-    return;                                 // Bail if RAM has not been allocated (otherwise we could be writing anywhere!)
-  packetUBXRXMSFRBX->moduleQueried = false; // Mark all datums as stale (read before)
-}
-
-// Log this data in file buffer
-void DevUBLOXGNSS::logRXMSFRBX(bool enabled)
-{
-  if (packetUBXRXMSFRBX == nullptr)
-    return; // Bail if RAM has not been allocated (otherwise we could be writing anywhere!)
-  packetUBXRXMSFRBX->automaticFlags.flags.bits.addToFileBuffer = (uint8_t)enabled;
-}
 
 // UBX-RXM-RAWX and UBX-RXM-MEASX are now registered v4 messages (ubxRXMRAWX/ubxRXMMEASX) - see
 // AGENTS.md "Adding the variable-length UBX messages". setAutoRXMRAWX/setAutoRXMRAWXrate/

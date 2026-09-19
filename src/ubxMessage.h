@@ -178,10 +178,10 @@ public:
     // message (see DevUBLOXGNSS::setAutoCallbackPtr()). Kept separate from _storage so a fast
     // producer (processUBXpacket, via storePayload()) can freeze a copy for the callback to read
     // without racing a consumer that hasn't got round to reading _storage yet - see AGENTS.md
-    // "class ubxMessage needs separate callback storage". _numCallbackCopies is usually 1; only a
-    // single copy is supported so far (every currently-registered message has numCallbackCopies ==
-    // 1) - true ring-buffered multi-copy support for RXM-SFRBX/ESF-MEAS is still future work, per
-    // AGENTS.md.
+    // "class ubxMessage needs separate callback storage". _numCallbackCopies is usually 1 (a
+    // degenerate single-slot ring); RXM-SFRBX uses 14 to hold a burst of messages that can arrive
+    // in a single checkUblox() call before checkCallbacks() drains them - see AGENTS.md "Adding
+    // support for RXM-SFRBX" and ubxMessageVector::storePayload() / DevUBLOXGNSS::checkCallbacks().
     bool initCallbackStorage(void)
     {
         if (_callbackStorage == nullptr)
@@ -338,9 +338,12 @@ public:
         _maxBlocks = maxBlocks;
         _storage = nullptr; // Only allocated when needed - see initStorage()
         _callbackStorage = nullptr; // Only allocated when needed - see initCallbackStorage()
+        _callbackHead = 0;
+        _callbackTail = 0;
+        _callbackCount = 0;
+        _callbackReadIndex = 0;
         _moduleQueried = false;
         _callbackPtr = nullptr;
-        _callbackDataValid = false;
         _automatic = false;
         _implicitUpdate = true;
         _addToFileBuffer = false;
@@ -352,7 +355,7 @@ public:
     const char *_classStr = nullptr;
     const char *_idStr = nullptr;
     uint16_t _messageLength = 0;    // The message PAYLOAD length in bytes (matches e.g. UBX_NAV_PVT_LEN)
-    uint8_t _numCallbackCopies = 0; // Reserved for future callback-copy support - not yet wired up for any message
+    uint8_t _numCallbackCopies = 0; // Number of ring-buffer slots in _callbackStorage - 1 for most messages, >1 for burst messages like RXM-SFRBX/ESF-MEAS - see AGENTS.md "Adding support for RXM-SFRBX"
     uint8_t *_storage = nullptr;    // Raw payload storage - nullptr until initStorage() is called
     uint8_t _numFields = 0;
     // Has fresh data arrived since the last time it was reported? A single flag for the whole
@@ -367,12 +370,20 @@ public:
     uint16_t _blockHeaderLength = 0;      // Bytes before the first repeated block (e.g. 8 for NAV-SAT)
     uint16_t _blockLength = 0;            // Bytes per repeated block (e.g. 12 for NAV-SAT)
     uint16_t _maxBlocks = 0;              // Upper bound on the number of repeated blocks (e.g. UBX_NAV_SAT_MAX_BLOCKS)
-    uint8_t *_callbackStorage = nullptr; // Storage for the callback copy / copies - nullptr until initCallbackStorage() is called
+    uint8_t *_callbackStorage = nullptr; // Ring buffer of _numCallbackCopies slots, each _messageLength bytes - nullptr until initCallbackStorage() is called
+    // Ring-buffer bookkeeping for _callbackStorage - see AGENTS.md "Adding support for RXM-SFRBX".
+    // ubxMessageVector::storePayload() (the write side) writes to _callbackHead and advances it;
+    // DevUBLOXGNSS::checkCallbacks() (the read side) reads from _callbackTail and advances it,
+    // draining oldest-first (FIFO) while _callbackCount > 0. For _numCallbackCopies <= 1 this
+    // degenerates to a single slot, both indices always 0 - unchanged from the original behavior.
+    uint8_t _callbackHead = 0;      // Next free slot storePayload() will write into
+    uint8_t _callbackTail = 0;      // Next fresh slot checkCallbacks() will read and dispatch
+    uint8_t _callbackCount = 0;     // How many slots currently hold fresh, undelivered data (replaces the old single _callbackDataValid bool)
+    uint8_t _callbackReadIndex = 0; // Set by checkCallbacks() to _callbackTail immediately before each callback firing, so getUbxMessageFieldCallback()/getUbxMessageBlockFieldCallback() know which slot to read
     // Called by DevUBLOXGNSS::checkCallbacks() (via the generic registry walk) once fresh data is
     // waiting - see AGENTS.md "setAutoCallbackPtr". Takes a ubxCallbackDataCommon_t*, not a raw
     // uint8_t* - see AGENTS.md "class ubxMessage needs separate callback storage".
     void (*_callbackPtr)(ubxCallbackDataCommon_t *) = nullptr;
-    bool _callbackDataValid = false;           // Has storePayload() frozen a fresh copy into _callbackStorage that checkCallbacks() hasn't fired yet?
     bool _automatic = false;                   // Is the module set to output this message periodically?
     bool _implicitUpdate = true;               // true: getUBX() itself parses new data; false: caller must call checkUblox() itself
     bool _addToFileBuffer = false;             // Set by logUBX() using setAddToFileBuffer

@@ -1601,47 +1601,14 @@ typedef struct
   uint32_t dwrd[UBX_RXM_SFRBX_MAX_WORDS]; // The data words
 } UBX_RXM_SFRBX_data_t;
 
-// Define a struct to hold the entire SFRBX message so the whole thing can be pushed to the PointPerfect Library
-// Remember that the length of the payload will be variable.
-typedef struct
-{
-  uint8_t sync1; // 0xB5
-  uint8_t sync2; // 0x62
-  uint8_t cls;
-  uint8_t ID;
-  uint8_t lengthLSB;
-  uint8_t lengthMSB;
-  uint8_t payload[UBX_RXM_SFRBX_MAX_LEN];
-  uint8_t checksumA;
-  uint8_t checksumB;
-} UBX_RXM_SFRBX_message_data_t;
-
-struct ubxSFRBXAutomaticFlags
-{
-  union
-  {
-    uint32_t all;
-    struct
-    {
-      uint32_t automatic : 1;                                             // Will this message be delivered and parsed "automatically" (without polling)
-      uint32_t implicitUpdate : 1;                                        // Is the update triggered by accessing stale data (=true) or by a call to checkUblox (=false)
-      uint32_t addToFileBuffer : 1;                                       // Should the raw UBX data be added to the file buffer?
-      uint32_t callbackCopyValid : UBX_RXM_SFRBX_CALLBACK_BUFFERS;        // Are the copies of the data struct used by the callback valid/fresh?
-      uint32_t callbackMessageCopyValid : UBX_RXM_SFRBX_CALLBACK_BUFFERS; // Are the copies of the data structs used by the callback valid/fresh?
-    } bits;
-  } flags;
-};
-
-typedef struct
-{
-  ubxSFRBXAutomaticFlags automaticFlags;
-  UBX_RXM_SFRBX_data_t data;
-  bool moduleQueried;
-  void (*callbackPointerPtr)(UBX_RXM_SFRBX_data_t *);
-  UBX_RXM_SFRBX_data_t *callbackData; // This is an array of buffers
-  void (*callbackMessagePointerPtr)(UBX_RXM_SFRBX_message_data_t *);
-  UBX_RXM_SFRBX_message_data_t *callbackMessageData; // This is an array of buffers
-} UBX_RXM_SFRBX_t;
+// UBX_RXM_SFRBX_message_data_t (the whole raw packet, for the retired PointPerfect push feature),
+// ubxSFRBXAutomaticFlags and UBX_RXM_SFRBX_t (the v3 RAM-management wrapper) have been removed -
+// UBX-RXM-SFRBX is now a registered v4 message (ubxRXMSFRBX, in ubxMessages/ubxRXMSFRBX.h) with
+// its own ring-buffered callback storage. See AGENTS.md "Adding support for RXM-SFRBX".
+// UBX_RXM_SFRBX_data_t (above) and UBX_RXM_SFRBX_MAX_WORDS/UBX_RXM_SFRBX_MAX_LEN/
+// UBX_RXM_SFRBX_CALLBACK_BUFFERS (above) are kept as documented reference for the message's wire
+// format, exactly as UBX_RXM_RAWX_header_t/_block_t and UBX_RXM_MEASX_header_t/_block_t were kept
+// when those messages were migrated.
 
 // UBX-RXM-MEASX (0x02 0x14): Receiver Manager Messages: i.e. Satellite Status, RTC Status.
 const uint8_t UBX_RXM_MEASX_MAX_BLOCKS = 92;
