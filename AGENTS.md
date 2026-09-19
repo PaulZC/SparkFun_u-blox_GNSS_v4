@@ -754,6 +754,31 @@ Refer to `u-blox-X20-HPG-2.10_InterfaceDescription_UBXDOC-304424225-21263.pdf` f
 
 Please write a proposal on how we should do that. Do not make any code changes yet. Let me review your proposal first.
 
+## Adding support for RXM-SFRBX
+
+We need to add the variable-length RXM-SFRBX message to the `ubxMessages` `class`. This will need care.
+
+The u-blox GNSS modules output several RXM-SFRBX messages as a 'group', with no bus delay or separation between them.
+Those multiple messages may all be processed by a single call of `checkUblox()`.
+The `ubxMessage` `_callbackStorage` needs to be able to hold those multiple messages.
+
+In the v3 library, the "automatic" storage for RXM-RAWX included `UBX_RXM_SFRBX_CALLBACK_BUFFERS`. 14 buffers was found to work well.
+
+We need to include the same feature in v4.
+
+In `class ubxRXMSFRBX`, use `const uint8_t numCallbackCopies = 14;`.
+
+I suggest doing the following:
+In `class` `ubxMessage`, change `_storageCallback` so that it becomes a ring buffer of message buffers: `_numCallbackCopies`, each `_messageLength` in size.
+Include a `_head`, and a `_tail` to make it easy to determine how many buffers contain fresh not-read-before data.
+The `class ubxMessageVector` `storePayload` method will need to be modified so that it writes the incoming message to the `_head` (if space is available).
+It may be necessary to add a `extractPayload` method to `ubxMessageVector` to extract the message pointed to by the `_tail`.
+
+Please write a proposal for how you will support for RXM-SFRBX.
+Do not make any code changes yet. Write the proposal first. I will need to approve it before you change the code.
+
+Sidenote: ESF-MEAS will need the same multiple-buffer approach. It requires (at least) 6 callback buffers.
+
 ## Test
 
 Compile the example code in examples/Example1\_PositionVelocityTime using the batch file compile\_example.bat.
