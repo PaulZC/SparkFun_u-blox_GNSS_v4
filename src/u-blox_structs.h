@@ -2972,6 +2972,7 @@ const uint8_t NMEA_GGA_MAX_LENGTH = 100;
 const uint8_t NMEA_GLL_MAX_LENGTH = 50;
 const uint8_t NMEA_GNS_MAX_LENGTH = 100;
 const uint8_t NMEA_GST_MAX_LENGTH = 100;
+const uint8_t NMEA_GSV_MAX_LENGTH = 100; // Variable length - up to 4 satellite blocks. See AGENTS.md "Adding support for NMEA GSV messages"
 const uint8_t NMEA_RMC_MAX_LENGTH = 100;
 const uint8_t NMEA_VTG_MAX_LENGTH = 50;
 const uint8_t NMEA_ZDA_MAX_LENGTH = 50;

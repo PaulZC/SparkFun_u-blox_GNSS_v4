@@ -67,8 +67,9 @@
 
 #include "u-blox_external_typedefs.h" // sfe_ublox_status_e
 #include "u-blox_config_keys.h"       // UBX_CFG_* type tags
+#include "sfe_debug.h"                // v4 scaffolding - shared base for debugPrint()/debugPrintln(), see AGENTS.md
 
-class ubxMessageVector
+class ubxMessageVector : public SparkFun_UBLOX_GNSS::SfeDebugPrint
 {
 public:
     std::vector<ubxMessage *> ubxMessageVectors;
@@ -256,7 +257,7 @@ public:
                 // _head "if space is available"). Every individual SFRBX/ESF-MEAS message matters to
                 // a downstream decoder, so silently replacing a buffered-but-unread one would be the
                 // wrong failure mode here - this only happens if checkCallbacks() falls behind.
-                debugPrint("storePayload: Class 0x", true); // Important
+                debugPrint("UBX storePayload: Class 0x", true); // Important
                 debugPrint(Class, HEX, true);
                 debugPrint(" ID 0x", true);
                 debugPrint(ID, HEX, true);

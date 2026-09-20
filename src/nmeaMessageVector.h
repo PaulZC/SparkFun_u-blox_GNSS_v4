@@ -20,6 +20,7 @@
 #include "nmeaMessages/nmeaGLL.h"
 #include "nmeaMessages/nmeaGNS.h"
 #include "nmeaMessages/nmeaGST.h"
+#include "nmeaMessages/nmeaGSV.h"
 #include "nmeaMessages/nmeaRMC.h"
 #include "nmeaMessages/nmeaVTG.h"
 #include "nmeaMessages/nmeaZDA.h"
@@ -27,8 +28,9 @@
 // ===========================
 
 #include "u-blox_external_typedefs.h" // sfe_ublox_status_e
+#include "sfe_debug.h"                 // v4 scaffolding - shared base for debugPrint()/debugPrintln(), see AGENTS.md
 
-class nmeaMessageVector
+class nmeaMessageVector : public SparkFun_UBLOX_GNSS::SfeDebugPrint
 {
 public:
     std::vector<nmeaMessage *> nmeaMessageVectors;
@@ -157,6 +159,10 @@ public:
     }
 
     // Copy 'len' freshly-received payload bytes into this message's storage and mark it fresh.
+    // Note: not currently called anywhere - the live NMEA dispatch path is the inline code in
+    // DevUBLOXGNSS::process(), which this mirrors (including its ring-buffered callback write
+    // side - see AGENTS.md "Adding support for NMEA GSV messages"). Kept working and consistent
+    // with the live path rather than removed, in case a future caller wants a single entry point.
     sfe_ublox_status_e storePayload(const char *msgId, const uint8_t *payload, uint16_t len)
     {
         nmeaMessage *msg = find(msgId);
@@ -173,8 +179,25 @@ public:
         {
             if (msg->initCallbackStorage())
             {
-                memcpy(msg->_callbackStorage, payload, len);
-                msg->_callbackDataValid = true;
+                if (msg->_numCallbackCopies <= 1)
+                {
+                    memcpy(msg->_callbackStorage, payload, len);
+                    msg->_callbackCount = 1; // head/tail stay at 0 - a degenerate 1-slot ring
+                }
+                else if (msg->_callbackCount < msg->_numCallbackCopies) // Ring has a free slot
+                {
+                    uint8_t *slot = msg->_callbackStorage + ((uint32_t)msg->_callbackHead * msg->_messageLength);
+                    memcpy(slot, payload, len);
+                    msg->_callbackHead = (uint8_t)((msg->_callbackHead + 1) % msg->_numCallbackCopies);
+                    msg->_callbackCount++;
+                }
+                else
+                {
+                    // ring is full - drop this payload, keep what's already buffered
+                    debugPrint("NMEA storePayload: msgId ", true); // Important
+                    debugPrint(msgId, true);
+                    debugPrintln(" _callbackStorage ring buffer full. Message lost.", true);
+                }
             }
         }
 

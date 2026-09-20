@@ -591,69 +591,24 @@ void DevUBLOXGNSS::enableDebugging(Print &debugPort, bool printLimitedDebug)
   _debugSerial.init(debugPort); // Grab which port the user wants us to use for debugging
   _printDebug = true; // Should we print the commands we send? Good for debugging
   _printLimitedDebug = printLimitedDebug; // Should we print limited debug messages? Good for debugging high navigation rates
+
+  // v4 scaffolding: ubxMessages/nmeaMessages inherit debugPrint()/debugPrintln() from the same
+  // SfeDebugPrint base we do (see sfe_debug.h), but as separate objects they have their own
+  // separate debug state, so they don't see the enableDebugging() call above automatically -
+  // push it to them explicitly instead.
+  ubxMessages.copyDebugStateFrom(*this);
+  nmeaMessages.copyDebugStateFrom(*this);
 }
 void DevUBLOXGNSS::disableDebugging(void)
 {
   _printDebug = false; // Turn off extra print statements
   _printLimitedDebug = false;
+
+  ubxMessages.copyDebugStateFrom(*this);
+  nmeaMessages.copyDebugStateFrom(*this);
 }
 
-// Safely print messages
-void DevUBLOXGNSS::debugPrint(const char *message, bool important)
-{
-  if (_printDebug == true) // if _printDebug is true, prepare to print
-    // Don't print if _printLimitedDebug is true and this message is not important
-    if (!(_printLimitedDebug && !important))
-      _debugSerial.print(message);
-}
-// Safely print messages
-void DevUBLOXGNSS::debugPrintln(const char *message, bool important)
-{
-  if (_printDebug == true) // if _printDebug is true, prepare to print
-    // Don't print if _printLimitedDebug is true and this message is not important
-    if (!(_printLimitedDebug && !important))
-      _debugSerial.println(message);
-}
-// Safely print debug values
-void DevUBLOXGNSS::debugPrint(uint32_t value, bool important)
-{
-  if (_printDebug == true) // if _printDebug is true, prepare to print
-    // Don't print if _printLimitedDebug is true and this message is not important
-    if (!(_printLimitedDebug && !important))
-      _debugSerial.print(value);
-}
-// Safely print debug values in a given base (e.g. HEX)
-void DevUBLOXGNSS::debugPrint(uint32_t value, int printBase, bool important)
-{
-  if (_printDebug == true) // if _printDebug is true, prepare to print
-    // Don't print if _printLimitedDebug is true and this message is not important
-    if (!(_printLimitedDebug && !important))
-      _debugSerial.print(value, printBase);
-}
-// Safely print debug values
-void DevUBLOXGNSS::debugPrintln(uint32_t value, bool important)
-{
-  if (_printDebug == true) // if _printDebug is true, prepare to print
-    // Don't print if _printLimitedDebug is true and this message is not important
-    if (!(_printLimitedDebug && !important))
-      _debugSerial.println(value);
-}
-// Safely print debug values in a given base (e.g. HEX)
-void DevUBLOXGNSS::debugPrintln(uint32_t value, int printBase, bool important)
-{
-  if (_printDebug == true) // if _printDebug is true, prepare to print
-    // Don't print if _printLimitedDebug is true and this message is not important
-    if (!(_printLimitedDebug && !important))
-      _debugSerial.println(value, printBase);
-}
-// Safely print a blank debug line
-void DevUBLOXGNSS::debugPrintln(void)
-{
-  if (_printDebug == true) // if _printDebug is true, prepare to print
-    // Not important - don't print if doing limited debugging
-    if (!_printLimitedDebug)
-      _debugSerial.println();
-}
+// debugPrint()/debugPrintln() are now inherited from SfeDebugPrint - see sfe_debug.h/.cpp.
 
 const char *DevUBLOXGNSS::statusString(sfe_ublox_status_e stat)
 {
@@ -1376,15 +1331,29 @@ void DevUBLOXGNSS::process(uint8_t incoming, ubxPacket *incomingUBX, uint8_t req
                 // We don't need to NULL-terminate. _storageNMEA->data was memset to 0 above.
                 nmeaMessagePtr->_moduleQueried = true; // Mark the data as fresh
 
-                // Callback
+                // Callback - write into the next ring-buffer slot. See AGENTS.md "Adding
+                // support for NMEA GSV messages" and ubxMessageVector::storePayload(), which this
+                // mirrors. For _numCallbackCopies <= 1 (every message except GSV) this reproduces
+                // today's single-slot overwrite-always behavior exactly; for GSV
+                // (_numCallbackCopies == 54) a full ring drops the new sentence and keeps what's
+                // already buffered, so an unread sentence is never silently replaced.
                 if (doesThisNMEAHaveCallback(storedNMEAID)) // Do we need to copy the data into the callback copy?
                 {
-                  if (nmeaMessagePtr->_callbackDataValid == false) // Has the callback copy valid flag been cleared (by checkCallbacks)
+                  if (nmeaMessagePtr->_numCallbackCopies <= 1)
                   {
                     memcpy(nmeaMessagePtr->_callbackStorage, _storageNMEA->data, bytesToCopy);
                     nmeaMessagePtr->_callbackStorage[bytesToCopy] = 0; // NULL-terminate
-                    nmeaMessagePtr->_callbackDataValid = true; // Mark the data as fresh
+                    nmeaMessagePtr->_callbackCount = 1; // head/tail stay at 0 - a degenerate 1-slot ring
                   }
+                  else if (nmeaMessagePtr->_callbackCount < nmeaMessagePtr->_numCallbackCopies) // Ring has a free slot
+                  {
+                    uint8_t *slot = nmeaMessagePtr->_callbackStorage + ((uint32_t)nmeaMessagePtr->_callbackHead * nmeaMessagePtr->_messageLength);
+                    memcpy(slot, _storageNMEA->data, bytesToCopy);
+                    slot[bytesToCopy] = 0; // NULL-terminate this slot
+                    nmeaMessagePtr->_callbackHead = (uint8_t)((nmeaMessagePtr->_callbackHead + 1) % nmeaMessagePtr->_numCallbackCopies);
+                    nmeaMessagePtr->_callbackCount++;
+                  }
+                  // else: ring is full - drop this sentence, keep what's already buffered
                 }
               }
             }
@@ -3383,14 +3352,22 @@ nmeaMessage *DevUBLOXGNSS::getNmeaMessagePtr(nmeaCallbackDataCommon_t *theData)
 
 // v4 scaffolding: 
 // Factory: extracts a named field from the message a callback just fired for, reading from its
-// _callbackStorage (the copy storePayload() froze when the callback was queued) rather than its
-// live _storage (which may already have been overwritten by newer data by the time the callback
-// actually runs).
+// _callbackStorage (the copy the NMEA dispatch block in process() froze when the callback was
+// queued) rather than its live _storage (which may already have been overwritten by newer data by
+// the time the callback actually runs).
+// _callbackStorage may hold several buffered slots for GSV (see AGENTS.md "Adding support for
+// NMEA GSV messages"); checkCallbacks() sets _callbackReadIndex to the slot this firing is for
+// immediately before calling the callback, so this reads that slot rather than always offset 0.
+// For _numCallbackCopies <= 1 (every other message), _callbackReadIndex is always 0, so this is
+// unchanged from before.
 String DevUBLOXGNSS::getNmeaMessageFieldCallback(nmeaMessage *theMessage, const char *fieldName)
 {
     String value = String("");
-    if (theMessage != nullptr)
-        theMessage->extractFieldFrom(theMessage->_callbackStorage, fieldName, value);
+    if ((theMessage != nullptr) && (theMessage->_callbackStorage != nullptr))
+    {
+        const uint8_t *slot = theMessage->_callbackStorage + ((uint32_t)theMessage->_callbackReadIndex * theMessage->_messageLength);
+        theMessage->extractFieldFrom(slot, fieldName, value);
+    }
     return value;
 }
 
@@ -3401,6 +3378,38 @@ String DevUBLOXGNSS::getNmeaMessageField(nmeaMessage *theMessage, const char *fi
     String value = String("");
     if (theMessage != nullptr)
         theMessage->extractFieldFrom(theMessage->_storage, fieldName, value);
+    return value;
+}
+
+// v4 scaffolding: variable-length/repeated-block support (e.g. NMEA GSV's per-satellite blocks) -
+// see AGENTS.md "Adding support for NMEA GSV messages". Mirrors getNmeaMessageFieldCallback()
+// above, but reads field 'fieldName' from repeated block 'blockIndex' (0..numSV-1, where numSV
+// itself is a HEADER field, read the ordinary way via getNmeaMessageFieldCallback()) rather than
+// from the message's header/footer. Unlike the UBX block accessors, this - and
+// nmeaMessage::extractFieldFrom() underneath it - explicitly bounds-checks blockIndex against the
+// message's maxNumBlocks and returns an empty String if it's out of range, per AGENTS.md: NMEA
+// fields are ASCII of unknown extent, not a fixed-size binary block, so an out-of-range block
+// can't just be treated as unused-but-allocated memory the way the UBX side does.
+String DevUBLOXGNSS::getNmeaMessageBlockFieldCallback(nmeaMessage *theMessage, uint16_t blockIndex, const char *fieldName)
+{
+    String value = String("");
+    if ((theMessage != nullptr) && (theMessage->_blockFields != nullptr) && (theMessage->_callbackStorage != nullptr))
+    {
+        // See getNmeaMessageFieldCallback() above - _callbackReadIndex selects which buffered
+        // slot this callback firing is for (always 0 for a _numCallbackCopies <= 1 message).
+        const uint8_t *slot = theMessage->_callbackStorage + ((uint32_t)theMessage->_callbackReadIndex * theMessage->_messageLength);
+        theMessage->extractFieldFrom(slot, fieldName, value, theMessage->_blockFields, theMessage->_numBlockFields, blockIndex);
+    }
+    return value;
+}
+
+// v4 scaffolding: variable-length/repeated-block support - see getNmeaMessageBlockFieldCallback()
+// above. Reads from the message's live _storage rather than its frozen _callbackStorage.
+String DevUBLOXGNSS::getNmeaMessageBlockField(nmeaMessage *theMessage, uint16_t blockIndex, const char *fieldName)
+{
+    String value = String("");
+    if ((theMessage != nullptr) && (theMessage->_blockFields != nullptr) && (theMessage->_storage != nullptr))
+        theMessage->extractFieldFrom(theMessage->_storage, fieldName, value, theMessage->_blockFields, theMessage->_numBlockFields, blockIndex);
     return value;
 }
 
@@ -3473,16 +3482,23 @@ void DevUBLOXGNSS::checkCallbacks(void)
     }
   }
 
-  // v4 scaffolding: generic callback dispatch for every NMEA message registered in the new registry
+  // v4 scaffolding: generic callback dispatch for every NMEA message registered in the new
+  // registry. Drains every buffered slot for this message, oldest first (FIFO) - most messages
+  // have only one slot (_numCallbackCopies == 1), so this runs at most once, exactly as before.
+  // GSV can have several buffered sentences waiting after a burst arrived in a single
+  // checkUblox() call - see AGENTS.md "Adding support for NMEA GSV messages" and the ring-buffer
+  // write side in the NMEA dispatch block of process(), above.
   for (auto msg : nmeaMessages.nmeaMessageVectors)
   {
-    if ((msg->_callbackPtr != nullptr) && msg->_callbackDataValid)
+    while ((msg->_callbackPtr != nullptr) && (msg->_callbackCount > 0))
     {
+      msg->_callbackReadIndex = msg->_callbackTail; // Tell the getters which slot this firing reads
       nmeaCallbackDataCommon_t commonData;
       memcpy(commonData.msgId, msg->_msgId, 4); // Copy the three char ID plus the NULL
       commonData.messagePtr = msg;
       msg->_callbackPtr(&commonData); // Call the callback
-      msg->_callbackDataValid = false; // Mark the callback copy as stale
+      msg->_callbackTail = (uint8_t)((msg->_callbackTail + 1) % msg->_numCallbackCopies);
+      msg->_callbackCount--; // One fewer fresh slot waiting
     }
   }
 

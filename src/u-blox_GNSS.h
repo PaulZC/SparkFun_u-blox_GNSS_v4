@@ -43,6 +43,7 @@
 #include "u-blox_external_typedefs.h"
 #include "u-blox_Class_and_ID.h"
 #include "sfe_bus.h"
+#include "sfe_debug.h" // v4 scaffolding - shared base for debugPrint()/debugPrintln(), see AGENTS.md
 #include "ubxMessageVector.h" // v4 scaffolding - see AGENTS.md "Reference Scaffolding"
 #include "nmeaMessageVector.h"
 
@@ -50,7 +51,7 @@
 // Leave set to -1 if not needed
 const int debugPin = -1;
 
-class DevUBLOXGNSS
+class DevUBLOXGNSS : public SparkFun_UBLOX_GNSS::SfeDebugPrint
 {
 public:
   DevUBLOXGNSS(void);
@@ -173,13 +174,9 @@ public:
 #endif
 
   void disableDebugging(void);                                    // Turn off debug statements
-  void debugPrint(const char *message, bool important = false);             // Safely print debug statements
-  void debugPrint(uint32_t value, bool important = false);                  // Safely print debug values
-  void debugPrint(uint32_t value, int printBase, bool important = false);   // Safely print debug values in a given base (e.g. HEX)
-  void debugPrintln(const char *message, bool important = false);           // Safely print debug statements
-  void debugPrintln(uint32_t value, bool important = false);                // Safely print debug values
-  void debugPrintln(uint32_t value, int printBase, bool important = false); // Safely print debug values in a given base (e.g. HEX)
-  void debugPrintln(void);                                                  // Safely print a blank debug line
+  // debugPrint()/debugPrintln() are inherited from SfeDebugPrint (see sfe_debug.h) - also
+  // inherited by ubxMessageVector/nmeaMessageVector, so diagnostics deep inside those classes'
+  // own methods can use them too, kept in sync by enableDebugging()/disableDebugging() below.
   const char *statusString(sfe_ublox_status_e stat);              // Pretty print the return value
 
   // Check for the arrival of new I2C/Serial data
@@ -1106,6 +1103,8 @@ public:
   nmeaMessage *getNmeaMessagePtr(nmeaCallbackDataCommon_t *theData); // Factory: hands back the opaque per-message object a callback's nmeaCallbackDataCommon_t* points at
   String getNmeaMessageFieldCallback(nmeaMessage *theMessage, const char *fieldName); // Factory: extracts a named field from the message a callback just fired for, reading from its _callbackStorage
   String getNmeaMessageField(nmeaMessage *theMessage, const char *fieldName); // Factory: extracts a named field from the message, reading from its _storage
+  String getNmeaMessageBlockFieldCallback(nmeaMessage *theMessage, uint16_t blockIndex, const char *fieldName); // Factory: extracts a named field from repeated block 'blockIndex' of a variable-length message (e.g. GSV), reading from its _callbackStorage
+  String getNmeaMessageBlockField(nmeaMessage *theMessage, uint16_t blockIndex, const char *fieldName); // Factory: extracts a named field from repeated block 'blockIndex' of a variable-length message (e.g. GSV), reading from its _storage
 
   nmeaMessageVector nmeaMessages; // v4 scaffolding - the registry of per-message objects
 
@@ -1258,9 +1257,7 @@ protected:
   SparkFun_UBLOX_GNSS::SfePrint _rtcmOutputPort; // The user can assign an output port to print RTCM sentences if they wish
   SparkFun_UBLOX_GNSS::SfePrint _ubxOutputPort;  // The user can assign an output port to print UBX sentences if they wish
   SparkFun_UBLOX_GNSS::SfePrint _outputPort;     // The user can assign an output port to print ALL characters to if they wish
-  SparkFun_UBLOX_GNSS::SfePrint _debugSerial;    // The stream to send debug messages to if enabled
-  bool _printDebug = false;                      // Flag to print the serial commands we are sending to the Serial port for debug
-  bool _printLimitedDebug = false;               // Flag to print limited debug messages. Useful for I2C debugging or high navigation rates
+  // _debugSerial/_printDebug/_printLimitedDebug are inherited from SfeDebugPrint (see sfe_debug.h)
 
   // The packet buffers
   // These are pointed at from within the ubxPacket
