@@ -40,7 +40,7 @@ void printGSVdata(nmeaCallbackDataCommon_t *theData)
   if (printHeader)
   {
     Serial.println();
-    Serial.println("Signal              svid  elv  az  cno");
+    Serial.println("Signal              svid elv az cno");
     printHeader = false;
   }
 
@@ -106,11 +106,8 @@ void printGSVdata(nmeaCallbackDataCommon_t *theData)
     {
       Serial.print(signal);
       printPadded(myGNSS.getNmeaMessageBlockFieldCallback(msg, block, "svid"), 5);
-      Serial.print(" ");
       printPadded(myGNSS.getNmeaMessageBlockFieldCallback(msg, block, "elv"), 4);
-      Serial.print(" ");
       printPadded(myGNSS.getNmeaMessageBlockFieldCallback(msg, block, "az"), 3);
-      Serial.print(" ");
       printPadded(myGNSS.getNmeaMessageBlockFieldCallback(msg, block, "cno"), 4);
       Serial.println();
     }
