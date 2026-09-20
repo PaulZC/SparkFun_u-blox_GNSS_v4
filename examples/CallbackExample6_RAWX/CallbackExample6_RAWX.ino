@@ -34,7 +34,7 @@ void newRAWX(ubxCallbackDataCommon_t *theData)
 
   Serial.println();
 
-  uint8_t numMeas = myGNSS.getUbxMessageFieldCallback(msg, "numMeas");
+  uint8_t numMeas = (uint8_t)myGNSS.getUbxMessageFieldCallback(msg, "numMeas");
   Serial.print(F("New RAWX data received. It contains "));
   Serial.print(numMeas); // Print numMeas (Number of measurements / blocks)
   Serial.print(F(" measurements."));
@@ -71,10 +71,7 @@ void newRAWX(ubxCallbackDataCommon_t *theData)
     }
 
     uint8_t svId = (uint8_t)myGNSS.getUbxMessageBlockFieldCallback(msg, block, "svId");
-    Serial.print(svId);
-    if (svId < 10) Serial.print(F("    "));
-    else if (svId < 100) Serial.print(F("   "));
-    else Serial.print(F("  "));
+    printPadded(svId, 5);
 
     uint8_t sigId = (uint8_t)myGNSS.getUbxMessageBlockFieldCallback(msg, block, "sigId");
     switch (gnssId)
@@ -160,9 +157,7 @@ void newRAWX(ubxCallbackDataCommon_t *theData)
     }
 
     uint8_t cno = (uint8_t)myGNSS.getUbxMessageBlockFieldCallback(msg, block, "cno");
-    Serial.print(cno);
-    if (cno < 10) Serial.print(F("   "));
-    else Serial.print(F("  "));
+    printPadded(cno, 4);
 
     if (sizeof(double) == 8) // Check if our processor supports 64-bit double
     {
@@ -212,4 +207,15 @@ void loop()
 
   Serial.print(".");
   delay(50);
+}
+
+void printPadded(uint8_t val, uint8_t padding)
+{
+  Serial.print(val);
+
+  if (val < 10) Serial.print(F("  "));
+  else if (val < 100) Serial.print(F(" "));
+
+  for (uint8_t p = 3; p < padding; p++)
+    Serial.print(" ");
 }
