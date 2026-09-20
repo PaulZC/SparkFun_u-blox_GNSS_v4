@@ -779,6 +779,102 @@ Do not make any code changes yet. Write the proposal first. I will need to appro
 
 Sidenote: ESF-MEAS will need the same multiple-buffer approach. It requires (at least) 6 callback buffers.
 
+## Adding support for NMEA GSV messages
+
+Please add support for NMEA GSV.
+
+Refer to `u-blox-X20-HPG-2.10_InterfaceDescription_UBXDOC-304424225-21263.pdf` for the NMEA GSV field names and definitions.
+
+NMEA GSV messages are a special case. To support them, `nmeaMessages` will need to be restructured so that it can support: variable length messages; and multiple `_storageCallback`.
+
+The GNSS module will output multiple xxGSV messages in each navigation cycle. The library needs to be able to process and store all those messages from a single call of `checkUblox()`.
+
+Each individual GSV message is variable length:
+* The 'header' comprises: `xxGSV`, `numMsg`, `msgNum`, `numSV`
+* Followed by 1 to 4 blocks of: `svid`, `elv`, `az`, `cno`
+* Followed by a 'footer' of: `signalId`
+
+For each constellation, up to 9 messages can be generated: `numMsg` is the total number of messages in this group for the given constellation; `msgNum` is number of this message within the group.
+
+The Talker ID ("GP", "GL", "GA", "GB", "GI", "GQ") is the first two letters of the `xxGSV`. E.g. "GPGSV" messages contain the satellite information for the GPS constellation.
+
+Please modify `nmeaMessages` so it supports variable length messages.
+
+In `class nmeaGSV`, I suggest you add:
+* A new `const` member named `numBlockFields`. Set it to 4.
+* A new array of `struct` `const nmeaField nmeaBlockFields[numBlockFields]`
+* A new `const` member named `numHeaderFields`. Set it to 4. This also defines the position of the first field of the first block.
+* A new `const` member named `maxNumBlocks`. Set it to 4. (The minimum number of blocks (= 1) is implied.)
+
+Interpret `numFields` as excluding the `numBlockFields`
+
+Reinterpret the `nmeaField` `fieldNumber` so that it represents the position in the header or footer, skipping the variable block. E.g.:
+```
+    const nmeaField nmeaFields[numFields] = {
+        {"xxGSV", nmeaDataTypeString, 0}, // Header (implied by fieldNumber < numHeaderFields)
+        {"numMsg", nmeaDataTypeDigit, 1}, // Header (implied by fieldNumber < numHeaderFields)
+        {"msgNum", nmeaDataTypeDigit, 2}, // Header (implied by fieldNumber < numHeaderFields)
+        {"numSV", nmeaDataTypeNumeric, 3}, // Header (implied by fieldNumber < numHeaderFields)
+        {"signalId", nmeaDataTypeString, 4}, // Footer (implied by fieldNumber >= numHeaderFields)
+    };
+```
+
+Add:
+```
+    const nmeaField nmeaBlockFields[numBlockFields] = {
+        {"svid", nmeaDataTypeNumeric, 0},
+        {"elv", nmeaDataTypeNumeric, 1},
+        {"az", nmeaDataTypeNumeric, 2},
+        {"cno", nmeaDataTypeNumeric, 3},
+    };
+```
+
+`signalId` could be Hexadecimal. It needs `nmeaDataTypeString`.
+
+Set `numCallbackCopies` to 54 (six constellations * up to 9 messages per constellation)
+
+You will need to adjust `nmeaMessage` `extractFieldFrom` so it supports the same or similar parameters `fieldsOverride` and `numFieldsOverride` as for `ubxMessage`.
+
+For the callbacks, use the same transient `_callbackReadIndex` technique as `ubxMessage`.
+
+In the callback for GSV, it needs to be possible to use:
+```
+int svid = atoi(myGNSS.getNmeaMessageBlockFieldCallback(msg, block, "svid").c_str());
+```
+If `block` is illegal ( >= `maxNumBlocks`), `getNmeaMessageBlockFieldCallback` should return an empty `String`.
+
+Add `getNmeaMessageBlockField()` to support field extraction from `_storage`.
+
+## Debug printing (SfeDebugPrint)
+
+`DevUBLOXGNSS::debugPrint()`/`debugPrintln()` used to be plain member functions of `DevUBLOXGNSS`,
+so nothing else in the library could call them - including `ubxMessageVector`/`nmeaMessageVector`,
+whose own methods (e.g. `ubxMessageVector::storePayload()`'s ring-buffer-full branch) sometimes
+have something worth reporting but no way to say it.
+
+They now live on a small shared base class, `SparkFun_UBLOX_GNSS::SfeDebugPrint` (`src/sfe_debug.h`/
+`.cpp`), which `DevUBLOXGNSS`, `ubxMessageVector` and `nmeaMessageVector` each inherit independently.
+`sfe_debug.h` has to be its own leaf header (depending only on `sfe_bus.h`, for the `SfePrint` type)
+because `u-blox_GNSS.h` includes `ubxMessageVector.h`/`nmeaMessageVector.h`, not the other way
+around - those two headers cannot include `u-blox_GNSS.h` back, so they cannot inherit from
+`DevUBLOXGNSS` directly.
+
+This is real (non-static) inheritance, so each of the three objects gets its own separate copy of
+`_debugSerial`/`_printDebug`/`_printLimitedDebug`. That matters because `ubxMessages`/`nmeaMessages`
+are owned BY VALUE as member objects of `DevUBLOXGNSS` (the opposite containment direction from
+inheritance) - so on its own, a `ubxMessages.debugPrint(...)` call would compile but never print
+anything, since `myGNSS.enableDebugging()` only ever touches `DevUBLOXGNSS`'s own inherited copy of
+that state. `static` shared state would "fix" that, but would incorrectly couple debug on/off
+across every `SFE_UBLOX_GNSS` instance in a sketch that uses more than one.
+
+Instead, `SfeDebugPrint::copyDebugStateFrom(const SfeDebugPrint &other)` copies just the debug
+state (port + both enable flags) from one `SfeDebugPrint` to another. `DevUBLOXGNSS::enableDebugging()`
+and `disableDebugging()` call it on `ubxMessages`/`nmeaMessages` right after updating their own
+(inherited) state, so all three stay in sync per-`DevUBLOXGNSS`-instance without any shared/static
+state. If you add a fourth class that needs `debugPrint()`/`debugPrintln()`, inherit
+`SfeDebugPrint` and remember to wire it into `enableDebugging()`/`disableDebugging()` the same way -
+inheriting the class alone is not enough to make it ever actually print.
+
 ## Test
 
 Compile the example code in examples/Example1\_PositionVelocityTime using the batch file compile\_example.bat.
