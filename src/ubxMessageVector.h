@@ -65,6 +65,8 @@
 #include "ubxMessages/ubxHNRINS.h"
 #include "ubxMessages/ubxSECSIG.h" // Variable-length (Version 3 - see ubxSECSIG.h): header + repeated per-frequency blocks - see AGENTS.md "Adding the variable-length UBX messages"
 #include "ubxMessages/ubxESFMEAS.h" // Variable-length: header + repeated per-measurement blocks + an optional footer, ring-buffered callback storage (numCallbackCopies=UBX_ESF_MEAS_CALLBACK_BUFFERS) - see AGENTS.md "Adding support for ESF-MEAS"
+#include "ubxMessages/ubxESFRAW.h" // Variable-length: NO header count field at all, block count derived purely from actual received length - see AGENTS.md "Adding support for ESF-RAW and ESF-STATUS"
+#include "ubxMessages/ubxESFSTATUS.h" // Variable-length: header + repeated per-sensor status blocks - see AGENTS.md "Adding support for ESF-RAW and ESF-STATUS"
 
 // ===========================
 

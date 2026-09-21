@@ -342,33 +342,49 @@ public:
     }
 
     // Defensively computes the real number of repeated blocks present in 'buffer' (either this
-    // object's live _storage, or one slot of its _callbackStorage), for a message that set
-    // _blockCountField via addClassID() - see AGENTS.md "Adding support for ESF-MEAS". Needed
-    // because some messages' own header block-count field is documented as unreliable (e.g.
-    // ESF-MEAS's numMeas: "optional, can be obtained from message size") - unlike every
-    // variable-length message registered before ESF-MEAS, which trusts its header field directly
-    // via the plain _maxBlocks-bounded loop the caller writes itself. 'actualLength' is the real
-    // received byte length of 'buffer' (_actualLength for _storage, or the matching
-    // _callbackActualLength[] slot for _callbackStorage) - NOT _messageLength, which is only the
-    // allocated maximum. Returns the minimum of: the header field's own value; how many whole
-    // blocks actually fit in 'actualLength'; and _maxBlocks. Returns 0 if this message did not set
-    // _blockCountField (every message registered before ESF-MEAS), has no block support at all, or
-    // buffer/actualLength don't leave room for even the block header.
+    // object's live _storage, or one slot of its _callbackStorage), for any message that set
+    // _blockFields via addClassID() - see AGENTS.md "Adding support for ESF-MEAS" and "Adding
+    // support for ESF-RAW and ESF-STATUS". 'actualLength' is the real received byte length of
+    // 'buffer' (_actualLength for _storage, or the matching _callbackActualLength[] slot for
+    // _callbackStorage) - NOT _messageLength, which is only the allocated maximum.
+    //
+    // If this message set _blockCountField (currently only ESF-MEAS - a message whose own header
+    // block-count field is documented as unreliable, e.g. ESF-MEAS's numMeas: "optional, can be
+    // obtained from message size"), returns the minimum of: that header field's own value; how
+    // many whole blocks actually fit in 'actualLength'; and _maxBlocks.
+    //
+    // If this message did NOT set _blockCountField, there are two cases. Most variable-length
+    // messages (NAV-SAT, MON-COMMS, SEC-SIG, ...) DO have a trustworthy header count field, but
+    // the caller is expected to read it directly (e.g. "nPorts", "numSens") and loop with that,
+    // exactly as those messages' own file-header comments describe - this function is not needed
+    // for them, though calling it anyway is harmless (see below). ESF-RAW is different: it has NO
+    // block-count field in its wire format AT ALL (u-blox's own note on the old
+    // UBX_ESF_RAW_data_t.numEsfRawBlocks: "this is not contained in the ESF RAW message. It is
+    // calculated from the message length.") - for a message like that, this function is the ONLY
+    // way to know how many blocks are actually present, so it falls back to using 'actualLength'
+    // alone (bounded by _maxBlocks), with no header value to intersect against. Returns 0 if this
+    // message has no block support at all (_blockFields == nullptr), or buffer/actualLength don't
+    // leave room for even the block header.
     uint16_t getBlockCount(const uint8_t *buffer, uint16_t actualLength) const
     {
-        if ((_blockCountField == nullptr) || (_blockFields == nullptr) || (buffer == nullptr))
+        if ((_blockFields == nullptr) || (buffer == nullptr))
             return 0;
-
-        ubxAnyType headerValue;
-        uint16_t headerCount = 0;
-        if (extractFieldFrom(buffer, _blockCountField, &headerValue))
-            headerCount = (uint16_t)(double)headerValue;
 
         uint16_t byLength = 0;
         if ((actualLength > _blockHeaderLength) && (_blockLength > 0))
             byLength = (uint16_t)((actualLength - _blockHeaderLength) / _blockLength);
 
-        uint16_t count = (headerCount < byLength) ? headerCount : byLength;
+        uint16_t count = byLength;
+        if (_blockCountField != nullptr) // Cross-check against the header field too, if this message set one
+        {
+            ubxAnyType headerValue;
+            uint16_t headerCount = 0;
+            if (extractFieldFrom(buffer, _blockCountField, &headerValue))
+                headerCount = (uint16_t)(double)headerValue;
+            if (headerCount < count)
+                count = headerCount;
+        }
+
         if (count > _maxBlocks)
             count = _maxBlocks;
         return count;

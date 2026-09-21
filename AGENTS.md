@@ -1008,6 +1008,123 @@ as-built record. Summary of what shipped:
   narrower loose ends (an unused accessor, and a build-tooling gap that has applied to every phase
   of this engagement, not something specific to ESF-MEAS).
 
+## Adding support for ESF-RAW and ESF-STATUS
+
+Please add UBX-ESF-RAW and UBX-ESF-STATUS to `class` `ubxMessages`. `getRawSensorMeasurement()`
+and both overloads of `getSensorFusionStatus()` can be redacted. Both only need one
+`_callbackStorage` buffer - ignore the comment about "the NEO-M8U sends them in sets of ten (i.e.
+seventy readings per message)".
+
+### Implemented
+
+Implemented in the same session as a direct instruction (no proposal needed - neither message is
+architecturally novel, same as MON-COMMS/SEC-SIG: both follow the ordinary header-plus-repeated-
+blocks pattern already established by NAV-SAT/RXM-SFRBX/MON-COMMS/SEC-SIG/ESF-MEAS). See
+`claude/v4-migration-status.md` (Phase 31) for the as-built record. Summary of what shipped:
+
+- `class ubxESFRAW` (`src/ubxMessages/ubxESFRAW.h`) and `class ubxESFSTATUS`
+  (`src/ubxMessages/ubxESFSTATUS.h`) - both self-registered, following the same variable-length
+  pattern as every message above. Both set `numCallbackCopies = 1`, per explicit instruction - the
+  "NEO-M8U sends sets of ten" note is about how many BLOCKS one single ESF-RAW message can
+  contain (unchanged - `maxBlocks` is still sized for `DEF_NUM_SENS * DEF_MAX_NUM_ESF_RAW_REPEATS`
+  = 70), not about needing multiple ring-buffer copies for a burst of separate messages, unlike
+  RXM-SFRBX/ESF-MEAS.
+- **ESF-RAW is a genuinely new case: it has NO block-count field anywhere in its wire format at
+  all** - its 4-byte header is entirely reserved (the old v3 struct's own comment on
+  `numEsfRawBlocks`: "this is not contained in the ESF RAW message. It is calculated from the
+  message length."). Every previous variable-length message either has a trustworthy header count
+  field the caller reads directly (MON-COMMS's `nPorts`, SEC-SIG's `jamNumCentFreqs`), or an
+  unreliable one that still exists and gets cross-checked (ESF-MEAS's `numMeas`, via
+  `_blockCountField`). ESF-RAW has neither - so `ubxMessage::getBlockCount()` (`ubxMessage.h`) was
+  extended: when a message has NOT set `_blockCountField`, it now falls back to computing the
+  block count purely from the actual received length (bounded by `_maxBlocks`), instead of
+  unconditionally returning 0 as it did before. This is additive and backward compatible - every
+  message that DOES set `_blockCountField` (only ESF-MEAS) behaves identically to before; every
+  ordinary message that sets neither (MON-COMMS, SEC-SIG, ESF-STATUS) now also gets a working,
+  purely-defensive `getUbxMessageBlockCount()`/`...Callback()` as a bonus, agreeing with its own
+  header field under normal circumstances - though the intended way to bound their block loop
+  remains reading the header field directly (`nPorts`/`jamNumCentFreqs`/`numSens`), per each
+  message's own file-header comment. For ESF-RAW specifically, this fallback is not a bonus but
+  the ONLY way to know how many blocks a particular message actually contains -
+  `getUbxMessageBlockCount()`/`...Callback()` is the intended, and only, way to bound its block
+  loop. `numFields` is 0 and `ubxFields` is passed as `nullptr` for ESF-RAW, since there is
+  nothing in its 4-byte header worth exposing as a named field.
+- ESF-STATUS's per-sensor block exposes both the raw status byte (`sensStatus1`/`sensStatus2`/
+  `faults`) and its individual bit-packed sub-fields (`type`/`used`/`ready`/`calibStatus`/
+  `timeStatus`/`badMeas`/`badTTag`/`missingMeas`/`noisyMeas`) - the same convention MON-COMMS uses
+  for `txErrors` and SEC-SIG uses for `sigSecFlags`.
+- `getRawSensorMeasurement()` and both overloads of `getSensorFusionStatus()` are redacted
+  entirely, per explicit instruction - they took their data by value/pointer from the caller (the
+  old v3-style `UBX_ESF_RAW_data_t`/`UBX_ESF_STATUS_data_t`), and nothing constructs one any more
+  now that both messages' storage paths are the generic registry. No replacement helper was added -
+  the generic `getUbxMessageBlockField()`/`getUbxMessageBlockFieldCallback()` API (with
+  `getUbxMessageBlockCount()`/`...Callback()` to bound the loop) covers the same ground.
+- `getESFSTATUS()` is kept as a thin wrapper (`return getUBX(UBX_CLASS_ESF, UBX_ESF_STATUS,
+  maxWait);`), exactly matching `getMONCOMMS()`'s/`getSECSIG()`'s bodies - it is called directly by
+  `getEsfInfo()` and possibly by sketches, unchanged. **There is no `getESFRAW()`** - ESF RAW data
+  cannot be polled, it is "Output" only (a comment already correctly sitting above the real
+  ESF-RAW section in `u-blox_structs.h`, fixed in place during the ESF-MEAS phase), and no such
+  poll wrapper existed in the old v3 API either - this is a deliberate absence, not a gap.
+- **Full migration of the old v3 scaffolding, same depth as MON-COMMS/SEC-SIG/ESF-MEAS:** removed
+  `packetUBXESFRAW`/`packetUBXESFSTATUS` (the `UBX_ESF_RAW_t *`/`UBX_ESF_STATUS_t *` members) from
+  `u-blox_GNSS.h`; removed the destructor's two cleanup blocks, the
+  `autoLookup()`/`processUBXpacket()` branches for both messages under `case UBX_CLASS_ESF:` (the
+  case label itself is now fully empty, matching `case UBX_CLASS_MON:`'s precedent - every message
+  that was ever parsed there is now self-registered), and the `checkCallbacks()` manual
+  callback-firing blocks for both - each replaced with a short retiring comment. Removed
+  `setAutoESFSTATUS` (both overloads), `setAutoESFSTATUSrate`, `setAutoESFSTATUScallbackPtr`,
+  `assumeAutoESFSTATUS`, `flushESFSTATUS`, `logESFSTATUS`, and `initPacketUBXESFSTATUS` entirely
+  (declarations and definitions) - none survive even as thin wrappers, since the generic
+  `setAutoUBX`/`setAutoUBXrate`/`setAutoCallbackPtr`/`assumeAutoUBX`/`flushUBX`/`logUBX` (by
+  Class/ID or by name "ESF"/"STATUS") now do the same job.
+- **Found while touching this code again: ESF-RAW's ENTIRE old "automatic" control-plane API was
+  already dead code, predating this migration.** `setAutoESFRAW` (both overloads),
+  `setAutoESFRAWrate`, `setAutoESFRAWcallbackPtr`, `assumeAutoESFRAW`, `logESFRAW`, and
+  `initPacketUBXESFRAW` were all declared in `u-blox_GNSS.h` but had NO definitions anywhere in
+  `u-blox_GNSS.cpp` (confirmed via grep before removing anything, same care taken for ESF-MEAS's
+  smaller dead-declaration finding in Phase 30). Since `initPacketUBXESFRAW()` was never defined,
+  `packetUBXESFRAW` could never actually be allocated - meaning every `if (packetUBXESFRAW !=
+  nullptr)` branch that used to exist in the destructor, `autoLookup()`, `processUBXpacket()`, and
+  `checkCallbacks()` was ALREADY unreachable dead code before this session touched any of it, not
+  just after. Only `getRawSensorMeasurement()` (now redacted) and the raw parsing/storage/
+  callback-firing code actually did anything, and even that could never fire in practice since the
+  data it depended on was never allocated.
+- **`u-blox_structs.h`**: removed only `UBX_ESF_RAW_t` and `UBX_ESF_STATUS_moduleQueried_t`/
+  `UBX_ESF_STATUS_t` (the v3 RAM-management wrappers) - kept `UBX_ESF_RAW_data_t`/
+  `UBX_ESF_RAW_sensorData_t`/`UBX_ESF_STATUS_data_t`/`UBX_ESF_STATUS_sensorStatus_t` (the
+  wire-format structs) as documented reference, matching every prior migration.
+  `UBX_ESF_RAW_MAX_LEN`/`UBX_ESF_STATUS_MAX_LEN` are unchanged and still used, as `messageLength`.
+- **Verified statically:** confirmed every field's byte/bit offset in both new files against
+  `UBX_ESF_RAW_sensorData_t`/`UBX_ESF_STATUS_data_t`/`UBX_ESF_STATUS_sensorStatus_t`'s actual
+  struct layouts in `u-blox_structs.h` before writing the field tables, not after. Confirmed the
+  `addClassID()` calls' argument order and count match the existing extended signature exactly (14
+  positional arguments, matching MON-COMMS/SEC-SIG - neither new message uses the
+  `blockCountField`/footer trailing parameters). Confirmed `ubxESFRAW.h`'s 3 block-field-table
+  entries match its declared `numBlockFields`, and `ubxESFSTATUS.h`'s 4 header + 13 block entries
+  match its declared `numFields`/`numBlockFields`. Confirmed
+  `UBLOX_CFG_MSGOUT_UBX_ESF_{RAW,STATUS}_{I2C,SPI,UART1,UART2}` all exist in
+  `u-blox_config_keys.h`, and that `UBX_ESF_RAW = 0x03`/`UBX_ESF_STATUS = 0x10` are already defined
+  in `u-blox_Class_and_ID.h`. Confirmed brace/paren balance held on every touched file against the
+  pre-edit baseline (`ubxMessage.h` 32/32 braces, 310/310 parens; `ubxMessageVector.h` 24/24,
+  125/125; `u-blox_GNSS.h` 34/34, 889/889; `u-blox_structs.h` 292/292, 385/385; `ubxESFRAW.h` 7/7,
+  46/46; `ubxESFSTATUS.h` 22/22, 53/53; `u-blox_GNSS.cpp` 1048/1048 braces, carrying the same
+  pre-existing -2 paren imbalance documented since Phase 9, confirmed present at the pre-edit
+  baseline too - not newly introduced). Confirmed CRLF preserved on every touched core file and
+  both new files are LF-only, matching every other file in `ubxMessages/`. Grepped the whole `src/`
+  tree afterward for every retired symbol (`packetUBXESFRAW`, `packetUBXESFSTATUS`,
+  `UBX_ESF_RAW_t`, `UBX_ESF_STATUS_t`, `UBX_ESF_STATUS_moduleQueried_t`,
+  `getRawSensorMeasurement`, `getSensorFusionStatus`, `setAutoESFRAW*`, `setAutoESFSTATUS*`,
+  `assumeAutoESF*`, `logESFRAW`, `logESFSTATUS`, `initPacketUBXESFRAW`, `initPacketUBXESFSTATUS`)
+  and confirmed every remaining hit is a comment, not live code.
+- **Not yet done**: this implementation has NOT been compiled - Docker has been unavailable in
+  every sandbox tried this engagement. It also has NOT been hardware-validated - unlike ESF-MEAS/
+  MON-COMMS/SEC-SIG, no `CallbackExample`-style sketch has been written for either message yet.
+  `numCallbackCopies = 1` for both is a design decision (explicitly instructed), not an estimate to
+  validate the way `UBX_ESF_MEAS_CALLBACK_BUFFERS`/`UBX_RXM_SFRBX_CALLBACK_BUFFERS` were - but the
+  block-count fallback (`getBlockCount()`'s new no-`_blockCountField` path) and the field tables
+  themselves are unvalidated against real hardware traffic, same caution as every other message at
+  this stage.
+
 ## Test
 
 Compile the example code in examples/Example1\_PositionVelocityTime using the batch file compile\_example.bat.

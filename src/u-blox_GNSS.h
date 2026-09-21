@@ -707,7 +707,7 @@ public:
   ubxAnyType getUbxMessageBlockFieldCallback(ubxMessage *theMessage, uint16_t blockIndex, const char *fieldName); // Factory: extracts a named field from repeated block 'blockIndex' of a variable-length message (e.g. NAV-SAT), reading from its _callbackStorage
   ubxAnyType getUbxMessageBlockField(ubxMessage *theMessage, uint16_t blockIndex, const char *fieldName); // Factory: extracts a named field from repeated block 'blockIndex' of a variable-length message (e.g. NAV-SAT), reading from its _storage
   // v4 scaffolding, added for ESF-MEAS - see AGENTS.md "Adding support for ESF-MEAS". General/reusable by any future message with the same shape, not ESF-MEAS-specific.
-  uint16_t getUbxMessageBlockCountCallback(ubxMessage *theMessage); // Factory: the DEFENSIVELY-computed real block count (not the message's own, possibly-unreliable header field) for a message that set _blockCountField, reading from its _callbackStorage - use this, not the raw header field, to bound a getUbxMessageBlockFieldCallback() loop
+  uint16_t getUbxMessageBlockCountCallback(ubxMessage *theMessage); // Factory: the DEFENSIVELY-computed real block count for any message with block support, reading from its _callbackStorage - cross-checks the header's own count field for a message that set _blockCountField (e.g. ESF-MEAS's numMeas), or falls back to computing it purely from the actual received length for a message with no such field at all (e.g. ESF-RAW) - use this, not the raw header field, to bound a getUbxMessageBlockFieldCallback() loop
   uint16_t getUbxMessageBlockCount(ubxMessage *theMessage);         // Factory: same as above, reading from its live _storage
   ubxAnyType getUbxMessageFooterFieldCallback(ubxMessage *theMessage, const char *fieldName); // Factory: extracts a named field from a variable-length message's OPTIONAL trailing footer group (e.g. ESF-MEAS's calibTtag), reading from its _callbackStorage - returns "field not found" if this particular message did not actually include the footer
   ubxAnyType getUbxMessageFooterField(ubxMessage *theMessage, const char *fieldName);         // Factory: same as above, reading from its live _storage
@@ -791,15 +791,16 @@ public:
 
   // Sensor fusion (dead reckoning) (ESF)
 
-  bool getEsfInfo(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                                                                          // ESF STATUS Helper
-  bool getESFSTATUS(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                                                                        // ESF STATUS
-  bool setAutoESFSTATUS(bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                   // Enable/disable automatic ESF STATUS reports
-  bool setAutoESFSTATUS(bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                              // Enable/disable automatic ESF STATUS reports, with implicitUpdate == false accessing stale data will not issue parsing of data in the rxbuffer of your interface, instead you have to call checkUblox when you want to perform an update
-  bool setAutoESFSTATUSrate(uint8_t rate, bool implicitUpdate = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                   // Set the rate for automatic STATUS reports
-  bool setAutoESFSTATUScallbackPtr(void (*callbackPointerPtr)(UBX_ESF_STATUS_data_t *), uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Enable automatic STATUS reports at the navigation frequency. Data is accessed from the callback.
-  bool assumeAutoESFSTATUS(bool enabled, bool implicitUpdate = true);                                                                                                    // In case no config access to the GPS is possible and ESF STATUS is send cyclically already
-  void flushESFSTATUS();                                                                                                                                                 // Mark all the data as read/stale
-  void logESFSTATUS(bool enabled = true);                                                                                                                                // Log data to file buffer
+  bool getEsfInfo(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // ESF STATUS Helper - thin wrapper, unchanged
+
+  // ubxESFSTATUS is now self-registered - see AGENTS.md "Adding support for ESF-RAW and
+  // ESF-STATUS". setAutoESFSTATUS/setAutoESFSTATUSrate/setAutoESFSTATUScallbackPtr/
+  // assumeAutoESFSTATUS/initPacketUBXESFSTATUS/flushESFSTATUS/logESFSTATUS are retired; the
+  // generic setAutoUBX/setAutoUBXrate/setAutoCallbackPtr/assumeAutoUBX/flushUBX/logUBX (by
+  // Class/ID UBX_CLASS_ESF/UBX_ESF_STATUS, or by name "ESF"/"STATUS") do the same job, with no
+  // per-message code required. getESFSTATUS() remains, as a thin wrapper, since it is called
+  // directly rather than by name (including from getEsfInfo() above).
+  bool getESFSTATUS(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // ESF STATUS
 
   // ubxESFMEAS is now self-registered - see AGENTS.md "Adding support for ESF-MEAS". The old
   // setAutoESFMEAS/setAutoESFMEASrate/setAutoESFMEAScallbackPtr/assumeAutoESFMEAS/logESFMEAS
@@ -809,12 +810,16 @@ public:
   // getESFMEAS() remains, as a thin wrapper, since it is called directly rather than by name.
   bool getESFMEAS(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Query module for latest ESF MEAS data
 
-  bool setAutoESFRAW(bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                // Enable/disable automatic ESF RAW reports
-  bool setAutoESFRAW(bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                           // Enable/disable automatic ESF RAW reports, with implicitUpdate == false accessing stale data will not issue parsing of data in the rxbuffer of your interface, instead you have to call checkUblox when you want to perform an update
-  bool setAutoESFRAWrate(uint8_t rate, bool implicitUpdate = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                // Set the rate for automatic RAW reports
-  bool setAutoESFRAWcallbackPtr(void (*callbackPointerPtr)(UBX_ESF_RAW_data_t *), uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Enable automatic RAW reports at the navigation frequency. Data is accessed from the callback.
-  bool assumeAutoESFRAW(bool enabled, bool implicitUpdate = true);                                                                                                 // In case no config access to the GPS is possible and ESF RAW is send cyclically already
-  void logESFRAW(bool enabled = true);                                                                                                                             // Log data to file buffer
+  // ubxESFRAW is now self-registered - see AGENTS.md "Adding support for ESF-RAW and
+  // ESF-STATUS". The old setAutoESFRAW/setAutoESFRAW(implicitUpdate)/setAutoESFRAWrate/
+  // setAutoESFRAWcallbackPtr/assumeAutoESFRAW/logESFRAW/initPacketUBXESFRAW declarations here had
+  // NO definitions anywhere in u-blox_GNSS.cpp - dead declarations, never callable, predating this
+  // migration - so there is nothing to retire beyond removing them from this header. The generic
+  // setAutoUBX/setAutoUBXrate/setAutoCallbackPtr/assumeAutoUBX/flushUBX/logUBX (by Class/ID
+  // UBX_CLASS_ESF/UBX_ESF_RAW, or by name "ESF"/"RAW") do the same job, with no per-message code
+  // required. There is no getESFRAW() - ESF RAW data cannot be polled, it is "Output" only (see
+  // the comment above the real ESF-RAW section in u-blox_structs.h), and no such wrapper existed
+  // in the old API either.
 
   // ubxSECSIG (Version 3 - see ubxSECSIG.h) is now self-registered - see AGENTS.md "Adding the
   // variable-length UBX messages". getSECSIG() remains, as a thin wrapper, since it is called
@@ -1039,9 +1044,14 @@ public:
   // ESF-MEAS's storage path is the generic registry (ubxESFMEAS). The generic
   // getUbxMessageBlockField()/getUbxMessageBlockFieldCallback() (with getUbxMessageBlockCount()/
   // ...Callback() to bound the loop) cover the same ground.
-  bool getRawSensorMeasurement(UBX_ESF_RAW_sensorData_t *sensorData, UBX_ESF_RAW_data_t ubxDataStruct, uint8_t sensor);
-  bool getSensorFusionStatus(UBX_ESF_STATUS_sensorStatus_t *sensorStatus, uint8_t sensor, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
-  bool getSensorFusionStatus(UBX_ESF_STATUS_sensorStatus_t *sensorStatus, UBX_ESF_STATUS_data_t ubxDataStruct, uint8_t sensor);
+
+  // getRawSensorMeasurement() and both overloads of getSensorFusionStatus() are redacted, per
+  // explicit instruction - see AGENTS.md "Adding support for ESF-RAW and ESF-STATUS". They took
+  // their data structs by value/pointer from the caller (the old v3-style UBX_ESF_RAW_data_t/
+  // UBX_ESF_STATUS_data_t), but nothing constructs one of those to pass any more now that
+  // ESF-RAW's/ESF-STATUS's storage paths are the generic registry (ubxESFRAW/ubxESFSTATUS). The
+  // generic getUbxMessageBlockField()/getUbxMessageBlockFieldCallback() (with
+  // getUbxMessageBlockCount()/...Callback() to bound the loop) cover the same ground.
 
   // Helper functions for HNR
   // For safety, call getHNRroll/pitch/yaw inside an if(getHNRATT()) or if(getUBX("HNR","ATT"))
@@ -1172,8 +1182,11 @@ public:
 
   // packetUBXESFMEAS no longer exists - ubxESFMEAS is now self-registered - see AGENTS.md "Adding
   // support for ESF-MEAS".
-  UBX_ESF_RAW_t *packetUBXESFRAW = nullptr;       // Pointer to struct. RAM will be allocated for this if/when necessary
-  UBX_ESF_STATUS_t *packetUBXESFSTATUS = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
+  // packetUBXESFRAW/packetUBXESFSTATUS no longer exist - ubxESFRAW/ubxESFSTATUS are now
+  // self-registered - see AGENTS.md "Adding support for ESF-RAW and ESF-STATUS". (packetUBXESFRAW
+  // itself could never actually have been allocated anyway - initPacketUBXESFRAW() was declared
+  // but had no definition, so every "if (packetUBXESFRAW != nullptr)" branch that used to exist
+  // in this file was dead, unreachable code even before this migration.)
 
   // packetUBXSECSIG no longer exists - ubxSECSIG is now self-registered - see AGENTS.md
   // "Adding the variable-length UBX messages".
@@ -1237,11 +1250,15 @@ protected:
   bool initPacketUBXRXMPMP();           // Allocate RAM for packetUBXRXMPMP and initialize it
   bool initPacketUBXRXMPMPmessage();    // Allocate RAM for packetUBXRXMPMPRaw and initialize it
   bool initPacketUBXRXMQZSSL6message(); // Allocate RAM for packetUBXRXMQZSSL6raw and initialize it
-  bool initPacketUBXESFSTATUS();        // Allocate RAM for packetUBXESFSTATUS and initialize it
+  // initPacketUBXESFSTATUS() no longer exists - ubxESFSTATUS is now self-registered - see
+  // AGENTS.md "Adding support for ESF-RAW and ESF-STATUS".
   // initPacketUBXESFMEAS() no longer exists - ubxESFMEAS is now self-registered - see AGENTS.md
   // "Adding support for ESF-MEAS". (It had no definition anywhere in u-blox_GNSS.cpp either - a
   // dead declaration, never callable.)
-  bool initPacketUBXESFRAW();           // Allocate RAM for packetUBXESFRAW and initialize it
+  // initPacketUBXESFRAW() no longer exists - ubxESFRAW is now self-registered - see AGENTS.md
+  // "Adding support for ESF-RAW and ESF-STATUS". (It had no definition anywhere in
+  // u-blox_GNSS.cpp either - a dead declaration, never callable - see the comment above
+  // packetUBXESFRAW's old declaration.)
   bool initPacketUBXMGAACK();           // Allocate RAM for packetUBXMGAACK and initialize it
   bool initPacketUBXMGADBD();           // Allocate RAM for packetUBXMGADBD and initialize it
 

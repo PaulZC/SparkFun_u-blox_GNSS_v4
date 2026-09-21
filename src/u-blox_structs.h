@@ -2559,6 +2559,15 @@ typedef struct
 // Note: The ZED-F9R sends sets of seven sensor readings one at a time
 //       But the NEO-M8U sends them in sets of ten (i.e. seventy readings per message)
 // Note: ESF RAW data cannot be polled. It is "Output" only
+// Note: ESF-RAW is now implemented as its own self-registered Class - see ubxMessages/ubxESFRAW.h
+// and AGENTS.md "Adding support for ESF-RAW and ESF-STATUS". UBX_ESF_RAW_MAX_LEN below is still
+// used there (as messageLength). numCallbackCopies is 1 (a single _callbackStorage buffer,
+// explicitly instructed) - the "NEO-M8U sends sets of ten" note above is about how many BLOCKS
+// one single message can contain (unchanged, sized for by DEF_NUM_SENS*DEF_MAX_NUM_ESF_RAW_REPEATS
+// below), not about needing multiple ring-buffer copies for a burst of separate messages. ESF-RAW
+// has no block-count field anywhere in its own wire format (see numEsfRawBlocks's comment below) -
+// ubxMessage::getBlockCount() falls back to computing the block count purely from the actual
+// received message length for a message like this.
 const uint16_t UBX_ESF_RAW_MAX_LEN = 4 + (8 * DEF_NUM_SENS * DEF_MAX_NUM_ESF_RAW_REPEATS);
 
 typedef struct
@@ -2582,16 +2591,20 @@ typedef struct
   uint8_t numEsfRawBlocks; // Note: this is not contained in the ESF RAW message. It is calculated from the message length.
 } UBX_ESF_RAW_data_t;
 
-typedef struct
-{
-  ubxAutomaticFlags automaticFlags;
-  UBX_ESF_RAW_data_t data;
-  void (*callbackPointerPtr)(UBX_ESF_RAW_data_t *);
-  UBX_ESF_RAW_data_t *callbackData;
-} UBX_ESF_RAW_t;
+// UBX_ESF_RAW_data_t/UBX_ESF_RAW_sensorData_t above are kept as documented reference for the wire
+// format - see ubxMessages/ubxESFRAW.h's field tables for the actual v4 parsing. The old
+// v3-style RAM-management wrapper (UBX_ESF_RAW_t, with its callbackPointerPtr/callbackData) is
+// retired - ubxESFRAW is now self-registered and owns its own storage/callback buffer via
+// ubxMessage - see AGENTS.md "Adding support for ESF-RAW and ESF-STATUS". (This wrapper's
+// destructor/autoLookup/processUBXpacket/checkCallbacks cleanup was already unreachable dead
+// code before this migration - the pointer that used it, packetUBXESFRAW, could never actually
+// be allocated, since the old initPacketUBXESFRAW() was declared but never defined.)
 
 // UBX-ESF-STATUS (0x10 0x10): External sensor fusion status
 // Note: length is variable
+// Note: ESF-STATUS is now implemented as its own self-registered Class - see
+// ubxMessages/ubxESFSTATUS.h and AGENTS.md "Adding support for ESF-RAW and ESF-STATUS".
+// UBX_ESF_STATUS_MAX_LEN below is still used there (as messageLength).
 const uint16_t UBX_ESF_STATUS_MAX_LEN = 16 + (4 * DEF_NUM_SENS);
 
 typedef struct
@@ -2649,33 +2662,12 @@ typedef struct
   UBX_ESF_STATUS_sensorStatus_t status[DEF_NUM_SENS];
 } UBX_ESF_STATUS_data_t;
 
-typedef struct
-{
-  union
-  {
-    uint32_t all;
-    struct
-    {
-      uint32_t all : 1;
-
-      uint32_t iTOW : 1;
-      uint32_t version : 1;
-      uint32_t fusionMode : 1;
-      uint32_t numSens : 1;
-
-      uint32_t status : DEF_NUM_SENS;
-    } bits;
-  } moduleQueried;
-} UBX_ESF_STATUS_moduleQueried_t;
-
-typedef struct
-{
-  ubxAutomaticFlags automaticFlags;
-  UBX_ESF_STATUS_data_t data;
-  UBX_ESF_STATUS_moduleQueried_t moduleQueried;
-  void (*callbackPointerPtr)(UBX_ESF_STATUS_data_t *);
-  UBX_ESF_STATUS_data_t *callbackData;
-} UBX_ESF_STATUS_t;
+// UBX_ESF_STATUS_data_t/UBX_ESF_STATUS_sensorStatus_t above are kept as documented reference for
+// the wire format - see ubxMessages/ubxESFSTATUS.h's field tables for the actual v4 parsing. The
+// old v3-style RAM-management wrapper (UBX_ESF_STATUS_moduleQueried_t / UBX_ESF_STATUS_t, with its
+// callbackPointerPtr/callbackData) is retired - ubxESFSTATUS is now self-registered and owns its
+// own storage/callback buffer via ubxMessage - see AGENTS.md "Adding support for ESF-RAW and
+// ESF-STATUS".
 
 // MGA-specific structs
 

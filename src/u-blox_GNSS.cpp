@@ -166,28 +166,18 @@ void DevUBLOXGNSS::end(void)
   // packetUBXMONCOMMS no longer exists - ubxMONCOMMS is now self-registered and destroyed by
   // ubxMessageVector's own destructor. See AGENTS.md "Adding the variable-length UBX messages".
 
-  if (packetUBXESFSTATUS != nullptr)
-  {
-    if (packetUBXESFSTATUS->callbackData != nullptr)
-    {
-      delete packetUBXESFSTATUS->callbackData;
-    }
-    delete packetUBXESFSTATUS;
-    packetUBXESFSTATUS = nullptr;
-  }
+  // packetUBXESFSTATUS no longer exists - ubxESFSTATUS is now self-registered and destroyed by
+  // ubxMessageVector's own destructor. See AGENTS.md "Adding support for ESF-RAW and
+  // ESF-STATUS".
 
   // packetUBXESFMEAS no longer exists - ubxESFMEAS is now self-registered and destroyed by
   // ubxMessageVector's own destructor. See AGENTS.md "Adding support for ESF-MEAS".
 
-  if (packetUBXESFRAW != nullptr)
-  {
-    if (packetUBXESFRAW->callbackData != nullptr)
-    {
-      delete packetUBXESFRAW->callbackData;
-    }
-    delete packetUBXESFRAW;
-    packetUBXESFRAW = nullptr;
-  }
+  // packetUBXESFRAW no longer exists - ubxESFRAW is now self-registered and destroyed by
+  // ubxMessageVector's own destructor. See AGENTS.md "Adding support for ESF-RAW and
+  // ESF-STATUS". (This cleanup block was already unreachable dead code before this migration -
+  // packetUBXESFRAW could never actually be non-nullptr, since initPacketUBXESFRAW() was
+  // declared but never defined.)
 
   if (packetUBXMGAACK != nullptr)
   {
@@ -853,20 +843,9 @@ bool DevUBLOXGNSS::autoLookup(uint8_t Class, uint8_t ID, uint16_t *maxSize)
     // see AGENTS.md "Adding the variable-length UBX messages".
     break;
   case UBX_CLASS_ESF:
-    // UBX_ESF_MEAS is handled above via the registry (ubxESFMEAS is now self-registered) - see
-    // AGENTS.md "Adding support for ESF-MEAS".
-    if (ID == UBX_ESF_RAW)
-    {
-      if (maxSize != nullptr)
-        *maxSize = UBX_ESF_RAW_MAX_LEN;
-      return (packetUBXESFRAW != nullptr);
-    }
-    else if (ID == UBX_ESF_STATUS)
-    {
-      if (maxSize != nullptr)
-        *maxSize = UBX_ESF_STATUS_MAX_LEN;
-      return (packetUBXESFSTATUS != nullptr);
-    }
+    // UBX_ESF_MEAS, UBX_ESF_RAW and UBX_ESF_STATUS are all handled above via the registry
+    // (ubxESFMEAS/ubxESFRAW/ubxESFSTATUS are now self-registered) - see AGENTS.md "Adding
+    // support for ESF-MEAS" and "Adding support for ESF-RAW and ESF-STATUS".
     break;
   case UBX_CLASS_MGA:
     if (ID == UBX_MGA_ACK_DATA0)
@@ -2155,72 +2134,15 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
       // that generically.
       break;
     case UBX_CLASS_ESF:
-      // UBX_ESF_MEAS is now a registered v4 message (ubxESFMEAS) - see AGENTS.md "Adding support
-      // for ESF-MEAS". processUBXpacket() no longer parses it here; the registry-first branch at
-      // the top of this function (ubxMessages.storePayload()) does that generically, including
-      // writing into the ring-buffered _callbackStorage/_callbackActualLength/_callbackRawFrame.
-      if (msg->id == UBX_ESF_RAW)
-      {
-        // Parse various byte fields into storage - but only if we have memory allocated for it
-        if (packetUBXESFRAW != nullptr)
-        {
-          packetUBXESFRAW->data.numEsfRawBlocks = (msg->len - 4) / 8; // Record how many blocks were received. Could be 7 or 70 (ZED-F9R vs. NEO-M8U)
-          for (uint16_t i = 0; (i < (DEF_NUM_SENS * DEF_MAX_NUM_ESF_RAW_REPEATS)) && ((i * 8) < (msg->len - 4)); i++)
-          {
-            packetUBXESFRAW->data.data[i].data.all = extractLong(msg, 4 + (i * 8));
-            packetUBXESFRAW->data.data[i].sTag = extractLong(msg, 8 + (i * 8));
-          }
-
-          // Check if we need to copy the data for the callback
-          if ((packetUBXESFRAW->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-              && (packetUBXESFRAW->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-          {
-            memcpy(&packetUBXESFRAW->callbackData->data[0].data.all, &packetUBXESFRAW->data.data[0].data.all, sizeof(UBX_ESF_RAW_data_t));
-            packetUBXESFRAW->automaticFlags.flags.bits.callbackCopyValid = true;
-          }
-
-          // Check if we need to copy the data into the file buffer
-          if (packetUBXESFRAW->automaticFlags.flags.bits.addToFileBuffer)
-          {
-            addedToFileBuffer = storePacket(msg);
-          }
-        }
-      }
-      else if (msg->id == UBX_ESF_STATUS)
-      {
-        // Parse various byte fields into storage - but only if we have memory allocated for it
-        if (packetUBXESFSTATUS != nullptr)
-        {
-          packetUBXESFSTATUS->data.iTOW = extractLong(msg, 0);
-          packetUBXESFSTATUS->data.version = extractByte(msg, 4);
-          packetUBXESFSTATUS->data.fusionMode = extractByte(msg, 12);
-          packetUBXESFSTATUS->data.numSens = extractByte(msg, 15);
-          for (uint16_t i = 0; (i < DEF_NUM_SENS) && (i < packetUBXESFSTATUS->data.numSens) && ((i * 4) < (msg->len - 16)); i++)
-          {
-            packetUBXESFSTATUS->data.status[i].sensStatus1.all = extractByte(msg, 16 + (i * 4) + 0);
-            packetUBXESFSTATUS->data.status[i].sensStatus2.all = extractByte(msg, 16 + (i * 4) + 1);
-            packetUBXESFSTATUS->data.status[i].freq = extractByte(msg, 16 + (i * 4) + 2);
-            packetUBXESFSTATUS->data.status[i].faults.all = extractByte(msg, 16 + (i * 4) + 3);
-          }
-
-          // Mark all datums as fresh (not read before)
-          packetUBXESFSTATUS->moduleQueried.moduleQueried.all = 0xFFFFFFFF;
-
-          // Check if we need to copy the data for the callback
-          if ((packetUBXESFSTATUS->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-              && (packetUBXESFSTATUS->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-          {
-            memcpy(&packetUBXESFSTATUS->callbackData->iTOW, &packetUBXESFSTATUS->data.iTOW, sizeof(UBX_ESF_STATUS_data_t));
-            packetUBXESFSTATUS->automaticFlags.flags.bits.callbackCopyValid = true;
-          }
-
-          // Check if we need to copy the data into the file buffer
-          if (packetUBXESFSTATUS->automaticFlags.flags.bits.addToFileBuffer)
-          {
-            addedToFileBuffer = storePacket(msg);
-          }
-        }
-      }
+      // UBX_ESF_MEAS, UBX_ESF_RAW and UBX_ESF_STATUS are all now registered v4 messages
+      // (ubxESFMEAS/ubxESFRAW/ubxESFSTATUS) - see AGENTS.md "Adding support for ESF-MEAS" and
+      // "Adding support for ESF-RAW and ESF-STATUS". processUBXpacket() no longer parses any of
+      // them here; the registry-first branch at the top of this function
+      // (ubxMessages.storePayload()) does that generically, including writing into the
+      // ring-buffered _callbackStorage/_callbackActualLength/_callbackRawFrame. (The ESF_RAW
+      // branch that used to be here was already unreachable dead code before this migration -
+      // packetUBXESFRAW could never actually be non-nullptr, since initPacketUBXESFRAW() was
+      // declared but never defined.)
       break;
     case UBX_CLASS_MGA:
       if (msg->id == UBX_MGA_ACK_DATA0 && msg->len == UBX_MGA_ACK_DATA0_LEN)
@@ -3209,12 +3131,16 @@ ubxAnyType DevUBLOXGNSS::getUbxMessageBlockField(ubxMessage *theMessage, uint16_
     return value;
 }
 
-// v4 scaffolding, added for ESF-MEAS - see AGENTS.md "Adding support for ESF-MEAS". General/
-// reusable by any future message with the same shape, not ESF-MEAS-specific.
-// Factory: the DEFENSIVELY-computed real block count (ubxMessage::getBlockCount()) for a message
-// that set _blockCountField, reading from its _callbackStorage - use this, not the message's own
-// (possibly-unreliable) header count field, to bound a getUbxMessageBlockFieldCallback() loop. 0
-// if this message did not set _blockCountField, or if no callback data is available yet.
+// v4 scaffolding, added for ESF-MEAS, extended for ESF-RAW - see AGENTS.md "Adding support for
+// ESF-MEAS" and "Adding support for ESF-RAW and ESF-STATUS". General/reusable by any future
+// message with the same shape.
+// Factory: the DEFENSIVELY-computed real block count (ubxMessage::getBlockCount()) for any
+// message with block support, reading from its _callbackStorage - use this, not the message's own
+// (possibly-unreliable, or entirely absent) header count field, to bound a
+// getUbxMessageBlockFieldCallback() loop. For a message that set _blockCountField (e.g. ESF-MEAS),
+// this cross-checks that header field against the actual received length; for a message with no
+// block-count field at all (e.g. ESF-RAW), this computes the count purely from the actual received
+// length. 0 if this message has no block support at all, or if no callback data is available yet.
 uint16_t DevUBLOXGNSS::getUbxMessageBlockCountCallback(ubxMessage *theMessage)
 {
     if ((theMessage == nullptr) || (theMessage->_callbackStorage == nullptr) || (theMessage->_callbackActualLength == nullptr))
@@ -3511,27 +3437,11 @@ void DevUBLOXGNSS::checkCallbacks(void)
   // now self-registered, with its own ring-buffered _callbackStorage) - see AGENTS.md "Adding
   // support for ESF-MEAS".
 
-  if (packetUBXESFRAW != nullptr)                                               // If RAM has been allocated for message storage
-    if (packetUBXESFRAW->callbackData != nullptr)                               // If RAM has been allocated for the copy of the data
-      if (packetUBXESFRAW->automaticFlags.flags.bits.callbackCopyValid == true) // If the copy of the data is valid
-      {
-        if (packetUBXESFRAW->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          packetUBXESFRAW->callbackPointerPtr(packetUBXESFRAW->callbackData); // Call the callback
-        }
-        packetUBXESFRAW->automaticFlags.flags.bits.callbackCopyValid = false; // Mark the data as stale
-      }
-
-  if (packetUBXESFSTATUS != nullptr)                                               // If RAM has been allocated for message storage
-    if (packetUBXESFSTATUS->callbackData != nullptr)                               // If RAM has been allocated for the copy of the data
-      if (packetUBXESFSTATUS->automaticFlags.flags.bits.callbackCopyValid == true) // If the copy of the data is valid
-      {
-        if (packetUBXESFSTATUS->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          packetUBXESFSTATUS->callbackPointerPtr(packetUBXESFSTATUS->callbackData); // Call the callback
-        }
-        packetUBXESFSTATUS->automaticFlags.flags.bits.callbackCopyValid = false; // Mark the data as stale
-      }
+  // UBX_ESF_RAW's and UBX_ESF_STATUS's callbacks are both dispatched by the generic registry walk
+  // above (ubxESFRAW/ubxESFSTATUS are now self-registered) - see AGENTS.md "Adding support for
+  // ESF-RAW and ESF-STATUS". (The ESF_RAW block that used to be here was already unreachable dead
+  // code before this migration - packetUBXESFRAW could never actually be non-nullptr, since
+  // initPacketUBXESFRAW() was declared but never defined.)
 
   // UBX_SEC_SIG's callback is now dispatched by the generic registry walk above (ubxSECSIG is
   // now self-registered) - see AGENTS.md "Adding the variable-length UBX messages".
@@ -7818,6 +7728,13 @@ bool DevUBLOXGNSS::getESFMEAS(uint16_t maxWait)
 }
 
 // ***** ESF STATUS automatic support
+// ubxESFSTATUS is now self-registered - see AGENTS.md "Adding support for ESF-RAW and
+// ESF-STATUS". setAutoESFSTATUS/setAutoESFSTATUSrate/setAutoESFSTATUScallbackPtr/
+// assumeAutoESFSTATUS/initPacketUBXESFSTATUS/flushESFSTATUS/logESFSTATUS are retired; the
+// generic setAutoUBX/setAutoUBXrate/setAutoCallbackPtr/assumeAutoUBX/flushUBX/logUBX (by
+// Class/ID UBX_CLASS_ESF/UBX_ESF_STATUS, or by name "ESF"/"STATUS") do the same job, with no
+// per-message code required. getESFSTATUS() remains, as a thin wrapper, since it is called
+// directly rather than by name (including from getEsfInfo() below).
 
 bool DevUBLOXGNSS::getEsfInfo(uint16_t maxWait)
 {
@@ -7826,161 +7743,7 @@ bool DevUBLOXGNSS::getEsfInfo(uint16_t maxWait)
 
 bool DevUBLOXGNSS::getESFSTATUS(uint16_t maxWait)
 {
-  if (packetUBXESFSTATUS == nullptr)
-    initPacketUBXESFSTATUS();        // Check that RAM has been allocated for the ESF status data
-  if (packetUBXESFSTATUS == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  if (packetUBXESFSTATUS->automaticFlags.flags.bits.automatic && packetUBXESFSTATUS->automaticFlags.flags.bits.implicitUpdate)
-  {
-    // The GPS is automatically reporting, we just check whether we got unread data
-    checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-    return packetUBXESFSTATUS->moduleQueried.moduleQueried.bits.all;
-  }
-  else if (packetUBXESFSTATUS->automaticFlags.flags.bits.automatic && !packetUBXESFSTATUS->automaticFlags.flags.bits.implicitUpdate)
-  {
-    // Someone else has to call checkUblox for us...
-    return (false);
-  }
-  else
-  {
-    // The GPS is not automatically reporting HNR PVT so we have to poll explicitly
-    packetCfg.cls = UBX_CLASS_ESF;
-    packetCfg.id = UBX_ESF_STATUS;
-    packetCfg.len = 0;
-    packetCfg.startingSpot = 0;
-
-    // The data is parsed as part of processing the response
-    sfe_ublox_status_e retVal = sendCommand(&packetCfg, maxWait);
-
-    if (retVal == SFE_UBLOX_STATUS_DATA_RECEIVED)
-      return (true);
-
-    if (retVal == SFE_UBLOX_STATUS_DATA_OVERWRITTEN)
-    {
-      return (true);
-    }
-
-    return (false);
-  }
-
-  return (false); // Trap. We should never get here...
-}
-
-// Enable or disable automatic ESF STATUS message generation by the GNSS. This changes the way getESFInfo
-// works.
-bool DevUBLOXGNSS::setAutoESFSTATUS(bool enable, uint8_t layer, uint16_t maxWait)
-{
-  return setAutoESFSTATUSrate(enable ? 1 : 0, true, layer, maxWait);
-}
-
-// Enable or disable automatic ESF STATUS message generation by the GNSS. This changes the way getESFInfo
-// works.
-bool DevUBLOXGNSS::setAutoESFSTATUS(bool enable, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
-{
-  return setAutoESFSTATUSrate(enable ? 1 : 0, implicitUpdate, layer, maxWait);
-}
-
-// Enable or disable automatic ESF STATUS message generation by the GNSS. This changes the way getESFInfo
-// works.
-bool DevUBLOXGNSS::setAutoESFSTATUSrate(uint8_t rate, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
-{
-  if (packetUBXESFSTATUS == nullptr)
-    initPacketUBXESFSTATUS();        // Check that RAM has been allocated for the data
-  if (packetUBXESFSTATUS == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  if (rate > 127)
-    rate = 127;
-
-  uint32_t key = UBLOX_CFG_MSGOUT_UBX_ESF_STATUS_I2C;
-  if (_commType == COMM_TYPE_SPI)
-    key = UBLOX_CFG_MSGOUT_UBX_ESF_STATUS_SPI;
-  else if (_commType == COMM_TYPE_SERIAL)
-  {
-    if (!_UART2)
-      key = UBLOX_CFG_MSGOUT_UBX_ESF_STATUS_UART1;
-    else
-      key = UBLOX_CFG_MSGOUT_UBX_ESF_STATUS_UART2;
-  }
-
-  bool ok = setAutoMsgRateVal(key, rate, implicitUpdate, packetUBXESFSTATUS->automaticFlags, layer, maxWait);
-  packetUBXESFSTATUS->moduleQueried.moduleQueried.bits.all = false; // Mark data as stale
-  return ok;
-}
-
-// Enable automatic navigation message generation by the GNSS.
-bool DevUBLOXGNSS::setAutoESFSTATUScallbackPtr(void (*callbackPointerPtr)(UBX_ESF_STATUS_data_t *), uint8_t layer, uint16_t maxWait)
-{
-  // Enable auto messages. Set implicitUpdate to false as we expect the user to call checkUblox manually.
-  bool result = setAutoESFSTATUS(true, false, layer, maxWait);
-  if (!result)
-    return (result); // Bail if setAuto failed
-
-  if (packetUBXESFSTATUS->callbackData == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    packetUBXESFSTATUS->callbackData = new UBX_ESF_STATUS_data_t; // Allocate RAM for the main struct
-  }
-
-  if (packetUBXESFSTATUS->callbackData == nullptr)
-  {
-    debugPrintln("setAutoESFSTATUScallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  packetUBXESFSTATUS->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// In case no config access to the GNSS is possible and ESF STATUS is send cyclically already
-// set config to suitable parameters
-bool DevUBLOXGNSS::assumeAutoESFSTATUS(bool enabled, bool implicitUpdate)
-{
-  if (packetUBXESFSTATUS == nullptr)
-    initPacketUBXESFSTATUS();        // Check that RAM has been allocated for the ESF status data
-  if (packetUBXESFSTATUS == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  bool changes = packetUBXESFSTATUS->automaticFlags.flags.bits.automatic != enabled || packetUBXESFSTATUS->automaticFlags.flags.bits.implicitUpdate != implicitUpdate;
-  if (changes)
-  {
-    packetUBXESFSTATUS->automaticFlags.flags.bits.automatic = enabled;
-    packetUBXESFSTATUS->automaticFlags.flags.bits.implicitUpdate = implicitUpdate;
-  }
-  return changes;
-}
-
-// PRIVATE: Allocate RAM for packetUBXESFSTATUS and initialize it
-bool DevUBLOXGNSS::initPacketUBXESFSTATUS()
-{
-  packetUBXESFSTATUS = new UBX_ESF_STATUS_t; // Allocate RAM for the main struct
-
-  if (packetUBXESFSTATUS == nullptr)
-  {
-    debugPrintln("initPacketUBXESFSTATUS: RAM alloc failed!", true); // Important
-    return (false);
-  }
-  packetUBXESFSTATUS->automaticFlags.flags.all = 0;
-  packetUBXESFSTATUS->callbackPointerPtr = nullptr;
-  packetUBXESFSTATUS->callbackData = nullptr;
-  packetUBXESFSTATUS->moduleQueried.moduleQueried.all = 0;
-  return (true);
-}
-
-// Mark all the data as read/stale
-void DevUBLOXGNSS::flushESFSTATUS()
-{
-  if (packetUBXESFSTATUS == nullptr)
-    return;                                                // Bail if RAM has not been allocated (otherwise we could be writing anywhere!)
-  packetUBXESFSTATUS->moduleQueried.moduleQueried.all = 0; // Mark all datums as stale (read before)
-}
-
-// Log this data in file buffer
-void DevUBLOXGNSS::logESFSTATUS(bool enabled)
-{
-  if (packetUBXESFSTATUS == nullptr)
-    return; // Bail if RAM has not been allocated (otherwise we could be writing anywhere!)
-  packetUBXESFSTATUS->automaticFlags.flags.bits.addToFileBuffer = (uint8_t)enabled;
+  return getUBX(UBX_CLASS_ESF, UBX_ESF_STATUS, maxWait);
 }
 
 // ***** SEC-SIG automatic support
@@ -9422,39 +9185,9 @@ float DevUBLOXGNSS::getESFyaw() // Returned as degrees
 // getSensorFusionMeasurement() is redacted, per explicit instruction - see AGENTS.md "Adding
 // support for ESF-MEAS" and the comment above its declaration in u-blox_GNSS.h.
 
-bool DevUBLOXGNSS::getRawSensorMeasurement(UBX_ESF_RAW_sensorData_t *sensorData, UBX_ESF_RAW_data_t ubxDataStruct, uint8_t sensor)
-{
-  sensorData->data.all = ubxDataStruct.data[sensor].data.all;
-  sensorData->sTag = ubxDataStruct.data[sensor].sTag;
-  return (true);
-}
-
-bool DevUBLOXGNSS::getSensorFusionStatus(UBX_ESF_STATUS_sensorStatus_t *sensorStatus, uint8_t sensor, uint16_t maxWait)
-{
-  if (packetUBXESFSTATUS == nullptr)
-    initPacketUBXESFSTATUS();        // Check that RAM has been allocated for the ESF STATUS data
-  if (packetUBXESFSTATUS == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if ((packetUBXESFSTATUS->moduleQueried.moduleQueried.bits.status & (1 << sensor)) == 0)
-    getESFSTATUS(maxWait);
-  packetUBXESFSTATUS->moduleQueried.moduleQueried.bits.status &= ~(1 << sensor); // Since we are about to give this to user, mark this data as stale
-  packetUBXESFSTATUS->moduleQueried.moduleQueried.bits.all = false;
-  sensorStatus->sensStatus1.all = packetUBXESFSTATUS->data.status[sensor].sensStatus1.all;
-  sensorStatus->sensStatus2.all = packetUBXESFSTATUS->data.status[sensor].sensStatus2.all;
-  sensorStatus->freq = packetUBXESFSTATUS->data.status[sensor].freq;
-  sensorStatus->faults.all = packetUBXESFSTATUS->data.status[sensor].faults.all;
-  return (true);
-}
-
-bool DevUBLOXGNSS::getSensorFusionStatus(UBX_ESF_STATUS_sensorStatus_t *sensorStatus, UBX_ESF_STATUS_data_t ubxDataStruct, uint8_t sensor)
-{
-  sensorStatus->sensStatus1.all = ubxDataStruct.status[sensor].sensStatus1.all;
-  sensorStatus->sensStatus2.all = ubxDataStruct.status[sensor].sensStatus2.all;
-  sensorStatus->freq = ubxDataStruct.status[sensor].freq;
-  sensorStatus->faults.all = ubxDataStruct.status[sensor].faults.all;
-  return (true);
-}
+// getRawSensorMeasurement() and both overloads of getSensorFusionStatus() are redacted, per
+// explicit instruction - see AGENTS.md "Adding support for ESF-RAW and ESF-STATUS" and the
+// comment above their declarations in u-blox_GNSS.h.
 
 // ***** HNR Helper Functions
 
