@@ -103,7 +103,7 @@ public:
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,
                    numFields, (const void *)&ubxFields, (const uint32_t *)msgOutKeys,
                    (const void *)&ubxBlockFields, numBlockFields, blockHeaderLength, blockLength,
-                   DEF_NUM_SENS);
+                   UBX_ESF_STATUS_MAX_NUM_SENS);
         // blockCountField deliberately left at its default (nullptr) - "numSens" is a genuine,
         // documented count field, same convention as MON-COMMS/SEC-SIG - see the file header
         // comment above.

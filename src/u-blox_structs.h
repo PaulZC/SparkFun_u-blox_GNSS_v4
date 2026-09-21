@@ -37,18 +37,6 @@
 
 #pragma once
 
-#ifndef DEF_NUM_SENS
-#define DEF_NUM_SENS 7 // The maximum number of ESF sensors
-#endif
-
-#ifndef DEF_MAX_NUM_ESF_RAW_REPEATS
-#define DEF_MAX_NUM_ESF_RAW_REPEATS 10 // The NEO-M8U sends ESF RAW data in blocks / sets of ten readings. (The ZED-F9R sends them one at a time.)
-#endif
-
-#ifndef DEF_MAX_NUM_ESF_MEAS
-#define DEF_MAX_NUM_ESF_MEAS 31 // numMeas is 5 bits, indicating up to 31 groups could be received
-#endif
-
 // Additional flags and pointers that need to be stored with each message type
 struct ubxAutomaticFlags
 {
@@ -2513,7 +2501,8 @@ typedef struct
 // UBX_RXM_SFRBX_CALLBACK_BUFFERS needing to be raised well above its original estimate once
 // tested for real - see AGENTS.md "Adding support for ESF-MEAS" for the full detail.
 const uint8_t UBX_ESF_MEAS_CALLBACK_BUFFERS = 18;
-const uint16_t UBX_ESF_MEAS_MAX_LEN = 8 + (4 * DEF_MAX_NUM_ESF_MEAS) + 4;
+const uint16_t UBX_ESF_MEAS_MAX_NUM_MEAS = 31; // numMeas is 5 bits, indicating up to 31 groups could be received
+const uint16_t UBX_ESF_MEAS_MAX_LEN = 8 + (4 * UBX_ESF_MEAS_MAX_NUM_MEAS) + 4;
 
 typedef struct
 {
@@ -2545,7 +2534,7 @@ typedef struct
     } bits;
   } flags;
   uint16_t id; // Identification number of data provider
-  UBX_ESF_MEAS_sensorData_t data[DEF_MAX_NUM_ESF_MEAS];
+  UBX_ESF_MEAS_sensorData_t data[UBX_ESF_MEAS_MAX_NUM_MEAS];
   uint32_t calibTtag; // OPTIONAL: Receiver local time calibrated: ms
 } UBX_ESF_MEAS_data_t;
 // UBX_ESF_MEAS_data_t/UBX_ESF_MEAS_sensorData_t above are kept as documented reference for the
@@ -2568,7 +2557,10 @@ typedef struct
 // has no block-count field anywhere in its own wire format (see numEsfRawBlocks's comment below) -
 // ubxMessage::getBlockCount() falls back to computing the block count purely from the actual
 // received message length for a message like this.
-const uint16_t UBX_ESF_RAW_MAX_LEN = 4 + (8 * DEF_NUM_SENS * DEF_MAX_NUM_ESF_RAW_REPEATS);
+const uint16_t UBX_ESF_RAW_MAX_NUM_SENS = 7; // The maximum number of ESF sensors
+const uint16_t UBX_ESF_RAW_MAX_NUM_SENS_REPEATS = 1; // The ZED-F9R sends ESF RAW data one block of sensors at a time. The NEO-M8U sends blocks of ten readings.
+
+const uint16_t UBX_ESF_RAW_MAX_LEN = 4 + (8 * UBX_ESF_RAW_MAX_NUM_SENS * UBX_ESF_RAW_MAX_NUM_SENS_REPEATS);
 
 typedef struct
 {
@@ -2587,7 +2579,7 @@ typedef struct
 typedef struct
 {
   uint8_t reserved1[4];
-  UBX_ESF_RAW_sensorData_t data[DEF_NUM_SENS * DEF_MAX_NUM_ESF_RAW_REPEATS];
+  UBX_ESF_RAW_sensorData_t data[UBX_ESF_RAW_MAX_NUM_SENS * UBX_ESF_RAW_MAX_NUM_SENS_REPEATS];
   uint8_t numEsfRawBlocks; // Note: this is not contained in the ESF RAW message. It is calculated from the message length.
 } UBX_ESF_RAW_data_t;
 
@@ -2605,7 +2597,8 @@ typedef struct
 // Note: ESF-STATUS is now implemented as its own self-registered Class - see
 // ubxMessages/ubxESFSTATUS.h and AGENTS.md "Adding support for ESF-RAW and ESF-STATUS".
 // UBX_ESF_STATUS_MAX_LEN below is still used there (as messageLength).
-const uint16_t UBX_ESF_STATUS_MAX_LEN = 16 + (4 * DEF_NUM_SENS);
+const uint16_t UBX_ESF_STATUS_MAX_NUM_SENS = 7; // The maximum number of ESF sensors
+const uint16_t UBX_ESF_STATUS_MAX_LEN = 16 + (4 * UBX_ESF_STATUS_MAX_NUM_SENS);
 
 typedef struct
 {
@@ -2659,7 +2652,7 @@ typedef struct
                       //  3: Disabled fusion mode: sensor fusion is permanently disabled until receiver reset due e.g. to sensor error
   uint8_t reserved2[2];
   uint8_t numSens; // Number of sensors
-  UBX_ESF_STATUS_sensorStatus_t status[DEF_NUM_SENS];
+  UBX_ESF_STATUS_sensorStatus_t status[UBX_ESF_STATUS_MAX_NUM_SENS];
 } UBX_ESF_STATUS_data_t;
 
 // UBX_ESF_STATUS_data_t/UBX_ESF_STATUS_sensorStatus_t above are kept as documented reference for

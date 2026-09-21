@@ -122,7 +122,7 @@ public:
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,
                    numFields, (const void *)&ubxFields, (const uint32_t *)msgOutKeys,
                    (const void *)&ubxBlockFields, numBlockFields, blockHeaderLength, blockLength,
-                   DEF_MAX_NUM_ESF_MEAS,
+                   UBX_ESF_MEAS_MAX_NUM_MEAS,
                    "numMeas", // blockCountField - cross-checked defensively, see the file header comment above
                    (const void *)&ubxFooterFields, numFooterFields, footerLength);
     }

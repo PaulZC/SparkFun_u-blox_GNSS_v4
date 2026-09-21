@@ -95,7 +95,7 @@ public:
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,
                    numFields, (const void *)nullptr, (const uint32_t *)msgOutKeys,
                    (const void *)&ubxBlockFields, numBlockFields, blockHeaderLength, blockLength,
-                   (uint16_t)(DEF_NUM_SENS * DEF_MAX_NUM_ESF_RAW_REPEATS));
+                   (uint16_t)(UBX_ESF_RAW_MAX_NUM_SENS * UBX_ESF_RAW_MAX_NUM_SENS_REPEATS));
         // blockCountField deliberately left at its default (nullptr) - see the file header
         // comment above and ubxMessage::getBlockCount()'s actual-length-only fallback.
     }
