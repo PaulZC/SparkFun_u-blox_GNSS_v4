@@ -1584,8 +1584,8 @@ typedef struct
 // Note: length is variable
 // Note: on protocol version 17: numWords is (0..16)
 //       on protocol version 18+: numWords is (0..10)
-#define UBX_RXM_SFRBX_CALLBACK_BUFFERS 14 // 14 data buffers, 14 message buffers, 3 flags, in uint32_t
-const uint8_t UBX_RXM_SFRBX_MAX_WORDS = 16;
+const uint8_t UBX_RXM_SFRBX_CALLBACK_BUFFERS = 50; // X20P needs more than 40 buffers!
+const uint8_t UBX_RXM_SFRBX_MAX_WORDS = 20; // X20P occasionally outputs 19 words! (Payload length 84)
 const uint16_t UBX_RXM_SFRBX_MAX_LEN = 8 + (4 * UBX_RXM_SFRBX_MAX_WORDS);
 
 typedef struct
