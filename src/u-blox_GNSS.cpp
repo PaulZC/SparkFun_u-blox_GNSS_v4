@@ -2009,8 +2009,29 @@ void DevUBLOXGNSS::processUBX(uint8_t incoming, ubxPacket *incomingUBX, uint8_t 
       debugPrint("processUBX: counter hit maximum_payload_size + 6!", true);
     debugPrint(" activePacketBuffer: ", true);
     debugPrint(activePacketBuffer, true);
+    switch (activePacketBuffer)
+    {
+      case SFE_UBLOX_PACKET_PACKETCFG:
+        debugPrint(" (SFE_UBLOX_PACKET_PACKETCFG)");
+        break;
+      case SFE_UBLOX_PACKET_PACKETACK:
+        debugPrint(" (SFE_UBLOX_PACKET_PACKETACK)");
+        break;
+      case SFE_UBLOX_PACKET_PACKETBUF:
+        debugPrint(" (SFE_UBLOX_PACKET_PACKETBUF)");
+        break;
+      case SFE_UBLOX_PACKET_PACKETAUTO:
+        debugPrint(" (SFE_UBLOX_PACKET_PACKETAUTO)");
+        break;
+    }
     debugPrint(" maximum_payload_size: ", true);
-    debugPrintln(maximum_payload_size, true);
+    debugPrint(maximum_payload_size, true);
+    debugPrint(" Class: 0x", true);
+    debugPrint(incomingUBX->cls, HEX, true);
+    debugPrint(" ID: 0x", true);
+    debugPrint(incomingUBX->id, HEX, true);
+    debugPrint(" Len: ", true);
+    debugPrintln(incomingUBX->len, true);
   }
 
   // Increment the counter
