@@ -64,7 +64,7 @@ public:
         {"svId", ubxDataType8bit(UBX_CFG_U1), 1, -1, -1},   // Satellite identifier
         // reserved1 at byte 2 is not exposed
         {"freqId", ubxDataType8bit(UBX_CFG_U1), 3, -1, -1},  // Only used for GLONASS: GLONASS frequency slot
-        {"numWords", ubxDataType8bit(UBX_CFG_U1), 4, -1, -1}, // The number of data words contained in this message (0..16)
+        {"numWords", ubxDataType8bit(UBX_CFG_U1), 4, -1, -1}, // The number of data words contained in this message - interface description says (0..16), X20P observed up to 19
         {"chn", ubxDataType8bit(UBX_CFG_U1), 5, -1, -1},      // The tracking channel number the message was received on
         {"version", ubxDataType8bit(UBX_CFG_U1), 6, -1, -1}}; // Message version (0x02 for this version)
         // reserved2 at byte 7 is not exposed

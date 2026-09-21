@@ -779,6 +779,30 @@ Do not make any code changes yet. Write the proposal first. I will need to appro
 
 Sidenote: ESF-MEAS will need the same multiple-buffer approach. It requires (at least) 6 callback buffers.
 
+### Validated on hardware (ZED-X20P) - numbers above were optimistic
+
+`DataloggingExample1_RAWX_and_SFRBX` on a ZED-X20P showed real traffic exceeding both of this
+section's original estimates, taken from the v3 library / interface description:
+
+- **`UBX_RXM_SFRBX_CALLBACK_BUFFERS`** (the "14 buffers was found to work well" figure above) had
+  to be raised to **50** to avoid data loss - the X20P outputs SFRBX in back-to-back groups of
+  more than 40 messages, not the handful the v3 figure assumed.
+- **`UBX_RXM_SFRBX_MAX_WORDS`** had to be raised from 16 (the interface description's stated
+  maximum for protocol version 17) to **20** - the X20P has been observed sending SFRBX messages
+  with 19 data words, above the documented maximum.
+
+Both constants now live in `u-blox_structs.h` as named constants (`UBX_RXM_SFRBX_CALLBACK_BUFFERS`,
+`UBX_RXM_SFRBX_MAX_WORDS`), not literals inside `ubxRXMSFRBX.h`, specifically so they can be
+tuned like this without touching the message class itself. Validated by the user: the number of
+SFRBX messages seen by the registered callback matched the number of SFRBX messages actually
+logged to the `RXM_RAWX.ubx` file on the SD card, over a real logging run.
+
+**Bearing on ESF-MEAS (tomorrow's planned work, as of this note):** the "(at least) 6 callback
+buffers" estimate above should be treated the same way the SFRBX "14 buffers" estimate was -
+a starting point, not a hard target. Worth using a named, easily-tunable constant for ESF-MEAS's
+buffer count too, and checking real hardware behavior before assuming the documented/estimated
+figure holds.
+
 ## Adding support for NMEA GSV messages
 
 Please add support for NMEA GSV.

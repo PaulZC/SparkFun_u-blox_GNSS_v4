@@ -1584,6 +1584,7 @@ typedef struct
 // Note: length is variable
 // Note: on protocol version 17: numWords is (0..16)
 //       on protocol version 18+: numWords is (0..10)
+// Note: the X20P has been observed exceeding both of the above - see UBX_RXM_SFRBX_MAX_WORDS.
 const uint8_t UBX_RXM_SFRBX_CALLBACK_BUFFERS = 50; // X20P needs more than 40 buffers!
 const uint8_t UBX_RXM_SFRBX_MAX_WORDS = 20; // X20P occasionally outputs 19 words! (Payload length 84)
 const uint16_t UBX_RXM_SFRBX_MAX_LEN = 8 + (4 * UBX_RXM_SFRBX_MAX_WORDS);
@@ -1594,7 +1595,9 @@ typedef struct
   uint8_t svId;   // Satellite identifier
   uint8_t reserved1;
   uint8_t freqId;   // GLONASS frequency slot
-  uint8_t numWords; // The number of data words contained in this message (0..16)
+  uint8_t numWords; // The number of data words contained in this message - the interface
+                    // description says (0..16), but the X20P has been observed sending 19; see
+                    // UBX_RXM_SFRBX_MAX_WORDS above
   uint8_t chn;      // The tracking channel number the message was received on
   uint8_t version;  // Message version (0x01 for this version)
   uint8_t reserved2;
