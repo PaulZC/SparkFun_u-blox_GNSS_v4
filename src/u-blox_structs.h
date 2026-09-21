@@ -1967,15 +1967,12 @@ typedef struct
   UBX_MON_COMMS_port_t port[UBX_MON_COMMS_MAX_PORTS];
 } UBX_MON_COMMS_data_t;
 
-typedef struct
-{
-  ubxAutomaticFlags automaticFlags;
-  UBX_MON_COMMS_data_t data;
-  bool moduleQueried;
-  void (*callbackPointerPtr)(UBX_MON_COMMS_data_t *);
-  UBX_MON_COMMS_data_t *callbackData;
-} UBX_MON_COMMS_t;
-
+// UBX_MON_COMMS_t (the v3 RAM-management wrapper) has been removed - UBX-MON-COMMS is now a
+// registered v4 message (ubxMONCOMMS, in ubxMessages/ubxMONCOMMS.h). See AGENTS.md "Adding the
+// variable-length UBX messages". UBX_MON_COMMS_header_t/_port_t/_data_t (above) are kept as
+// documented reference for the message's wire format, exactly as UBX_RXM_SFRBX_data_t and
+// UBX_RXM_RAWX_header_t/_block_t/UBX_RXM_MEASX_header_t/_block_t were kept when those messages
+// were migrated.
 
 // UBX-MON-HW (0x0A 0x09): Hardware status
 const uint16_t UBX_MON_HW_LEN = 60;

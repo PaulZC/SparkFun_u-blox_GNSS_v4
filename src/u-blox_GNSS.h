@@ -778,14 +778,9 @@ public:
 
   // Receiver status (MON)
 
-  bool getMONCOMMS(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                                                                    // MON COMMS
-  bool setAutoMONCOMMS(bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                               // Enable/disable automatic MON COMMS reports at the navigation frequency
-  bool setAutoMONCOMMS(bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                          // Enable/disable automatic MON COMMS reports at the navigation frequency, with implicitUpdate == false accessing stale data will not issue parsing of data in the rxbuffer of your interface, instead you have to call checkUblox when you want to perform an update
-  bool setAutoMONCOMMSrate(uint8_t rate, bool implicitUpdate = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);               // Set the rate for automatic MON COMMS reports
-  bool setAutoMONCOMMScallbackPtr(void (*callbackPointerPtr)(UBX_MON_COMMS_data_t *), uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Enable automatic MON COMMS reports at the navigation frequency. Data is accessed from the callback.
-  bool assumeAutoMONCOMMS(bool enabled, bool implicitUpdate = true);                                                                                                // In case no config access to the GPS is possible and MON COMMS is send cyclically already
-  void flushMONCOMMS();                                                                                                                                             // Mark all the data as read/stale
-  void logMONCOMMS(bool enabled = true);                                                                                                                            // Log data to file buffer
+  // ubxMONCOMMS is now self-registered - see AGENTS.md "Adding the variable-length UBX messages".
+  // getMONCOMMS() remains, as a thin wrapper, since it is called directly rather than by name.
+  bool getMONCOMMS(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // MON COMMS
 
   // Sensor fusion (dead reckoning) (ESF)
 
@@ -1021,10 +1016,6 @@ public:
   uint16_t getTIMTPweek();                           // Returns the UBX-TIM-TP time pulse week according to time base
   uint32_t getTIMTPAsEpoch(uint32_t &microsecond); // Convert TIM TP to Unix Epoch - CAUTION! Assumes the time base is UTC and the week number is GPS
 
-  // Helper function for MON COMMS
-
-  bool getCommsPortInfo(UBX_MON_COMMS_data_t *data, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get the communication port information using UBX_MON_COMMS
-
   // Helper function for hardware status (including jamming)
   // For safety, call getAntennaStatus inside an if(getMONHW()) or if(getUBX("MON","HW"))
 
@@ -1170,7 +1161,8 @@ public:
   // packetUBXRXMRAWX/packetUBXRXMMEASX no longer exist - ubxRXMRAWX/ubxRXMMEASX are now
   // self-registered - see AGENTS.md "Adding the variable-length UBX messages".
 
-  UBX_MON_COMMS_t *packetUBXMONCOMMS = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
+  // packetUBXMONCOMMS no longer exists - ubxMONCOMMS is now self-registered - see AGENTS.md
+  // "Adding the variable-length UBX messages".
 
   UBX_ESF_MEAS_t *packetUBXESFMEAS = nullptr;     // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_ESF_RAW_t *packetUBXESFRAW = nullptr;       // Pointer to struct. RAM will be allocated for this if/when necessary
@@ -1237,7 +1229,6 @@ protected:
   bool initPacketUBXRXMPMP();           // Allocate RAM for packetUBXRXMPMP and initialize it
   bool initPacketUBXRXMPMPmessage();    // Allocate RAM for packetUBXRXMPMPRaw and initialize it
   bool initPacketUBXRXMQZSSL6message(); // Allocate RAM for packetUBXRXMQZSSL6raw and initialize it
-  bool initPacketUBXMONCOMMS();         // Allocate RAM for packetUBXMONCOMMS and initialize it
   bool initPacketUBXESFSTATUS();        // Allocate RAM for packetUBXESFSTATUS and initialize it
   bool initPacketUBXESFMEAS();          // Allocate RAM for packetUBXESFMEAS and initialize it
   bool initPacketUBXESFRAW();           // Allocate RAM for packetUBXESFRAW and initialize it
