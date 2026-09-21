@@ -49,10 +49,9 @@ public:
     const uint8_t supportedVersions = 1;
 
     const uint16_t messageLength = UBX_RXM_SFRBX_MAX_LEN; // Maximum payload length - see above
-    // 14 buffered slots, not 1 - SFRBX messages can arrive in a back-to-back burst within a single
-    // checkUblox() call. See AGENTS.md "Adding support for RXM-SFRBX" (v3 used the same figure, in
-    // UBX_RXM_SFRBX_CALLBACK_BUFFERS).
-    const uint8_t numCallbackCopies = 14;
+    // Multiple buffered slots, not 1 - SFRBX messages can arrive in a back-to-back burst within a single
+    // checkUblox() call. See AGENTS.md "Adding support for RXM-SFRBX". X20P needs additional buffers.
+    const uint8_t numCallbackCopies = UBX_RXM_SFRBX_CALLBACK_BUFFERS;
 
     // Header field table - the 8 bytes that precede the repeated data words. Read with the
     // ordinary getUbxMessageField() / getUbxMessageFieldCallback(), exactly like any other message.
