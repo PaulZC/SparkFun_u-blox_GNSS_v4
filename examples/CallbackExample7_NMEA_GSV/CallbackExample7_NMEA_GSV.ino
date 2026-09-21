@@ -40,7 +40,7 @@ void printGSVdata(nmeaCallbackDataCommon_t *theData)
   if (printHeader)
   {
     Serial.println();
-    Serial.println("Signal              svid elv az cno");
+    Serial.println("Signal             svid elv  az cno");
     printHeader = false;
   }
 
@@ -105,9 +105,19 @@ void printGSVdata(nmeaCallbackDataCommon_t *theData)
     if (myGNSS.getNmeaMessageBlockFieldCallback(msg, block, "svid").length() > 0)
     {
       Serial.print(signal);
-      printPadded(myGNSS.getNmeaMessageBlockFieldCallback(msg, block, "svid"), 5);
+
+      // Adjust the SV number if needed
+      String svid_str = myGNSS.getNmeaMessageBlockFieldCallback(msg, block, "svid");
+      int svid = atoi(myGNSS.getNmeaMessageBlockFieldCallback(msg, block, "svid").c_str());
+      if (xxGSV == "GPGSV") // SBAS SVs S120-S151 are numbered 33-64
+        if ((svid >= 33) && (svid <= 64))
+          svid_str = String(svid + 87);
+      if (xxGSV == "GLGSV") // GLONASS SVs R1-R32 are numbered 65-96
+        svid_str = String(svid - 64);
+      printPadded(svid_str, 4);
+
       printPadded(myGNSS.getNmeaMessageBlockFieldCallback(msg, block, "elv"), 4);
-      printPadded(myGNSS.getNmeaMessageBlockFieldCallback(msg, block, "az"), 3);
+      printPadded(myGNSS.getNmeaMessageBlockFieldCallback(msg, block, "az"), 4);
       printPadded(myGNSS.getNmeaMessageBlockFieldCallback(msg, block, "cno"), 4);
       Serial.println();
     }
@@ -149,6 +159,7 @@ void loop()
   printHeader = true;
 }
 
+// Print a String, right-justified with space padding as needed
 void printPadded(String str, uint8_t padding)
 {
   for (uint8_t p = str.length(); p < padding; p++)

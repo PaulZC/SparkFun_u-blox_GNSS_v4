@@ -57,10 +57,7 @@ void newNAVSAT(ubxCallbackDataCommon_t *theData)
     }
 
     uint8_t svId = (uint8_t)myGNSS.getUbxMessageBlockFieldCallback(msg, block, "svId");
-    Serial.print(svId);
-    if (svId < 10) Serial.print(F("    "));
-    else if (svId < 100) Serial.print(F("   "));
-    else Serial.print(F("  "));
+    printPadded(svId, 4);
 
     // Signal quality indicator:
     //  0 = no signal
@@ -70,18 +67,16 @@ void newNAVSAT(ubxCallbackDataCommon_t *theData)
     //  4 = code locked and time synchronized
     //  5, 6, 7 = code and carrier locked and time synchronized
     uint8_t qualityInd = (uint8_t)myGNSS.getUbxMessageBlockFieldCallback(msg, block, "qualityInd");
-    Serial.print(qualityInd);
-    Serial.print(F("    "));
+    printPadded(qualityInd, 5);
 
     bool svUsed = (bool)myGNSS.getUbxMessageBlockFieldCallback(msg, block, "svUsed");
-    Serial.print(svUsed);
-    Serial.print(F("    "));
+    printPadded((uint8_t)svUsed, 5);
 
     uint8_t cno = (uint8_t)myGNSS.getUbxMessageBlockFieldCallback(msg, block, "cno");
-    Serial.print(cno);
-    if (cno < 10) Serial.print(F("   "));
-    else Serial.print(F("  "));
+    printPadded(cno, 4);
 
+    // Print cno as a bar
+    Serial.print(F(" "));
     for (uint8_t bar = 0; bar < cno; bar++)
       Serial.print(F("="));
     Serial.println();
@@ -92,7 +87,7 @@ void setup()
 {
   Serial.begin(115200);
   delay(1000); 
-  Serial.println("SparkFun u-blox Example");
+  Serial.println(F("SparkFun u-blox Example"));
 
   Wire.begin(); // Start I2C
 
@@ -100,7 +95,7 @@ void setup()
 
   while (myGNSS.begin() == false) //Connect to the u-blox module using Wire port
   {
-    Serial.println("u-blox GNSS not detected at default I2C address. Retrying...");
+    Serial.println(F("u-blox GNSS not detected at default I2C address. Retrying..."));
     delay (1000);
   }
 
@@ -120,4 +115,17 @@ void loop()
 
   Serial.print(".");
   delay(50);
+}
+
+// Print a uint8_t, right-justified with space padding as needed
+void printPadded(uint8_t val, uint8_t padding)
+{
+  uint8_t digits = 1;
+  if (val >= 100)
+    digits = 3;
+  else if (val >= 10)
+    digits = 2;
+  for (uint8_t p = padding; p > digits; p--)
+    Serial.print(" ");
+  Serial.print(val);
 }

@@ -71,7 +71,8 @@ void newRAWX(ubxCallbackDataCommon_t *theData)
     }
 
     uint8_t svId = (uint8_t)myGNSS.getUbxMessageBlockFieldCallback(msg, block, "svId");
-    printPadded(svId, 5);
+    printPadded(svId, 4);
+    Serial.print(F(" "));
 
     uint8_t sigId = (uint8_t)myGNSS.getUbxMessageBlockFieldCallback(msg, block, "sigId");
     switch (gnssId)
@@ -157,12 +158,13 @@ void newRAWX(ubxCallbackDataCommon_t *theData)
     }
 
     uint8_t cno = (uint8_t)myGNSS.getUbxMessageBlockFieldCallback(msg, block, "cno");
-    printPadded(cno, 4);
+    printPadded(cno, 3);
 
     if (sizeof(double) == 8) // Check if our processor supports 64-bit double
     {
       // getUbxMessageBlockFieldCallback returns double. No type conversion needed
       double pseudorange = myGNSS.getUbxMessageBlockFieldCallback(msg, block, "prMes");
+      Serial.print(F(" "));
       Serial.print(pseudorange, 3);
       Serial.print(F("    "));
 
@@ -209,13 +211,15 @@ void loop()
   delay(50);
 }
 
+// Print a uint8_t, right-justified with space padding as needed
 void printPadded(uint8_t val, uint8_t padding)
 {
-  Serial.print(val);
-
-  if (val < 10) Serial.print(F("  "));
-  else if (val < 100) Serial.print(F(" "));
-
-  for (uint8_t p = 3; p < padding; p++)
+  uint8_t digits = 1;
+  if (val >= 100)
+    digits = 3;
+  else if (val >= 10)
+    digits = 2;
+  for (uint8_t p = padding; p > digits; p--)
     Serial.print(" ");
+  Serial.print(val);
 }
