@@ -1,5 +1,5 @@
 /*
-  Configuring the GNSS to automatically send SEC SIG reports over I2C and display them using a callback
+  Configuring the GNSS to automatically send ESF MEAS reports over I2C and display them using a callback
   By: Paul Clark
   SparkFun Electronics
   Date: September 2026
@@ -39,7 +39,7 @@ void printESFMEASdata(ubxCallbackDataCommon_t *theData)
     Serial.print(F("Time:         "));
     Serial.println(timeTag);
 
-    // numMeas indicates how many sensor groups the UBX_ESF_MEAS_data_t contains.
+    // numMeas indicates how many sensor groups the data contains.
     // As a test, compare it to getUbxMessageBlockCount()
     uint8_t numMeas = (uint8_t)myGNSS.getUbxMessageFieldCallback(msg, "numMeas");
     Serial.print(F("Measurements: "));
