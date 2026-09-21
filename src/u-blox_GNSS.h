@@ -808,17 +808,10 @@ public:
   bool assumeAutoESFRAW(bool enabled, bool implicitUpdate = true);                                                                                                 // In case no config access to the GPS is possible and ESF RAW is send cyclically already
   void logESFRAW(bool enabled = true);                                                                                                                             // Log data to file buffer
 
-  // UBX_SEC_SIG Signal security information
-
-  bool getSECSIG(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                                                                     // Query module for latest data. If autoSECSIG is disabled, performs an explicit poll and waits, if enabled does not block. Returns true if new SEC SIG is available.
-  bool getSECSIG(UBX_SEC_SIG_data_t * data = nullptr, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                                          // Query module for latest data. If autoSECSIG is disabled, performs an explicit poll and waits, if enabled does not block. Returns true if new SEC SIG is available.
-  bool setAutoSECSIG(bool enabled, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                                                // Enable/disable automatic (periodic) reports at the navigation frequency
-  bool setAutoSECSIG(bool enabled, bool implicitUpdate, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                           // Enable/disable automatic (periodic) reports at the navigation frequency, with implicitUpdate == false accessing stale data will not issue parsing of data in the rxbuffer of your interface, instead you have to call checkUblox when you want to perform an update
-  bool setAutoSECSIGrate(uint8_t rate, bool implicitUpdate = true, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                // Set the rate for automatic (periodic) reports
-  bool setAutoSECSIGcallbackPtr(void (*callbackPointerPtr)(UBX_SEC_SIG_data_t *), uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Enable automatic (periodic) reports at the navigation frequency. Data is accessed from the callback.
-  bool assumeAutoSECSIG(bool enabled, bool implicitUpdate = true);                                                                                                 // In case no config access to the GPS is possible and SEC-SIG is send cyclically already
-  void flushSECSIG();                                                                                                                                              // Mark all the SEC-SIG data as read/stale
-  void logSECSIG(bool enabled = true);                                                                                                                             // Log data to file buffer
+  // ubxSECSIG (Version 2 only) is now self-registered - see AGENTS.md "Adding the variable-length
+  // UBX messages". getSECSIG() remains, as a thin wrapper, since it is called directly rather
+  // than by name. The UBX_SEC_SIG_data_t* overload is redacted.
+  bool getSECSIG(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Query module for latest data
 
 // Helper functions for CFG RATE
 
@@ -1168,7 +1161,8 @@ public:
   UBX_ESF_RAW_t *packetUBXESFRAW = nullptr;       // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_ESF_STATUS_t *packetUBXESFSTATUS = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
 
-  UBX_SEC_SIG_t *packetUBXSECSIG = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
+  // packetUBXSECSIG no longer exists - ubxSECSIG is now self-registered - see AGENTS.md
+  // "Adding the variable-length UBX messages".
 
   UBX_MGA_ACK_DATA0_t *packetUBXMGAACK = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_MGA_DBD_t *packetUBXMGADBD = nullptr;       // Pointer to struct. RAM will be allocated for this if/when necessary
@@ -1232,7 +1226,6 @@ protected:
   bool initPacketUBXESFSTATUS();        // Allocate RAM for packetUBXESFSTATUS and initialize it
   bool initPacketUBXESFMEAS();          // Allocate RAM for packetUBXESFMEAS and initialize it
   bool initPacketUBXESFRAW();           // Allocate RAM for packetUBXESFRAW and initialize it
-  bool initPacketUBXSECSIG();           // Allocate RAM for packetUBXSECSIG and initialize it
   bool initPacketUBXMGAACK();           // Allocate RAM for packetUBXMGAACK and initialize it
   bool initPacketUBXMGADBD();           // Allocate RAM for packetUBXMGADBD and initialize it
 

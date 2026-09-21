@@ -208,15 +208,8 @@ void DevUBLOXGNSS::end(void)
     packetUBXMGADBD = nullptr;
   }
 
-  if (packetUBXSECSIG != nullptr)
-  {
-    if (packetUBXSECSIG->callbackData != nullptr)
-    {
-      delete packetUBXSECSIG->callbackData;
-    }
-    delete packetUBXSECSIG;
-    packetUBXSECSIG = nullptr;
-  }
+  // packetUBXSECSIG no longer exists - ubxSECSIG is now self-registered and destroyed by
+  // ubxMessageVector's own destructor. See AGENTS.md "Adding the variable-length UBX messages".
 
   if (_storageNMEA != nullptr)
   {
@@ -900,14 +893,10 @@ bool DevUBLOXGNSS::autoLookup(uint8_t Class, uint8_t ID, uint16_t *maxSize)
       return (packetUBXMGADBD != nullptr);
     }
     break;
-    case UBX_CLASS_SEC:
-        if (ID == UBX_SEC_SIG)
-        {
-          if (maxSize != nullptr)
-            *maxSize = UBX_SEC_SIG_LEN_VERSION1 > UBX_SEC_SIG_MAX_LEN_VERSION2 ? UBX_SEC_SIG_LEN_VERSION1 : UBX_SEC_SIG_MAX_LEN_VERSION2;
-          return (packetUBXSECSIG != nullptr);
-        }
-      break;
+  case UBX_CLASS_SEC:
+    // UBX_SEC_SIG (Version 2) is handled above via the registry (ubxSECSIG is now
+    // self-registered) - see AGENTS.md "Adding the variable-length UBX messages".
+    break;
   default:
     return false;
     break;
@@ -2361,57 +2350,10 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
       }
       break;
     case UBX_CLASS_SEC:
-      if (msg->id == UBX_SEC_SIG)
-      {
-        // Parse various byte fields into storage - but only if we have memory allocated for it
-        if (packetUBXSECSIG != nullptr)
-        {
-          packetUBXSECSIG->data.version = extractByte(msg, 0);
-
-          // Check the version
-          if ((packetUBXSECSIG->data.version == 1) && (msg->len == UBX_SEC_SIG_LEN_VERSION1))
-          {
-            packetUBXSECSIG->data.versions.version1.jamFlags.all = extractByte(msg, 4);
-            packetUBXSECSIG->data.versions.version1.spfFlags.all = extractByte(msg, 8);
-          }
-          else if (packetUBXSECSIG->data.version == 2)
-          {
-            packetUBXSECSIG->data.versions.version2.sigSecFlags.all = extractByte(msg, 1);
-            packetUBXSECSIG->data.versions.version2.jamNumCentFreqs = extractByte(msg, 3);
-            if (packetUBXSECSIG->data.versions.version2.jamNumCentFreqs > UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2)
-            {
-              debugPrint("UBX_SEC_SIG: truncating ");
-              debugPrint(packetUBXSECSIG->data.versions.version2.jamNumCentFreqs);
-              debugPrint(" center frequencies to ");
-              debugPrintln(UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2);
-              packetUBXSECSIG->data.versions.version2.jamNumCentFreqs = UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2;
-            }
-            uint16_t centFreq = 0;
-            while (centFreq < packetUBXSECSIG->data.versions.version2.jamNumCentFreqs)
-            {
-              packetUBXSECSIG->data.versions.version2.jamStateCentFreq[centFreq].all = extractLong(msg, 4 + (centFreq * 4));
-              centFreq++;
-            }
-          }
-
-          // Mark all datums as fresh (not read before)
-          packetUBXSECSIG->moduleQueried = true;
-
-          // Check if we need to copy the data for the callback
-          if ((packetUBXSECSIG->callbackData != nullptr)                                  // If RAM has been allocated for the copy of the data
-              && (packetUBXSECSIG->automaticFlags.flags.bits.callbackCopyValid == false)) // AND the data is stale
-          {
-            memcpy(&packetUBXSECSIG->callbackData->version, &packetUBXSECSIG->data.version, sizeof(UBX_SEC_SIG_data_t));
-            packetUBXSECSIG->automaticFlags.flags.bits.callbackCopyValid = true;
-          }
-
-          // Check if we need to copy the data into the file buffer
-          if (packetUBXSECSIG->automaticFlags.flags.bits.addToFileBuffer)
-          {
-            addedToFileBuffer = storePacket(msg);
-          }
-        }
-      }
+      // UBX_SEC_SIG (Version 2) is now a registered v4 message (ubxSECSIG) - see AGENTS.md
+      // "Adding the variable-length UBX messages". processUBXpacket() no longer parses it here;
+      // the registry-first branch at the top of this function (ubxMessages.storePayload()) does
+      // that generically. Version 1 was never modelled by ubxSECSIG and is not handled at all.
       break;
     }
   }
@@ -3558,16 +3500,8 @@ void DevUBLOXGNSS::checkCallbacks(void)
         packetUBXESFSTATUS->automaticFlags.flags.bits.callbackCopyValid = false; // Mark the data as stale
       }
 
-  if (packetUBXSECSIG != nullptr)                                               // If RAM has been allocated for message storage
-    if (packetUBXSECSIG->callbackData != nullptr)                               // If RAM has been allocated for the copy of the data
-      if (packetUBXSECSIG->automaticFlags.flags.bits.callbackCopyValid == true) // If the copy of the data is valid
-      {
-        if (packetUBXSECSIG->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          packetUBXSECSIG->callbackPointerPtr(packetUBXSECSIG->callbackData); // Call the callback
-        }
-        packetUBXSECSIG->automaticFlags.flags.bits.callbackCopyValid = false; // Mark the data as stale
-      }
+  // UBX_SEC_SIG's callback is now dispatched by the generic registry walk above (ubxSECSIG is
+  // now self-registered) - see AGENTS.md "Adding the variable-length UBX messages".
 
   if (storageRTCM1005 != nullptr)                                            // If RAM has been allocated for message storage
     if (storageRTCM1005->callbackData != nullptr)                            // If RAM has been allocated for the copy of the data
@@ -8003,178 +7937,16 @@ void DevUBLOXGNSS::logESFSTATUS(bool enabled)
 }
 
 // ***** SEC-SIG automatic support
-
-// Get the latest security and fill all global variables
+// ubxSECSIG (Version 2 only) is now self-registered - see AGENTS.md "Adding the variable-length
+// UBX messages". setAutoSECSIG/setAutoSECSIGrate/setAutoSECSIGcallbackPtr/assumeAutoSECSIG/
+// initPacketUBXSECSIG/flushSECSIG/logSECSIG are retired; the generic setAutoUBX/setAutoUBXrate/
+// setAutoCallbackPtr/assumeAutoUBX/flushUBX/logUBX (by Class/ID UBX_CLASS_SEC/UBX_SEC_SIG, or by
+// name "SEC"/"SIG") do the same job, with no per-message code required. getSECSIG() remains, as
+// a thin wrapper, since it is called directly rather than by name. The UBX_SEC_SIG_data_t*
+// overload is redacted, per explicit instruction.
 bool DevUBLOXGNSS::getSECSIG(uint16_t maxWait)
 {
-  if (packetUBXSECSIG == nullptr)
-    initPacketUBXSECSIG();        // Check that RAM has been allocated for the UBX data
-  if (packetUBXSECSIG == nullptr) // Bail if the RAM allocation failed
-    return (false);
-
-  if (packetUBXSECSIG->automaticFlags.flags.bits.automatic && packetUBXSECSIG->automaticFlags.flags.bits.implicitUpdate)
-  {
-    checkUbloxInternal(&packetCfg, 0, 0); // Call checkUbloxInternal to parse any incoming data. Don't overwrite the requested Class and ID
-    return packetUBXSECSIG->moduleQueried;
-  }
-  else if (packetUBXSECSIG->automaticFlags.flags.bits.automatic && !packetUBXSECSIG->automaticFlags.flags.bits.implicitUpdate)
-  {
-    // Someone else has to call checkUblox for us...
-    return (false);
-  }
-  else
-  {
-    // The GPS is not automatically reporting navigation position so we have to poll explicitly
-    packetCfg.cls = UBX_CLASS_SEC;
-    packetCfg.id = UBX_SEC_SIG;
-    packetCfg.len = 0;
-    packetCfg.startingSpot = 0;
-
-    // The data is parsed as part of processing the response
-    sfe_ublox_status_e retVal = sendCommand(&packetCfg, maxWait);
-
-    if (retVal == SFE_UBLOX_STATUS_DATA_RECEIVED)
-      return (true);
-
-    if (retVal == SFE_UBLOX_STATUS_DATA_OVERWRITTEN)
-    {
-      return (true);
-    }
-
-    return (false);
-  }
-}
-
-// Get the latest security information
-bool DevUBLOXGNSS::getSECSIG(UBX_SEC_SIG_data_t *data, uint16_t maxWait)
-{
-  if (data == nullptr) // Check if the user forgot to include the data pointer
-    return (getSECSIG(maxWait));
-
-  if (!getSECSIG(maxWait))
-    return (false);
-
-  memcpy(data, &packetUBXSECSIG->data, sizeof(UBX_SEC_SIG_data_t));
-
-  packetUBXSECSIG->moduleQueried = false; // Mark the data as stale
-
-  return (true);
-}
-
-// Enable or disable automatic navigation message generation by the GNSS. This changes the way getSECSIG
-// works.
-bool DevUBLOXGNSS::setAutoSECSIG(bool enable, uint8_t layer, uint16_t maxWait)
-{
-  return setAutoSECSIGrate(enable ? 1 : 0, true, layer, maxWait);
-}
-
-// Enable or disable automatic navigation message generation by the GNSS. This changes the way getSECSIG
-// works.
-bool DevUBLOXGNSS::setAutoSECSIG(bool enable, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
-{
-  return setAutoSECSIGrate(enable ? 1 : 0, implicitUpdate, layer, maxWait);
-}
-
-// Enable or disable automatic navigation message generation by the GNSS. This changes the way getSECSIG
-// works.
-bool DevUBLOXGNSS::setAutoSECSIGrate(uint8_t rate, bool implicitUpdate, uint8_t layer, uint16_t maxWait)
-{
-  if (packetUBXSECSIG == nullptr)
-    initPacketUBXSECSIG();        // Check that RAM has been allocated for the data
-  if (packetUBXSECSIG == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  if (rate > 127)
-    rate = 127;
-
-  uint32_t key = UBLOX_CFG_MSGOUT_UBX_SEC_SIG_I2C;
-  if (_commType == COMM_TYPE_SPI)
-    key = UBLOX_CFG_MSGOUT_UBX_SEC_SIG_SPI;
-  else if (_commType == COMM_TYPE_SERIAL)
-  {
-    if (!_UART2)
-      key = UBLOX_CFG_MSGOUT_UBX_SEC_SIG_UART1;
-    else
-      key = UBLOX_CFG_MSGOUT_UBX_SEC_SIG_UART2;
-  }
-
-  bool ok = setAutoMsgRateVal(key, rate, implicitUpdate, packetUBXSECSIG->automaticFlags, layer, maxWait);
-  packetUBXSECSIG->moduleQueried = false;
-  return ok;
-}
-
-// Enable automatic navigation message generation by the GNSS. This changes the way getSECSIG works.
-bool DevUBLOXGNSS::setAutoSECSIGcallbackPtr(void (*callbackPointerPtr)(UBX_SEC_SIG_data_t *), uint8_t layer, uint16_t maxWait)
-{
-  // Enable auto messages. Set implicitUpdate to false as we expect the user to call checkUblox manually.
-  bool result = setAutoSECSIG(true, false, layer, maxWait);
-  if (!result)
-    return (result); // Bail if setAutoSECSIG failed
-
-  if (packetUBXSECSIG->callbackData == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    packetUBXSECSIG->callbackData = new UBX_SEC_SIG_data_t; // Allocate RAM for the main struct
-  }
-
-  if (packetUBXSECSIG->callbackData == nullptr)
-  {
-    debugPrintln("setAutoSECSIGcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  packetUBXSECSIG->callbackPointerPtr = callbackPointerPtr; // RAM has been allocated so now update the pointer
-
-  return (true);
-}
-
-// In case no config access to the GNSS is possible and SEC-SIG is send cyclically already
-// set config to suitable parameters
-bool DevUBLOXGNSS::assumeAutoSECSIG(bool enabled, bool implicitUpdate)
-{
-  if (packetUBXSECSIG == nullptr)
-    initPacketUBXSECSIG();        // Check that RAM has been allocated for the data
-  if (packetUBXSECSIG == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  bool changes = packetUBXSECSIG->automaticFlags.flags.bits.automatic != enabled || packetUBXSECSIG->automaticFlags.flags.bits.implicitUpdate != implicitUpdate;
-  if (changes)
-  {
-    packetUBXSECSIG->automaticFlags.flags.bits.automatic = enabled;
-    packetUBXSECSIG->automaticFlags.flags.bits.implicitUpdate = implicitUpdate;
-  }
-  return changes;
-}
-
-// PRIVATE: Allocate RAM for packetUBXSECSIG and initialize it
-bool DevUBLOXGNSS::initPacketUBXSECSIG()
-{
-  packetUBXSECSIG = new UBX_SEC_SIG_t; // Allocate RAM for the main struct
-  if (packetUBXSECSIG == nullptr)
-  {
-    debugPrintln("initPacketUBXSECSIG: RAM alloc failed!", true); // Important
-    return (false);
-  }
-  packetUBXSECSIG->automaticFlags.flags.all = 0;
-  packetUBXSECSIG->callbackPointerPtr = nullptr;
-  packetUBXSECSIG->callbackData = nullptr;
-  packetUBXSECSIG->moduleQueried = false;
-  return (true);
-}
-
-// Mark all the data as read/stale. This is handy to get data alignment after CRC failure
-void DevUBLOXGNSS::flushSECSIG()
-{
-  if (packetUBXSECSIG == nullptr)
-    return;                               // Bail if RAM has not been allocated (otherwise we could be writing anywhere!)
-  packetUBXSECSIG->moduleQueried = false; // Mark all datums as stale (read before)
-}
-
-// Log this data in file buffer
-void DevUBLOXGNSS::logSECSIG(bool enabled)
-{
-  if (packetUBXSECSIG == nullptr)
-    return; // Bail if RAM has not been allocated (otherwise we could be writing anywhere!)
-  packetUBXSECSIG->automaticFlags.flags.bits.addToFileBuffer = (uint8_t)enabled;
+  return getUBX(UBX_CLASS_SEC, UBX_SEC_SIG, maxWait);
 }
 
 // ***** Helper Functions for NMEA Logging / Processing

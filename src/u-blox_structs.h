@@ -2258,87 +2258,96 @@ typedef struct
 // SEC-specific structs
 
 // UBX-SEC-SIG (0x27 0x09): Signal security information
-// Note: there are two versions of UBX-SEC-SIG.
-//   Version 1 is 12 bytes.
-//   Version 2 is variable.
-//   Check the version byte before attempting to read data from the struct
-const uint16_t UBX_SEC_SIG_LEN_VERSION1 = 12;
-const uint16_t UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2 = 6; // ZED seems to default to 6 frequencies - without jamming
-const uint16_t UBX_SEC_SIG_MAX_LEN_VERSION2 = 4 + (4 * UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2);
+// Note: there are multiple versions of UBX-SEC-SIG.
+//   Version 1 is 12 bytes, a different fixed layout (see versions.version1 below).
+//   Version 2 is variable - a 4-byte header + repeated 4-byte center-frequency blocks (see
+//   versions.version2 below); older interface descriptions document up to 6 frequencies.
+//   Version 3 is ALSO variable, with the SAME byte layout as Version 2 (versions.version2 below
+//   applies to it unchanged) - documented in the u-blox X20-HPG-2.11 interface description
+//   (UBXDOC-304424225-21617). The ZED-X20P outputs Version 3, not Version 2: hardware-validated
+//   (CallbackExample9_SECSIG) sending 7 center frequencies with no jamming present, so
+//   UBX_SEC_SEG_MAX_CENT_FREQ_VERSION3 below is set to 10 for headroom, not a documented hard
+//   maximum.
+//   Check the version byte before attempting to read data from the struct.
+const uint16_t UBX_SEC_SEG_MAX_CENT_FREQ_VERSION3 = 10; // ZED-X20P seems to default to 7 frequencies - without jamming
+const uint16_t UBX_SEC_SIG_MAX_LEN_VERSION3 = 4 + (4 * UBX_SEC_SEG_MAX_CENT_FREQ_VERSION3);
 
-typedef struct
-{
-  uint8_t version; // Message version (0x01 for this version)
-  union
-  {
-    struct
-    {
-      uint8_t reserved0[3];
-      union
-      {
-        uint8_t all;
-        struct
-        {
-          uint8_t jamDetEnabled : 1; // Flag indicates whether jamming/interference detection is enabled
-          uint8_t jammingState : 2;  // Jamming/interference state:
-                                     // 0: Unknown, 1: No jamming indicated
-                                     // 2: Warning; jamming indicated but fix OK
-                                     // 3: Critical; jamming indicated and no fix
-        } bits;
-      } jamFlags;
-      uint8_t reserved1[3];
-      union
-      {
-        uint8_t all;
-        struct
-        {
-          uint8_t spfDetEnabled : 1; // Flag indicates whether spoofing detection is enabled
-          uint8_t spoofingState : 3; // Spoofing state:
-                                     // 0: Unknown, 1: No spoofing indicated
-                                     // 2: Spoofing indicated, 3: Spoofing affirmed
-        } bits;
-      } spfFlags;
-      uint8_t reserved2[3];
-    } version1;
-    struct {
-      union
-      {
-        uint8_t all;
-        struct
-        {
-          uint8_t jamDetEnabled : 1; // Flag indicates whether jamming/interference detection is enabled
-          uint8_t jamState : 2;      // Jamming/interference state:
-                                     // 0: Unknown, 1: No jamming indicated
-                                     // 2: Warning; jamming indicated but fix OK
-          uint8_t spfDetEnabled : 1; // Flag indicates whether spoofing detection is enabled
-          uint8_t spfState : 3;      // Spoofing state:
-                                     // 0: Unknown, 1: No spoofing indicated
-                                     // 2: Spoofing indicated, 3: Spoofing affirmed
-        } bits;
-      } sigSecFlags;
-      uint8_t reserved0;
-      uint8_t jamNumCentFreqs; // The number of center frequencies provided
-      union
-      {
-        uint32_t all;
-        struct
-        {
-          uint32_t centFreq : 24; // Center frequency in [kHz], floored to the nearest kHz multiple
-          uint32_t jammed : 1; // Flag indicates whether signals on the given center frequency are considered jammed
-        } bits;
-      } jamStateCentFreq[UBX_SEC_SEG_MAX_CENT_FREQ_VERSION2];
-    } version2;
-  } versions;
-} UBX_SEC_SIG_data_t;
+// typedef struct
+// {
+//   uint8_t version; // Message version (0x01 for this version)
+//   union
+//   {
+//     struct
+//     {
+//       uint8_t reserved0[3];
+//       union
+//       {
+//         uint8_t all;
+//         struct
+//         {
+//           uint8_t jamDetEnabled : 1; // Flag indicates whether jamming/interference detection is enabled
+//           uint8_t jammingState : 2;  // Jamming/interference state:
+//                                      // 0: Unknown, 1: No jamming indicated
+//                                      // 2: Warning; jamming indicated but fix OK
+//                                      // 3: Critical; jamming indicated and no fix
+//         } bits;
+//       } jamFlags;
+//       uint8_t reserved1[3];
+//       union
+//       {
+//         uint8_t all;
+//         struct
+//         {
+//           uint8_t spfDetEnabled : 1; // Flag indicates whether spoofing detection is enabled
+//           uint8_t spoofingState : 3; // Spoofing state:
+//                                      // 0: Unknown, 1: No spoofing indicated
+//                                      // 2: Spoofing indicated, 3: Spoofing affirmed
+//         } bits;
+//       } spfFlags;
+//       uint8_t reserved2[3];
+//     } version1;
+//     struct {
+//       union
+//       {
+//         uint8_t all;
+//         struct
+//         {
+//           uint8_t jamDetEnabled : 1; // Flag indicates whether jamming/interference detection is enabled
+//           uint8_t jamState : 2;      // Jamming/interference state:
+//                                      // 0: Unknown, 1: No jamming indicated
+//                                      // 2: Warning; jamming indicated but fix OK
+//           uint8_t spfDetEnabled : 1; // Flag indicates whether spoofing detection is enabled
+//           uint8_t spfState : 3;      // Spoofing state:
+//                                      // 0: Unknown, 1: No spoofing indicated
+//                                      // 2: Spoofing indicated, 3: Spoofing affirmed
+//         } bits;
+//       } sigSecFlags;
+//       uint8_t reserved0;
+//       uint8_t jamNumCentFreqs; // The number of center frequencies provided
+//       union
+//       {
+//         uint32_t all;
+//         struct
+//         {
+//           uint32_t centFreq : 24; // Center frequency in [kHz], floored to the nearest kHz multiple
+//           uint32_t jammed : 1; // Flag indicates whether signals on the given center frequency are considered jammed
+//         } bits;
+//       } jamStateCentFreq[]; // Variable length - jamNumCentFreqs entries. Same layout for
+//                             // Version 2 and Version 3 - see the note above
+//                             // UBX_SEC_SEG_MAX_CENT_FREQ_VERSION3, above.
+//     } version2; // This layout also applies to Version 3 - see the note above the struct
+//   } versions;
+// } UBX_SEC_SIG_data_t;
 
-typedef struct
-{
-  ubxAutomaticFlags automaticFlags;
-  UBX_SEC_SIG_data_t data;
-  bool moduleQueried;
-  void (*callbackPointerPtr)(UBX_SEC_SIG_data_t *);
-  UBX_SEC_SIG_data_t *callbackData;
-} UBX_SEC_SIG_t;
+// UBX_SEC_SIG_t (the v3 RAM-management wrapper) has been removed - UBX-SEC-SIG is now a
+// registered v4 message (ubxSECSIG, in ubxMessages/ubxSECSIG.h). See AGENTS.md "Adding the
+// variable-length UBX messages". UBX_SEC_SIG_data_t (above, both versions' layouts) is kept as
+// documented reference for the message's wire format, exactly as UBX_RXM_SFRBX_data_t and
+// UBX_RXM_RAWX_header_t/_block_t/UBX_RXM_MEASX_header_t/_block_t were kept when those messages
+// were migrated. ubxSECSIG models Version 3 (the version the ZED-X20P actually sends), using the
+// versions.version2 layout above unchanged - see the note above UBX_SEC_SEG_MAX_CENT_FREQ_VERSION3.
+// Version 1's layout (versions.version1) is documented here but not otherwise used anywhere in
+// the registry.
 
 // UBX-SEC-UNIQID (0x27 0x03): Unique chip ID
 // The ID is five bytes on the F9 and M9 (version 1) but six bytes on the M10 (version 2)

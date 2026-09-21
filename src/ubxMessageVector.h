@@ -63,6 +63,7 @@
 #include "ubxMessages/ubxHNRPVT.h"
 #include "ubxMessages/ubxHNRATT.h"
 #include "ubxMessages/ubxHNRINS.h"
+#include "ubxMessages/ubxSECSIG.h" // Variable-length (Version 3 - see ubxSECSIG.h): header + repeated per-frequency blocks - see AGENTS.md "Adding the variable-length UBX messages"
 
 // ===========================
 
