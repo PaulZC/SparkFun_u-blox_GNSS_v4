@@ -64,6 +64,7 @@
 #include "ubxMessages/ubxHNRATT.h"
 #include "ubxMessages/ubxHNRINS.h"
 #include "ubxMessages/ubxSECSIG.h" // Variable-length (Version 3 - see ubxSECSIG.h): header + repeated per-frequency blocks - see AGENTS.md "Adding the variable-length UBX messages"
+#include "ubxMessages/ubxESFMEAS.h" // Variable-length: header + repeated per-measurement blocks + an optional footer, ring-buffered callback storage (numCallbackCopies=UBX_ESF_MEAS_CALLBACK_BUFFERS) - see AGENTS.md "Adding support for ESF-MEAS"
 
 // ===========================
 
@@ -216,7 +217,11 @@ public:
     // This is the receive-side hook that AGENTS.md flags as "the largest remaining piece of
     // design work" for v3 messages in general; it is wired up for the messages migrated so far -
     // see DevUBLOXGNSS::processUBXpacket() in u-blox_GNSS.cpp.
-    sfe_ublox_status_e storePayload(uint8_t Class, uint8_t ID, const uint8_t *payload, uint16_t len)
+    // 'checksumA'/'checksumB' are the already-validated checksum bytes from the incoming ubxPacket
+    // (its one call site, processUBXpacket(), has them straight from msg->checksumA/checksumB) -
+    // needed to synthesize the complete raw UBX frame for _callbackRawFrame - see AGENTS.md
+    // "Adding support for ESF-MEAS" and ubxMessage::writeCallbackRawFrame().
+    sfe_ublox_status_e storePayload(uint8_t Class, uint8_t ID, const uint8_t *payload, uint16_t len, uint8_t checksumA, uint8_t checksumB)
     {
         ubxMessage *msg = find(Class, ID);
         if (msg == nullptr)
@@ -226,6 +231,13 @@ public:
         if (len > msg->_messageLength)
             len = msg->_messageLength;
         memcpy(msg->_storage, payload, len);
+        // The real received payload length actually copied above - NOT necessarily _messageLength
+        // (that's only the allocated maximum). See AGENTS.md "Adding support for ESF-MEAS": bytes
+        // beyond 'len' in _storage can be stale leftovers from a previous, longer message, since
+        // this memcpy (and initStorage()'s one-time zero-fill) never clears them - a defensive
+        // reader (see ubxMessage::getBlockCount()/extractFooterFieldFrom()) needs this actual
+        // length, not just the message's own header count field, to know where real data ends.
+        msg->_actualLength = len;
         msg->_moduleQueried = true;
 
         // v4 scaffolding: if a callback has been registered (see DevUBLOXGNSS::setAutoCallbackPtr()
@@ -241,14 +253,19 @@ public:
             {
                 // Unchanged from the original single-slot behavior: always overwrite the one slot
                 // with the newest data (latest wins) - the right behavior for a "give me the latest"
-                // message like NAV-PVT. This is every message registered so far except RXM-SFRBX.
+                // message like NAV-PVT. This is every message registered so far except RXM-SFRBX
+                // and ESF-MEAS.
                 memcpy(msg->_callbackStorage, payload, len);
+                msg->_callbackActualLength[0] = len;
+                msg->writeCallbackRawFrame(0, payload, len, checksumA, checksumB);
                 msg->_callbackCount = 1; // head/tail stay at 0 - a degenerate 1-slot ring
             }
             else if (msg->_callbackCount < msg->_numCallbackCopies) // Ring has a free slot
             {
                 uint8_t *slot = msg->_callbackStorage + ((uint32_t)msg->_callbackHead * msg->_messageLength);
                 memcpy(slot, payload, len);
+                msg->_callbackActualLength[msg->_callbackHead] = len;
+                msg->writeCallbackRawFrame(msg->_callbackHead, payload, len, checksumA, checksumB);
                 msg->_callbackHead = (uint8_t)((msg->_callbackHead + 1) % msg->_numCallbackCopies);
                 msg->_callbackCount++;
             }

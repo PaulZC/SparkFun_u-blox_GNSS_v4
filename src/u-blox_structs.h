@@ -2503,8 +2503,16 @@ typedef struct
 
 // UBX-ESF-MEAS (0x10 0x02): External sensor fusion measurements
 // Note: length is variable
-// Note: ESF RAW data cannot be polled. It is "Output" only
-#define UBX_ESF_MEAS_CALLBACK_BUFFERS 6
+// Note: ESF-MEAS is now implemented as its own self-registered Class - see ubxMessages/ubxESFMEAS.h
+// and AGENTS.md "Adding support for ESF-MEAS". UBX_ESF_MEAS_CALLBACK_BUFFERS/UBX_ESF_MEAS_MAX_LEN
+// below are still used there (as numCallbackCopies/messageLength), kept as named, easily-tunable
+// constants here rather than literals inside the message class - same convention as
+// UBX_RXM_SFRBX_CALLBACK_BUFFERS/UBX_RXM_SFRBX_MAX_WORDS. UBX_ESF_MEAS_CALLBACK_BUFFERS has been
+// validated against real hardware traffic on a ZED-F9R - 6 and 12 both produced ring-full
+// debugPrint warnings (messages being dropped), 18 did not. Same pattern as
+// UBX_RXM_SFRBX_CALLBACK_BUFFERS needing to be raised well above its original estimate once
+// tested for real - see AGENTS.md "Adding support for ESF-MEAS" for the full detail.
+const uint8_t UBX_ESF_MEAS_CALLBACK_BUFFERS = 18;
 const uint16_t UBX_ESF_MEAS_MAX_LEN = 8 + (4 * DEF_MAX_NUM_ESF_MEAS) + 4;
 
 typedef struct
@@ -2540,29 +2548,11 @@ typedef struct
   UBX_ESF_MEAS_sensorData_t data[DEF_MAX_NUM_ESF_MEAS];
   uint32_t calibTtag; // OPTIONAL: Receiver local time calibrated: ms
 } UBX_ESF_MEAS_data_t;
-
-struct ubxESFMEASAutomaticFlags
-{
-  union
-  {
-    uint16_t all;
-    struct
-    {
-      uint16_t automatic : 1;                                     // Will this message be delivered and parsed "automatically" (without polling)
-      uint16_t implicitUpdate : 1;                                // Is the update triggered by accessing stale data (=true) or by a call to checkUblox (=false)
-      uint16_t addToFileBuffer : 1;                               // Should the raw UBX data be added to the file buffer?
-      uint16_t callbackCopyValid : UBX_ESF_MEAS_CALLBACK_BUFFERS; // Are the copies of the data struct used by the callback valid/fresh?
-    } bits;
-  } flags;
-};
-
-typedef struct
-{
-  ubxESFMEASAutomaticFlags automaticFlags;
-  UBX_ESF_MEAS_data_t data;
-  void (*callbackPointerPtr)(UBX_ESF_MEAS_data_t *);
-  UBX_ESF_MEAS_data_t *callbackData; // This is an array of buffers
-} UBX_ESF_MEAS_t;
+// UBX_ESF_MEAS_data_t/UBX_ESF_MEAS_sensorData_t above are kept as documented reference for the
+// wire format - see ubxMessages/ubxESFMEAS.h's field tables for the actual v4 parsing. The old
+// v3-style RAM-management wrapper (ubxESFMEASAutomaticFlags / UBX_ESF_MEAS_t, with its
+// callbackPointerPtr/callbackData) is retired - ubxESFMEAS is now self-registered and owns its own
+// storage/callback ring buffer via ubxMessage - see AGENTS.md "Adding support for ESF-MEAS".
 
 // UBX-ESF-RAW (0x10 0x03): Raw sensor measurements
 // Note: length is variable

@@ -152,6 +152,10 @@ public:
             delete[] _storage;
         if (_callbackStorage != nullptr)
             delete[] _callbackStorage;
+        if (_callbackActualLength != nullptr)
+            delete[] _callbackActualLength;
+        if (_callbackRawFrame != nullptr)
+            delete[] _callbackRawFrame;
     }
 
     // Does this object represent this Class/ID?
@@ -182,6 +186,21 @@ public:
     // degenerate single-slot ring); RXM-SFRBX uses 14 to hold a burst of messages that can arrive
     // in a single checkUblox() call before checkCallbacks() drains them - see AGENTS.md "Adding
     // support for RXM-SFRBX" and ubxMessageVector::storePayload() / DevUBLOXGNSS::checkCallbacks().
+    // Also lazily allocates _callbackActualLength and _callbackRawFrame alongside _callbackStorage,
+    // for every message with a callback registered (not just ESF-MEAS) - see AGENTS.md "Adding
+    // support for ESF-MEAS". _callbackActualLength is a per-ring-slot real received length, needed
+    // because storePayload() no longer trusts a message's own header count field (see
+    // getBlockCount() below) and because a shorter message reused a ring slot that previously held
+    // a longer one, leaving stale trailing bytes in _callbackStorage. _callbackRawFrame is a
+    // separate, larger per-ring-slot buffer (8 + _messageLength bytes/slot) holding the COMPLETE
+    // raw UBX frame (sync bytes + Class/ID/length + payload + checksum) for relaying a message
+    // verbatim from inside a callback - see getUbxMessageRawLengthCallback()/
+    // getUbxMessageRawPtrCallback() in u-blox_GNSS.cpp. This roughly doubles the RAM cost of
+    // _callbackStorage for any message with a callback registered (duplicating the payload bytes
+    // into a second, checksum-and-header-wrapped buffer) - accepted as the price of a general,
+    // automatic capability rather than restructuring _callbackStorage's existing payload-only
+    // layout, which every field-extraction call site across every other registered message already
+    // depends on.
     bool initCallbackStorage(void)
     {
         if (_callbackStorage == nullptr)
@@ -190,7 +209,20 @@ public:
             if (_callbackStorage != nullptr)
                 memset(_callbackStorage, 0, _messageLength * _numCallbackCopies);
         }
-        return (_callbackStorage != nullptr);
+        if ((_callbackStorage != nullptr) && (_callbackActualLength == nullptr))
+        {
+            _callbackActualLength = new uint16_t[_numCallbackCopies];
+            if (_callbackActualLength != nullptr)
+                memset(_callbackActualLength, 0, sizeof(uint16_t) * _numCallbackCopies);
+        }
+        if ((_callbackStorage != nullptr) && (_callbackRawFrame == nullptr))
+        {
+            uint32_t frameBytes = ((uint32_t)_messageLength + 8) * _numCallbackCopies;
+            _callbackRawFrame = new uint8_t[frameBytes];
+            if (_callbackRawFrame != nullptr)
+                memset(_callbackRawFrame, 0, frameBytes);
+        }
+        return (_callbackStorage != nullptr) && (_callbackActualLength != nullptr) && (_callbackRawFrame != nullptr);
     }
 
     uint32_t getMsgOutKey(uint8_t commType) const
@@ -309,6 +341,90 @@ public:
         return false; // Field name not found
     }
 
+    // Defensively computes the real number of repeated blocks present in 'buffer' (either this
+    // object's live _storage, or one slot of its _callbackStorage), for a message that set
+    // _blockCountField via addClassID() - see AGENTS.md "Adding support for ESF-MEAS". Needed
+    // because some messages' own header block-count field is documented as unreliable (e.g.
+    // ESF-MEAS's numMeas: "optional, can be obtained from message size") - unlike every
+    // variable-length message registered before ESF-MEAS, which trusts its header field directly
+    // via the plain _maxBlocks-bounded loop the caller writes itself. 'actualLength' is the real
+    // received byte length of 'buffer' (_actualLength for _storage, or the matching
+    // _callbackActualLength[] slot for _callbackStorage) - NOT _messageLength, which is only the
+    // allocated maximum. Returns the minimum of: the header field's own value; how many whole
+    // blocks actually fit in 'actualLength'; and _maxBlocks. Returns 0 if this message did not set
+    // _blockCountField (every message registered before ESF-MEAS), has no block support at all, or
+    // buffer/actualLength don't leave room for even the block header.
+    uint16_t getBlockCount(const uint8_t *buffer, uint16_t actualLength) const
+    {
+        if ((_blockCountField == nullptr) || (_blockFields == nullptr) || (buffer == nullptr))
+            return 0;
+
+        ubxAnyType headerValue;
+        uint16_t headerCount = 0;
+        if (extractFieldFrom(buffer, _blockCountField, &headerValue))
+            headerCount = (uint16_t)(double)headerValue;
+
+        uint16_t byLength = 0;
+        if ((actualLength > _blockHeaderLength) && (_blockLength > 0))
+            byLength = (uint16_t)((actualLength - _blockHeaderLength) / _blockLength);
+
+        uint16_t count = (headerCount < byLength) ? headerCount : byLength;
+        if (count > _maxBlocks)
+            count = _maxBlocks;
+        return count;
+    }
+
+    // Attempts to extract field 'fieldName' from this message's optional trailing footer group
+    // (_footerFields/_numFooterFields/_footerLength - set via addClassID(), e.g. ESF-MEAS's
+    // calibTtag) - see AGENTS.md "Adding support for ESF-MEAS". 'blockCount' is the DEFENSIVE block
+    // count for this particular message (see getBlockCount() above, NOT _maxBlocks), used to
+    // compute where the footer actually starts for THIS message. Returns false - leaving *value
+    // untouched, same convention as extractFieldFrom() - if this message has no footer at all, or
+    // if 'actualLength' is too short for the footer to actually have been present in this
+    // particular message. This is what lets a caller distinguish "no footer this time" from
+    // "footer value happens to be zero" - inferring presence from the footer bytes themselves would
+    // be unsafe, since a ring slot or _storage can hold stale trailing bytes from a previous, longer
+    // message (see ubxMessageVector::storePayload()).
+    bool extractFooterFieldFrom(const uint8_t *buffer, uint16_t actualLength, uint16_t blockCount,
+                                 const char *fieldName, ubxAnyType *value) const
+    {
+        if ((_footerFields == nullptr) || (_numFooterFields == 0) || (buffer == nullptr))
+            return false;
+
+        uint16_t footerOffset = _blockHeaderLength + (blockCount * _blockLength);
+        if (actualLength < (uint16_t)(footerOffset + _footerLength))
+            return false; // This particular message did not actually include the footer
+
+        return extractFieldFrom(buffer + footerOffset, fieldName, value,
+                                 (const ubxField *)_footerFields, _numFooterFields);
+    }
+
+    // Synthesizes the COMPLETE raw UBX frame (sync bytes + Class + ID + length + payload +
+    // checksum) for ring slot 'slotIndex' of _callbackRawFrame, so it can be relayed verbatim (e.g.
+    // pushed straight to another device/UART) from inside a callback - see AGENTS.md "Adding
+    // support for ESF-MEAS" and getUbxMessageRawLengthCallback()/getUbxMessageRawPtrCallback() in
+    // u-blox_GNSS.cpp. Called by ubxMessageVector::storePayload() whenever _callbackRawFrame has
+    // been allocated (i.e. a callback is registered - see initCallbackStorage()). 'len' is assumed
+    // to already be clamped to _messageLength by the caller, exactly like the copy written into
+    // _callbackStorage, so the length field this writes always matches the payload bytes actually
+    // present in the frame (0xB5/0x62 are UBX_SYNCH_1/UBX_SYNCH_2 from u-blox_Class_and_ID.h,
+    // written as literals here rather than adding that #include to this already-leaf header).
+    void writeCallbackRawFrame(uint8_t slotIndex, const uint8_t *payload, uint16_t len, uint8_t checksumA, uint8_t checksumB)
+    {
+        if (_callbackRawFrame == nullptr)
+            return;
+        uint8_t *frame = _callbackRawFrame + ((uint32_t)slotIndex * ((uint32_t)_messageLength + 8));
+        frame[0] = 0xB5; // UBX_SYNCH_1
+        frame[1] = 0x62; // UBX_SYNCH_2
+        frame[2] = _Class;
+        frame[3] = _ID;
+        frame[4] = (uint8_t)(len & 0xFF);
+        frame[5] = (uint8_t)((len >> 8) & 0xFF);
+        memcpy(frame + 6, payload, len);
+        frame[6 + len] = checksumA;
+        frame[6 + len + 1] = checksumB;
+    }
+
     // Called once, from the subclass's own constructor, to register its identity/metadata into
     // the base class.
     // 'blockFields'/'numBlockFields'/'blockHeaderLength'/'blockLength'/'maxBlocks' describe a
@@ -317,11 +433,19 @@ public:
     // per-SV blocks. They default to nullptr/0, so every existing message subclass (which passes
     // exactly today's 9 arguments) is unaffected. See AGENTS.md "Adding the variable-length UBX
     // messages".
+    // 'blockCountField'/'footerFields'/'numFooterFields'/'footerLength' extend the variable-length
+    // support above for a message whose header block-count field cannot be trusted, and/or which
+    // has an optional trailing footer group after the last real block (e.g. ESF-MEAS's numMeas/
+    // calibTtag) - see AGENTS.md "Adding support for ESF-MEAS" and getBlockCount()/
+    // extractFooterFieldFrom() above. They default to nullptr/nullptr/0/0, so every message
+    // registered before ESF-MEAS (which passes exactly today's 14 arguments) is unaffected.
     void addClassID(uint8_t Class, uint8_t ID, const char *classStr, const char *idStr,
                      uint16_t messageLength, uint8_t numCallbackCopies, uint8_t numFields,
                      const void *ubxFields, const uint32_t *msgOutKeys,
                      const void *blockFields = nullptr, uint8_t numBlockFields = 0,
-                     uint16_t blockHeaderLength = 0, uint16_t blockLength = 0, uint16_t maxBlocks = 0)
+                     uint16_t blockHeaderLength = 0, uint16_t blockLength = 0, uint16_t maxBlocks = 0,
+                     const char *blockCountField = nullptr,
+                     const void *footerFields = nullptr, uint8_t numFooterFields = 0, uint16_t footerLength = 0)
     {
         _Class = Class;
         _ID = ID;
@@ -336,8 +460,15 @@ public:
         _blockHeaderLength = blockHeaderLength;
         _blockLength = blockLength;
         _maxBlocks = maxBlocks;
+        _blockCountField = blockCountField;
+        _footerFields = footerFields;
+        _numFooterFields = numFooterFields;
+        _footerLength = footerLength;
+        _actualLength = 0;
         _storage = nullptr; // Only allocated when needed - see initStorage()
         _callbackStorage = nullptr; // Only allocated when needed - see initCallbackStorage()
+        _callbackActualLength = nullptr; // Only allocated when needed - see initCallbackStorage()
+        _callbackRawFrame = nullptr;     // Only allocated when needed - see initCallbackStorage()
         _callbackHead = 0;
         _callbackTail = 0;
         _callbackCount = 0;
@@ -370,7 +501,17 @@ public:
     uint16_t _blockHeaderLength = 0;      // Bytes before the first repeated block (e.g. 8 for NAV-SAT)
     uint16_t _blockLength = 0;            // Bytes per repeated block (e.g. 12 for NAV-SAT)
     uint16_t _maxBlocks = 0;              // Upper bound on the number of repeated blocks (e.g. UBX_NAV_SAT_MAX_BLOCKS)
+    // Defensive block-count / optional footer support - see AGENTS.md "Adding support for
+    // ESF-MEAS" and getBlockCount()/extractFooterFieldFrom() above. nullptr/nullptr/0/0 for every
+    // message registered before ESF-MEAS (unaffected).
+    const char *_blockCountField = nullptr; // Names a header field to cross-check defensively against actual received length, for a message whose header count field cannot be trusted (e.g. ESF-MEAS's numMeas)
+    const void *_footerFields = nullptr;    // Points at the subclass's own `ubxFooterFields[]` table, if any; nullptr => no footer
+    uint8_t _numFooterFields = 0;           // Number of entries in _footerFields
+    uint16_t _footerLength = 0;             // Bytes in the footer group
+    uint16_t _actualLength = 0; // The real received payload byte length of the most recent _storage write, set by storePayload() - see AGENTS.md "Adding support for ESF-MEAS". 0 until the first storePayload() call. Needed because storage bytes beyond a shorter message's length can hold stale data from a previous, longer message.
     uint8_t *_callbackStorage = nullptr; // Ring buffer of _numCallbackCopies slots, each _messageLength bytes - nullptr until initCallbackStorage() is called
+    uint16_t *_callbackActualLength = nullptr; // Per-ring-slot counterpart to _actualLength, parallel to _callbackStorage - nullptr until initCallbackStorage() is called
+    uint8_t *_callbackRawFrame = nullptr;      // Per-ring-slot COMPLETE raw UBX frame (sync+Class+ID+len+payload+checksum), each 8+_messageLength bytes - nullptr until initCallbackStorage() is called. See getUbxMessageRawLengthCallback()/getUbxMessageRawPtrCallback() in u-blox_GNSS.cpp.
     // Ring-buffer bookkeeping for _callbackStorage - see AGENTS.md "Adding support for RXM-SFRBX".
     // ubxMessageVector::storePayload() (the write side) writes to _callbackHead and advances it;
     // DevUBLOXGNSS::checkCallbacks() (the read side) reads from _callbackTail and advances it,

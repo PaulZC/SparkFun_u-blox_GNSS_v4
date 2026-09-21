@@ -899,6 +899,115 @@ state. If you add a fourth class that needs `debugPrint()`/`debugPrintln()`, inh
 `SfeDebugPrint` and remember to wire it into `enableDebugging()`/`disableDebugging()` the same way -
 inheriting the class alone is not enough to make it ever actually print.
 
+## Adding support for ESF-MEAS
+
+It is time to migrate ESF-MEAS into `ubxMessages`. It needs a revised strategy since ESF-MEAS:
+* Is variable-length, containing multiple `data` groups / blocks (`numMeas` in total)
+* Can include an optional `calibTtag` time tage group (similar to the NMEA "footer")
+* Requires multiple `_callbackStorage` (`UBX_ESF_MEAS_CALLBACK_BUFFERS`) (found during earlier hardware tests)
+
+It is not clear if the GNSS module outputs `calibTtag`, or whether that is only added on messages sent **to** the GNSS.
+For safety, we should assume that ESF-MEAS output by the GNSS can include `calibTtag`.
+
+Please write a proposal on how ESF-MEAS will be added and how `class` `ubxMessage` will need to be adapted to include it.
+Please do not make any code changes yet. Let me review your proposal first.
+
+### Implemented
+
+The proposal was approved and implemented in the same session - see `esf-meas-proposal.md`/`.pdf`
+in the repo root for the full design, and `claude/v4-migration-status.md` (Phase 30) for the
+as-built record. Summary of what shipped:
+
+- `class ubxESFMEAS` (`src/ubxMessages/ubxESFMEAS.h`) - self-registered like every other
+  variable-length message, following the NAV-SAT/RXM-SFRBX/SEC-SIG pattern.
+- `class ubxMessage` gained four GENERAL, additive capabilities (nullptr/0 for every message
+  registered before ESF-MEAS, so no other message is affected):
+  - **Actual-length tracking**: `_actualLength`/`_callbackActualLength[]`, set by
+    `ubxMessageVector::storePayload()` from the real received byte count. Needed because
+    `_storage`/`_callbackStorage` are never zeroed between messages, so bytes beyond a shorter
+    message's length can hold stale data from a previous, longer one - a message whose own header
+    count field cannot be trusted (like ESF-MEAS's `numMeas`) needs this to know where real data
+    actually ends.
+  - **Defensive block count**: `_blockCountField` (set via `addClassID()`) + `getBlockCount()` -
+    the minimum of the header field's own value, how many whole blocks fit in the actual received
+    length, and `_maxBlocks`. New accessors `getUbxMessageBlockCount()`/`...Callback()`.
+  - **Optional footer group**: `_footerFields`/`_numFooterFields`/`_footerLength` (set via
+    `addClassID()`) + `extractFooterFieldFrom()`, whose offset is computed from the defensive block
+    count above, not `_maxBlocks`. Returns "field not found" for a message that did not actually
+    include the footer, distinct from a footer value that happens to be zero. New accessors
+    `getUbxMessageFooterField()`/`...Callback()`.
+  - **Raw-frame relay** (added at the user's request during proposal review, beyond ESF-MEAS
+    itself): `_callbackRawFrame` - a per-ring-slot buffer holding the COMPLETE raw UBX frame (sync
+    bytes + Class/ID/length + payload + checksum), synthesized by `writeCallbackRawFrame()`. Lets a
+    sketch relay a message verbatim from inside a callback (e.g. `Serial2.write(ptr, len)`) without
+    reconstructing it by hand. New accessors `getUbxMessageRawLengthCallback()`/
+    `getUbxMessageRawPtrCallback()`. This is automatic for ANY message with a callback registered,
+    not opt-in - roughly doubles that message's `_callbackStorage` RAM cost, which is worth
+    remembering when choosing `numCallbackCopies` for a future high-volume message.
+- `storePayload()` (`ubxMessageVector.h`) gained two required parameters, `checksumA`/`checksumB`,
+  needed to synthesize the raw frame - its one call site (`processUBXpacket()`) already has them
+  from the incoming `ubxPacket`.
+- `getSensorFusionMeasurement()` is redacted entirely, per explicit instruction - it took the old
+  v3-style `UBX_ESF_MEAS_data_t` by value, and nothing constructs one any more.
+- `UBX_ESF_MEAS_t`/`ubxESFMEASAutomaticFlags` (the old v3 RAM-management wrapper) are removed from
+  `u-blox_structs.h`; `UBX_ESF_MEAS_data_t`/`UBX_ESF_MEAS_sensorData_t` (the wire-format structs)
+  are kept as documented reference, matching every prior migration. `UBX_ESF_MEAS_CALLBACK_BUFFERS`/
+  `UBX_ESF_MEAS_MAX_LEN` are unchanged/still used, as `numCallbackCopies`/`messageLength`.
+- `case UBX_CLASS_ESF:` stays alive in `autoLookup()`/`processUBXpacket()`/`checkCallbacks()` -
+  unlike MON-COMMS/SEC-SIG, only the ESF-MEAS branch was removed from each, since ESF-RAW/
+  ESF-STATUS still have live v3 code there.
+- Found and fixed while touching this code again: `setAutoESFMEAS`/`setAutoESFMEASrate`/
+  `setAutoESFMEAScallbackPtr`/`assumeAutoESFMEAS`/`logESFMEAS`/`initPacketUBXESFMEAS` were declared
+  in `u-blox_GNSS.h` but had NO definitions anywhere in `u-blox_GNSS.cpp` - dead declarations that
+  were never callable, predating this migration. Also fixed four stale "SEC-SIG (Version 2)"
+  comments left over from the Version 3 discovery (see the "SEC-SIG" section above) that the
+  original comment-only fix pass missed, in `u-blox_GNSS.h`/`u-blox_GNSS.cpp`, plus a stray "ESF RAW
+  data cannot be polled" comment that had been sitting above the ESF-MEAS section in
+  `u-blox_structs.h` (the correct copy of that comment is above the real ESF-RAW section).
+- **Hardware-validated by the user:** added `CallbackExample10_ESFMEAS` (their own sketch, not
+  written by Claude) and ran it on a real ZED-F9R over I2C. `timeTag`, `numMeas`-bounded block
+  iteration, `dataType`-driven decoding, the 24-bit signed `dataField` (gyro rate, accelerometer
+  force, gyro temperature, wheel/speed ticks all observed and printed with plausible values), and
+  the `calibTtag` footer field (printed as "Rx Time", present and non-zero on every message
+  observed) all decoded correctly across a continuous run - confirming the field tables, the
+  X4/U4-tagged 24-bit `dataField` sub-field, and `extractFooterFieldFrom()`'s footer-presence
+  detection are all correct against real hardware, not just static reasoning.
+- **Follow-up: the defensive block count is now hardware-validated across multiple block counts,
+  including one real bug found and fixed along the way (a sketch mistake, not a library bug).**
+  The user added a self-check comparing `numMeas` (the header field) against
+  `getUbxMessageBlockCount()`, and initially saw spurious mismatches (always reporting 4,
+  regardless of the real count). **Root cause: the sketch called the wrong accessor** -
+  `getUbxMessageBlockCount(msg)` reads the message's LIVE `_storage`/`_actualLength` (for the
+  separate `getUBX()`-polling pattern used outside a callback), not the frozen per-slot
+  `_callbackStorage`/`_callbackActualLength` a queued callback is actually reporting on. Since
+  ESF-MEAS is ring-buffered (`numCallbackCopies = UBX_ESF_MEAS_CALLBACK_BUFFERS = 6`) and arrives
+  in a rapid, mixed-rate burst, `_storage` had almost always already been overwritten by a newer
+  message (usually the high-rate 4-measurement gyro+temp one) by the time any queued callback got
+  around to reading it - explaining both the mismatches and why they were so often exactly "4".
+  **Fix (the sketch's, confirmed correct):** use `getUbxMessageBlockCountCallback(msg)` instead -
+  the same live-vs-callback-storage split that already exists for
+  `getUbxMessageField()`/`getUbxMessageFieldCallback()`. After the fix, `numMeas` and
+  `getUbxMessageBlockCountCallback()` agreed on every message across a continuous run, correctly
+  showing 4 (gyro X/Y/Z + temp), 3 (accel X/Y/Z), and 1 (speed ticks) - the defensive block-count
+  formula is now confirmed correct for more than just the numMeas=1 case. **This is a genuinely
+  easy mistake to repeat** (the two accessors differ only by "Callback" in the name) - worth
+  remembering for any future message: inside a registered callback, always use the
+  `...Callback()`-suffixed accessor, never the plain one, for the same reason this applies to
+  every other field/block/footer getter.
+- **`UBX_ESF_MEAS_CALLBACK_BUFFERS` is now hardware-validated too - and needed raising, same
+  pattern as RXM-SFRBX's pre-Phase-26 buffer count.** The user tried 6 (the original estimate) and
+  12, and saw ring-full `debugPrint` warnings (messages being dropped) at both; **18 produced no
+  buffer errors** and is now the shipped value in `u-blox_structs.h`. The comment above the
+  constant was updated to record this (previously said "has NOT yet been validated"). **The user's
+  own words: "I am happy. ESF-MEAS is validated."**
+- **Still open:** the raw-frame relay accessors (`getUbxMessageRawLengthCallback()`/
+  `getUbxMessageRawPtrCallback()`) still haven't been exercised by any sketch. This implementation
+  has also still NOT been compiled with `compile_example.bat` - Docker was unavailable in every
+  sandbox tried so far, so the `compile_example.bat`/Dockerfile check described in "Test" below has
+  not been run against it. Neither of these blocks calling ESF-MEAS itself validated - both are
+  narrower loose ends (an unused accessor, and a build-tooling gap that has applied to every phase
+  of this engagement, not something specific to ESF-MEAS).
+
 ## Test
 
 Compile the example code in examples/Example1\_PositionVelocityTime using the batch file compile\_example.bat.

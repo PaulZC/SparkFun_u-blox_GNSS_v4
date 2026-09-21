@@ -176,15 +176,8 @@ void DevUBLOXGNSS::end(void)
     packetUBXESFSTATUS = nullptr;
   }
 
-  if (packetUBXESFMEAS != nullptr)
-  {
-    if (packetUBXESFMEAS->callbackData != nullptr)
-    {
-      delete[] packetUBXESFMEAS->callbackData;
-    }
-    delete packetUBXESFMEAS;
-    packetUBXESFMEAS = nullptr;
-  }
+  // packetUBXESFMEAS no longer exists - ubxESFMEAS is now self-registered and destroyed by
+  // ubxMessageVector's own destructor. See AGENTS.md "Adding support for ESF-MEAS".
 
   if (packetUBXESFRAW != nullptr)
   {
@@ -860,13 +853,9 @@ bool DevUBLOXGNSS::autoLookup(uint8_t Class, uint8_t ID, uint16_t *maxSize)
     // see AGENTS.md "Adding the variable-length UBX messages".
     break;
   case UBX_CLASS_ESF:
-    if (ID == UBX_ESF_MEAS)
-    {
-      if (maxSize != nullptr)
-        *maxSize = UBX_ESF_MEAS_MAX_LEN;
-      return (packetUBXESFMEAS != nullptr);
-    }
-    else if (ID == UBX_ESF_RAW)
+    // UBX_ESF_MEAS is handled above via the registry (ubxESFMEAS is now self-registered) - see
+    // AGENTS.md "Adding support for ESF-MEAS".
+    if (ID == UBX_ESF_RAW)
     {
       if (maxSize != nullptr)
         *maxSize = UBX_ESF_RAW_MAX_LEN;
@@ -894,8 +883,8 @@ bool DevUBLOXGNSS::autoLookup(uint8_t Class, uint8_t ID, uint16_t *maxSize)
     }
     break;
   case UBX_CLASS_SEC:
-    // UBX_SEC_SIG (Version 2) is handled above via the registry (ubxSECSIG is now
-    // self-registered) - see AGENTS.md "Adding the variable-length UBX messages".
+    // UBX_SEC_SIG (Version 3 - see ubxSECSIG.h) is handled above via the registry (ubxSECSIG is
+    // now self-registered) - see AGENTS.md "Adding the variable-length UBX messages".
     break;
   default:
     return false;
@@ -2032,7 +2021,10 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
     //  if the _callbackPtr is not nullptr:
     //   it also copies the payload into a free slot of _callbackStorage's ring buffer, advancing
     //   _callbackHead and _callbackCount - see AGENTS.md "Adding support for RXM-SFRBX"
-    if (ubxMessages.storePayload(msg->cls, msg->id, msg->payload, msg->len) != SFE_UBLOX_STATUS_SUCCESS)
+    //  also synthesizes the complete raw UBX frame (using msg->checksumA/checksumB) into
+    //   _callbackRawFrame, for messages that want to relay it verbatim - see AGENTS.md
+    //   "Adding support for ESF-MEAS"
+    if (ubxMessages.storePayload(msg->cls, msg->id, msg->payload, msg->len, msg->checksumA, msg->checksumB) != SFE_UBLOX_STATUS_SUCCESS)
     {
       debugPrint("processUBXpacket: storePayload failed for msg Class ");
       debugPrint(msg->cls);
@@ -2163,43 +2155,11 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
       // that generically.
       break;
     case UBX_CLASS_ESF:
-      if (msg->id == UBX_ESF_MEAS)
-      {
-        // Parse various byte fields into storage - but only if we have memory allocated for it
-        if (packetUBXESFMEAS != nullptr)
-        {
-          packetUBXESFMEAS->data.timeTag = extractLong(msg, 0);
-          packetUBXESFMEAS->data.flags.all = extractInt(msg, 4);
-          packetUBXESFMEAS->data.id = extractInt(msg, 6);
-          for (uint16_t i = 0; (i < DEF_MAX_NUM_ESF_MEAS) && (i < packetUBXESFMEAS->data.flags.bits.numMeas) && ((i * 4) < (msg->len - 8)); i++)
-          {
-            packetUBXESFMEAS->data.data[i].data.all = extractLong(msg, 8 + (i * 4));
-          }
-          if ((uint16_t)msg->len > (uint16_t)(8 + (packetUBXESFMEAS->data.flags.bits.numMeas * 4)))
-            packetUBXESFMEAS->data.calibTtag = extractLong(msg, 8 + (packetUBXESFMEAS->data.flags.bits.numMeas * 4));
-
-          // Check if we need to copy the data for the callback
-          if (packetUBXESFMEAS->callbackData != nullptr) // If RAM has been allocated for the copy of the data
-          {
-            for (uint16_t i = 0; i < UBX_ESF_MEAS_CALLBACK_BUFFERS; i++)
-            {
-              if ((packetUBXESFMEAS->automaticFlags.flags.bits.callbackCopyValid & (1 << i)) == 0) // AND the data is stale
-              {
-                memcpy(&packetUBXESFMEAS->callbackData[i].timeTag, &packetUBXESFMEAS->data.timeTag, sizeof(UBX_ESF_MEAS_data_t));
-                packetUBXESFMEAS->automaticFlags.flags.bits.callbackCopyValid |= (1 << i);
-                break; // Only copy once
-              }
-            }
-          }
-
-          // Check if we need to copy the data into the file buffer
-          if (packetUBXESFMEAS->automaticFlags.flags.bits.addToFileBuffer)
-          {
-            addedToFileBuffer = storePacket(msg);
-          }
-        }
-      }
-      else if (msg->id == UBX_ESF_RAW)
+      // UBX_ESF_MEAS is now a registered v4 message (ubxESFMEAS) - see AGENTS.md "Adding support
+      // for ESF-MEAS". processUBXpacket() no longer parses it here; the registry-first branch at
+      // the top of this function (ubxMessages.storePayload()) does that generically, including
+      // writing into the ring-buffered _callbackStorage/_callbackActualLength/_callbackRawFrame.
+      if (msg->id == UBX_ESF_RAW)
       {
         // Parse various byte fields into storage - but only if we have memory allocated for it
         if (packetUBXESFRAW != nullptr)
@@ -2350,10 +2310,10 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
       }
       break;
     case UBX_CLASS_SEC:
-      // UBX_SEC_SIG (Version 2) is now a registered v4 message (ubxSECSIG) - see AGENTS.md
-      // "Adding the variable-length UBX messages". processUBXpacket() no longer parses it here;
-      // the registry-first branch at the top of this function (ubxMessages.storePayload()) does
-      // that generically. Version 1 was never modelled by ubxSECSIG and is not handled at all.
+      // UBX_SEC_SIG (Version 3 - see ubxSECSIG.h) is now a registered v4 message (ubxSECSIG) - see
+      // AGENTS.md "Adding the variable-length UBX messages". processUBXpacket() no longer parses
+      // it here; the registry-first branch at the top of this function (ubxMessages.storePayload())
+      // does that generically. Version 1 was never modelled by ubxSECSIG and is not handled at all.
       break;
     }
   }
@@ -3249,7 +3209,90 @@ ubxAnyType DevUBLOXGNSS::getUbxMessageBlockField(ubxMessage *theMessage, uint16_
     return value;
 }
 
-// v4 scaffolding: 
+// v4 scaffolding, added for ESF-MEAS - see AGENTS.md "Adding support for ESF-MEAS". General/
+// reusable by any future message with the same shape, not ESF-MEAS-specific.
+// Factory: the DEFENSIVELY-computed real block count (ubxMessage::getBlockCount()) for a message
+// that set _blockCountField, reading from its _callbackStorage - use this, not the message's own
+// (possibly-unreliable) header count field, to bound a getUbxMessageBlockFieldCallback() loop. 0
+// if this message did not set _blockCountField, or if no callback data is available yet.
+uint16_t DevUBLOXGNSS::getUbxMessageBlockCountCallback(ubxMessage *theMessage)
+{
+    if ((theMessage == nullptr) || (theMessage->_callbackStorage == nullptr) || (theMessage->_callbackActualLength == nullptr))
+        return 0;
+    const uint8_t *slot = theMessage->_callbackStorage + ((uint32_t)theMessage->_callbackReadIndex * theMessage->_messageLength);
+    return theMessage->getBlockCount(slot, theMessage->_callbackActualLength[theMessage->_callbackReadIndex]);
+}
+
+// Factory: same as getUbxMessageBlockCountCallback() above, reading from the message's live
+// _storage instead.
+uint16_t DevUBLOXGNSS::getUbxMessageBlockCount(ubxMessage *theMessage)
+{
+    if ((theMessage == nullptr) || (theMessage->_storage == nullptr))
+        return 0;
+    return theMessage->getBlockCount(theMessage->_storage, theMessage->_actualLength);
+}
+
+// Factory: extracts field 'fieldName' from a variable-length message's OPTIONAL trailing footer
+// group (e.g. ESF-MEAS's calibTtag - see ubxMessage::extractFooterFieldFrom()), reading from the
+// message a callback just fired for's _callbackStorage. Returns the usual "field not found"
+// sentinel (see getUbxMessageFieldCallback() above) both when this message has no footer at all,
+// and when THIS PARTICULAR message's actual received length was too short for the footer to have
+// actually been present - the caller cannot tell those two cases apart from the return value alone
+// (by design - see the file header comment in ubxESFMEAS.h), only that no footer data is
+// available.
+ubxAnyType DevUBLOXGNSS::getUbxMessageFooterFieldCallback(ubxMessage *theMessage, const char *fieldName)
+{
+    ubxAnyType value;
+    value.ubxDataType = 0xFF; // Sentinel - ubxDataType8bit() can never produce this value; operator double() returns 0.0 for it
+    value.U8 = 0;
+    if ((theMessage != nullptr) && (theMessage->_callbackStorage != nullptr) && (theMessage->_callbackActualLength != nullptr))
+    {
+        const uint8_t *slot = theMessage->_callbackStorage + ((uint32_t)theMessage->_callbackReadIndex * theMessage->_messageLength);
+        uint16_t actualLength = theMessage->_callbackActualLength[theMessage->_callbackReadIndex];
+        uint16_t blockCount = theMessage->getBlockCount(slot, actualLength);
+        theMessage->extractFooterFieldFrom(slot, actualLength, blockCount, fieldName, &value);
+    }
+    return value;
+}
+
+// Factory: same as getUbxMessageFooterFieldCallback() above, reading from the message's live
+// _storage/_actualLength instead.
+ubxAnyType DevUBLOXGNSS::getUbxMessageFooterField(ubxMessage *theMessage, const char *fieldName)
+{
+    ubxAnyType value;
+    value.ubxDataType = 0xFF; // Sentinel - ubxDataType8bit() can never produce this value; operator double() returns 0.0 for it
+    value.U8 = 0;
+    if ((theMessage != nullptr) && (theMessage->_storage != nullptr))
+    {
+        uint16_t blockCount = theMessage->getBlockCount(theMessage->_storage, theMessage->_actualLength);
+        theMessage->extractFooterFieldFrom(theMessage->_storage, theMessage->_actualLength, blockCount, fieldName, &value);
+    }
+    return value;
+}
+
+// Factory: the COMPLETE raw UBX frame length (6-byte header + payload + 2-byte checksum) for the
+// message a callback just fired for - see ubxMessage::writeCallbackRawFrame() and AGENTS.md
+// "Adding support for ESF-MEAS". Pair with getUbxMessageRawPtrCallback() to relay the message
+// verbatim (e.g. Serial2.write(ptr, len)) from inside a callback. 0 if unavailable (no callback
+// registered, or no data has arrived yet).
+uint16_t DevUBLOXGNSS::getUbxMessageRawLengthCallback(ubxMessage *theMessage)
+{
+    if ((theMessage == nullptr) || (theMessage->_callbackRawFrame == nullptr) || (theMessage->_callbackActualLength == nullptr))
+        return 0;
+    return (uint16_t)(8 + theMessage->_callbackActualLength[theMessage->_callbackReadIndex]);
+}
+
+// Factory: a pointer to the start of the complete raw UBX frame within _callbackRawFrame, for the
+// message a callback just fired for - see getUbxMessageRawLengthCallback() above. nullptr if
+// unavailable.
+const uint8_t *DevUBLOXGNSS::getUbxMessageRawPtrCallback(ubxMessage *theMessage)
+{
+    if ((theMessage == nullptr) || (theMessage->_callbackRawFrame == nullptr))
+        return nullptr;
+    return theMessage->_callbackRawFrame + ((uint32_t)theMessage->_callbackReadIndex * ((uint32_t)theMessage->_messageLength + 8));
+}
+
+// v4 scaffolding:
 // Factory: hands back the opaque per-message object a callback's nmeaCallbackDataCommon_t* points
 // at, so getNmeaMessageField() can navigate its field table and extract a named field's
 // value
@@ -3464,19 +3507,9 @@ void DevUBLOXGNSS::checkCallbacks(void)
   // (ubxMONCOMMS is now self-registered) - see AGENTS.md "Adding the variable-length UBX
   // messages".
 
-  if (packetUBXESFMEAS != nullptr)                                               // If RAM has been allocated for message storage
-    if (packetUBXESFMEAS->callbackData != nullptr)                               // If RAM has been allocated for the copy of the data
-      for (uint16_t i = 0; i < UBX_ESF_MEAS_CALLBACK_BUFFERS; i++)
-      {
-        if ((packetUBXESFMEAS->automaticFlags.flags.bits.callbackCopyValid & (1 << i)) != 0) // If the copy of the data is valid
-        {
-          if (packetUBXESFMEAS->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-          {
-            packetUBXESFMEAS->callbackPointerPtr(&packetUBXESFMEAS->callbackData[i]); // Call the callback
-          }
-          packetUBXESFMEAS->automaticFlags.flags.bits.callbackCopyValid &= ~(1 << i); // Mark the data as stale
-        }
-      }
+  // UBX_ESF_MEAS's callback is now dispatched by the generic registry walk above (ubxESFMEAS is
+  // now self-registered, with its own ring-buffered _callbackStorage) - see AGENTS.md "Adding
+  // support for ESF-MEAS".
 
   if (packetUBXESFRAW != nullptr)                                               // If RAM has been allocated for message storage
     if (packetUBXESFRAW->callbackData != nullptr)                               // If RAM has been allocated for the copy of the data
@@ -7770,6 +7803,20 @@ bool DevUBLOXGNSS::getMONCOMMS(uint16_t maxWait)
   return getUBX(UBX_CLASS_MON, UBX_MON_COMMS, maxWait);
 }
 
+// ***** ESF MEAS automatic support
+// ubxESFMEAS is now self-registered - see AGENTS.md "Adding support for ESF-MEAS". The old
+// setAutoESFMEAS/setAutoESFMEASrate/setAutoESFMEAScallbackPtr/assumeAutoESFMEAS/logESFMEAS
+// declarations (formerly in u-blox_GNSS.h) had no definitions anywhere in this file - dead
+// declarations, never callable - so there is nothing to retire here beyond removing them from the
+// header. The generic setAutoUBX/setAutoUBXrate/setAutoCallbackPtr/assumeAutoUBX/flushUBX/logUBX
+// (by Class/ID UBX_CLASS_ESF/UBX_ESF_MEAS, or by name "ESF"/"MEAS") do the same job, with no
+// per-message code required. getESFMEAS() is new, as a thin wrapper, matching every other migrated
+// message.
+bool DevUBLOXGNSS::getESFMEAS(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_ESF, UBX_ESF_MEAS, maxWait);
+}
+
 // ***** ESF STATUS automatic support
 
 bool DevUBLOXGNSS::getEsfInfo(uint16_t maxWait)
@@ -7937,8 +7984,8 @@ void DevUBLOXGNSS::logESFSTATUS(bool enabled)
 }
 
 // ***** SEC-SIG automatic support
-// ubxSECSIG (Version 2 only) is now self-registered - see AGENTS.md "Adding the variable-length
-// UBX messages". setAutoSECSIG/setAutoSECSIGrate/setAutoSECSIGcallbackPtr/assumeAutoSECSIG/
+// ubxSECSIG (Version 3 - see ubxSECSIG.h) is now self-registered - see AGENTS.md "Adding the
+// variable-length UBX messages". setAutoSECSIG/setAutoSECSIGrate/setAutoSECSIGcallbackPtr/assumeAutoSECSIG/
 // initPacketUBXSECSIG/flushSECSIG/logSECSIG are retired; the generic setAutoUBX/setAutoUBXrate/
 // setAutoCallbackPtr/assumeAutoUBX/flushUBX/logUBX (by Class/ID UBX_CLASS_SEC/UBX_SEC_SIG, or by
 // name "SEC"/"SIG") do the same job, with no per-message code required. getSECSIG() remains, as
@@ -9372,11 +9419,8 @@ float DevUBLOXGNSS::getESFyaw() // Returned as degrees
   return (((float)value.I2) / 100.0); // Convert to degrees
 }
 
-bool DevUBLOXGNSS::getSensorFusionMeasurement(UBX_ESF_MEAS_sensorData_t *sensorData, UBX_ESF_MEAS_data_t ubxDataStruct, uint8_t sensor)
-{
-  sensorData->data.all = ubxDataStruct.data[sensor].data.all;
-  return (true);
-}
+// getSensorFusionMeasurement() is redacted, per explicit instruction - see AGENTS.md "Adding
+// support for ESF-MEAS" and the comment above its declaration in u-blox_GNSS.h.
 
 bool DevUBLOXGNSS::getRawSensorMeasurement(UBX_ESF_RAW_sensorData_t *sensorData, UBX_ESF_RAW_data_t ubxDataStruct, uint8_t sensor)
 {
