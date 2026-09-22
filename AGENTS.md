@@ -1395,6 +1395,119 @@ NAV-SAT/RXM-RAWX/RXM-MEASX/MON-COMMS/SEC-SIG/ESF-RAW/RXM-PMP. The one genuinely 
   sufficient, and that `checkCallbacks()` drains both before either could be overwritten by the
   next epoch's pair.
 
+## Tidying up u-blox_structs.h
+
+User asked: *"Please tidy up `u-blox_structs.h`. Please delete all unused, unneeded `typedef`
+definitions. I believe the only definitions that need to be retained are the ones for UBX-MGA?"*
+
+The user's hypothesis (only UBX-MGA needs retaining) was directionally right - MGA-DATA0/MGA-DBD
+are the only UBX message-family typedefs still needed - but not complete: several typedefs
+outside the MGA family are also still genuinely load-bearing, for reasons unrelated to the v4
+message registry. Rather than trust the hypothesis, every one of the 126 typedefs (struct/union)
+in the file, plus its 2 non-typedef tag structs (`ubxAutomaticFlags`, `rtcmAutomaticFlags`), was
+checked mechanically:
+
+1. Parsed every `typedef struct`/`typedef union` block (and the 2 tag structs) by brace-counting,
+   recording each one's name and exact line range.
+2. Built a dependency graph: for each block, which *other* block names appear as field types
+   inside its own body (e.g. `UBX_MON_RF_data_t` contains `UBX_MON_RF_header_t header;` and
+   `UBX_MON_RF_block_t blocks[...]`, so `_data_t` depends on `_header_t`/`_block_t`).
+3. Found every type with a **genuine external reference** - a real, compiling use in `.h`/`.cpp`
+   code outside `u-blox_structs.h` itself, distinguished carefully from a type name that only
+   appears inside a comment (the ~40 `ubxMessages/*.h` class files' header comments almost all say
+   something like "UBX_NAV_POSECEF_data_t (verified against the byte offsets...)" - none of that
+   is a real usage; it's prose describing how the class was originally written).
+4. Computed the transitive closure of that genuine-external-reference set through the dependency
+   graph from step 2 - anything reachable from a real anchor is still needed; everything else is
+   dead weight.
+
+**Kept (17 types, not just MGA):**
+- `UBX_MGA_ACK_DATA0_data_t`/`_t`, `UBX_MGA_DBD_data_t`/`_t` - the user's own hypothesis. MGA is
+  still outside the v4 registry entirely (`packetUBXMGAACK`/`packetUBXMGADBD` in `u-blox_GNSS.h`
+  still allocate and use these structs directly), so both are fully load-bearing.
+- **Exceptions to the user's hypothesis, found by the dependency check, not assumed:**
+  `UBX_MON_HW_data_t` (parameter of `getHWstatus()` - itself a long-standing no-op stub, but its
+  signature still compiles against the struct), `UBX_MON_HW2_data_t` (parameter of the fully
+  functional `getHW2status()`), `UBX_MON_RF_header_t`/`_block_t`/`_data_t` (parameter of the fully
+  functional `getRFinformation()` - MON-RF has no v4 registry class at all), `UBX_SEC_UNIQID_data_t`
+  (parameter of the fully functional `getUniqueChipId()`/`getUniqueChipIdStr()` - SEC-UNIQID has no
+  v4 registry class either). **None of these four messages have ever been migrated to the v4
+  registry** - they still poll via `packetCfg`/`sendCommand()`/`extractByte()` directly, unlike
+  every NAV/RXM/MON-COMMS/SEC-SIG/ESF message this engagement migrated - so this is a pre-existing
+  gap, not something this cleanup should paper over by deleting their structs.
+  `NMEA_STORAGE_t`/`RTCM_FRAME_t`/`RTCM_1005_data_t`/`RTCM_1005_t`/`RTCM_1006_data_t` (all still
+  directly allocated/used by `_storageNMEA`/`_storageRTCM`/`storageRTCM1005`/`rtcmInputStorage` in
+  `u-blox_GNSS.h`/`.cpp` - NMEA raw-frame storage and RTCM 1005/1006 input/output parsing were
+  never part of this migration's scope at all, unlike the per-sentence `nmeaMessage` registry).
+  `ubxAutomaticFlags` (the tag struct, not a typedef) - used as a parameter type by
+  `setAutoMsgRateVal()`, a function with **no callers anywhere in the repo** (confirmed by grep) -
+  see the incidental finding below.
+- Everything else a kept type's body actually nests (e.g. `UBX_MON_RF_header_t`/`_block_t` under
+  `_data_t`, `rtcmAutomaticFlags` under `RTCM_1005_t`) was pulled in automatically by the closure,
+  not hand-picked.
+
+**Removed (111 typedefs):** every NAV/RXM/MON-COMMS/TIM/SEC-SIG/ESF `_data_t`/`_header_t`/
+`_block_t`/`_sensorData_t`/`_sensorStatus_t`/`_message_data_t` struct that a previous phase had
+kept "as documented reference for the wire format" (MON-COMMS Phase 27, SEC-SIG Phase 28,
+ESF-MEAS/ESF-RAW/ESF-STATUS Phase 30-31, RXM-PMP/RXM-QZSSL6 Phase 32-33, and the original Phase 1-2
+messages) - none of these have any real code reference left anywhere; the corresponding v4
+`ubxMessages/*.h` class's own field table is the wire format's documentation now, and has been for
+every message since it was migrated. Also removed every `_t`/`_moduleQueried_t` v3
+RAM-management wrapper struct that a previous phase's "full migration of the old v3 scaffolding"
+step had already emptied of live references (these were already confirmed unused in each phase's
+own verification pass, but the struct declarations themselves were never deleted from
+`u-blox_structs.h` until now). `UBX_RXM_COR_t` (unused, RXM-COR was migrated in an earlier phase
+not otherwise detailed here) is included in this removal too.
+
+**SEC-SIG's already-commented-out struct removed too.** Phase 28/29 had left `UBX_SEC_SIG_data_t`
+as a large commented-out (`//`-prefixed) block rather than a real typedef, so the mechanical pass
+above didn't touch it (it isn't a compiled typedef any more, just prose) - but for consistency
+with every other now-removed wire-format struct, that ~65-line commented-out block was deleted
+too, replaced with a short prose note (mirroring the treatment every other message got).
+
+**Every retiring comment that claimed a struct was "kept above/below as documented reference" has
+been rewritten** to say it was removed instead (there were 12 such comments, one or two per
+migrated message) - leaving them unchanged would have been actively misleading, since the
+structs they pointed at no longer exist. One dangling cross-reference was also fixed: ESF-RAW's
+header comment said "see numEsfRawBlocks's comment below," but that comment lived inside the now-
+deleted `UBX_ESF_RAW_data_t` struct - repointed to the equivalent comment in `ubxMessage.h`, which
+still exists.
+
+**Deliberately out of scope for this cleanup, left untouched:**
+- The ~40 `ubxMessages/*.h` class files' own header comments, which describe (for historical
+  record) how each class's field table was originally verified against the now-deleted v3 struct
+  by name (e.g. "UBX_NAV_POSECEF_data_t (verified against the byte offsets...)"). These are
+  harmless prose, not code, and rewriting ~40 files' documentation was not what was asked.
+- `keywords.txt`, which still lists several of the removed type names as `KEYWORD1` entries - this
+  file has been known-stale since Phase 7 (never resynced for the v4 API) and is now additionally
+  stale for this cleanup; still a separate, explicitly-requested task per that longstanding note.
+- **Incidental finding: `setAutoMsgRateVal()` (`u-blox_GNSS.h`/`.cpp`) is dead code** - declared,
+  defined, and its signature genuinely uses `ubxAutomaticFlags`, but grepping the whole repo turns
+  up no caller anywhere. It's the one thing keeping `ubxAutomaticFlags` itself alive now that every
+  struct that used to embed it (`UBX_NAV_PVT_t` and its 28 siblings) has been removed. Not touched
+  this pass, since the ask was about typedefs specifically, not about hunting further dead
+  functions - flagged here in case the user wants it removed on a future pass, the same way
+  ESF-RAW's dead automatic-API functions were found and removed in Phase 31.
+
+**Verified statically:** built the dependency graph and closure programmatically (not by
+inspection alone), then ran an exhaustive `rg -w -f <delete-list>` across the *entire* repository
+(every `.h`/`.cpp`/`.ino` file, `keywords.txt`, `AGENTS.md`) after editing, confirming every
+remaining hit for a removed name is a comment, never live code. Confirmed every one of the 17 kept
+type names is still present, and every one of the 111 removed type names is gone (except where a
+new retiring comment intentionally still names it, as prose). Confirmed brace/paren balance before
+and after (286/286 -> 25/25 braces, 390/390 -> 182/182 parens, both still balanced) and that the
+file stayed 100% CRLF (641 CRLF, 0 bare LF) throughout every edit pass. File size: 115876 -> 33819
+bytes (3034 -> 641 lines). Transferred and edited directly via a shell on the user's own device
+this session (no container round-trip needed, since a working Python 3 + ripgrep were available
+there) and independently re-verified byte-for-byte (33819) after writing back to
+`src/u-blox_structs.h`.
+
+- **Not yet done:** this change has NOT been compiled (no Arduino toolchain available in this
+  environment, the same build-tooling gap as every prior phase) - a `compile_example.bat` run
+  (or at minimum, opening one of the existing `CallbackExample*` sketches that touches MON-HW,
+  MON-HW2, MON-RF, SEC-UNIQID, or MGA) is the natural verification step, since those are the four
+  message families with structs now surviving for reasons other than "still in the v4 registry."
+
 ## Test
 
 Compile the example code in examples/Example1\_PositionVelocityTime using the batch file compile\_example.bat.

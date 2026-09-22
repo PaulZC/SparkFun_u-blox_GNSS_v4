@@ -396,8 +396,9 @@ public:
   bool getESFAutoAlignment(uint8_t layer = VAL_LAYER_RAM, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Unsafe overload
   bool setESFAutoAlignment(bool enable, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
-  // RF Information (including jamming) - ZED-F9 only
-  bool getRFinformation(UBX_MON_RF_data_t *data = nullptr, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get the RF information using UBX_MON_RF
+  // RF Information (including jamming) - ZED-F9 only. getRFinformation() has been replaced by
+  // getMONRF() - see AGENTS.md "Adding the variable-length UBX messages" - declared alongside
+  // getMONCOMMS() below, under "Receiver status (MON)".
 
   // Extended hardware status
   bool getHW2status(UBX_MON_HW2_data_t *data = nullptr, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get the extended hardware status using UBX_MON_HW2
@@ -431,9 +432,12 @@ public:
   uint32_t uSpartnCrc32(const uint8_t *pU8Msg, size_t size);
   uint8_t * parseSPARTN(uint8_t incoming, bool &valid, uint16_t &len, sfe_ublox_spartn_header_t *header = nullptr);
 
-  // Get unique chip ID - UBX-SEC-UNIQID
-  bool getUniqueChipId(UBX_SEC_UNIQID_data_t *data = nullptr, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get the unique chip ID using UBX_SEC_UNIQID
-  const char *getUniqueChipIdStr(UBX_SEC_UNIQID_data_t *data = nullptr, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get the unique chip ID using UBX_SEC_UNIQID
+  // ubxSECUNIQID is now self-registered - see AGENTS.md "Adding the variable-length UBX messages".
+  // getUniqueChipId()/getUniqueChipIdStr(UBX_SEC_UNIQID_data_t*, ...) have been replaced by
+  // getSECUNIQID()/getUniqueChipIdStr() below. For safety, call getUniqueChipIdStr() inside an
+  // if(getSECUNIQID()) or if(getUBX("SEC","UNIQID")).
+  bool getSECUNIQID(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get the unique chip ID using UBX_SEC_UNIQID
+  String getUniqueChipIdStr(void); // Returns the uniqueId bytes as a hex String, e.g. "0123456789AB" - see ubxSECUNIQID.h
 
   // General configuration (used only on protocol v27 and higher - ie, ZED-F9P)
 
@@ -803,6 +807,13 @@ public:
   // ubxMONCOMMS is now self-registered - see AGENTS.md "Adding the variable-length UBX messages".
   // getMONCOMMS() remains, as a thin wrapper, since it is called directly rather than by name.
   bool getMONCOMMS(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // MON COMMS
+
+  // ubxMONRF is now self-registered - see AGENTS.md "Adding the variable-length UBX messages".
+  // getMONRF() remains, as a thin wrapper, since it is called directly rather than by name.
+  // Replaces the old getRFinformation(UBX_MON_RF_data_t*, ...) - read fields via
+  // getUBXfield()/getUbxMessageBlockField() (with the "nBlocks" header field to bound the loop),
+  // same as every other migrated variable-length message.
+  bool getMONRF(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // MON RF (RF information, including jamming)
 
   // Sensor fusion (dead reckoning) (ESF)
 

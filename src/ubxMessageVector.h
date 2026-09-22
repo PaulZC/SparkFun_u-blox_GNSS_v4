@@ -56,6 +56,7 @@
 #include "ubxMessages/ubxRXMPMP.h" // Variable-length: header + repeated 1-byte userData "blocks" - only Version 0x01's layout is modelled, see ubxRXMPMP.h
 #include "ubxMessages/ubxRXMQZSSL6.h" // Fixed-length: header + repeated 1-byte msgBytes "blocks", numCallbackCopies=UBX_RXM_QZSSL6_NUM_CHANNELS (2) - see ubxRXMQZSSL6.h
 #include "ubxMessages/ubxMONCOMMS.h"
+#include "ubxMessages/ubxMONRF.h" // Variable-length: header + repeated per-RF-block blocks, replaces the old getRFinformation() - see AGENTS.md "Adding the variable-length UBX messages"
 #include "ubxMessages/ubxMONHW.h"
 #include "ubxMessages/ubxMONHW2.h"
 #include "ubxMessages/ubxTIMTM2.h"
@@ -66,6 +67,7 @@
 #include "ubxMessages/ubxHNRATT.h"
 #include "ubxMessages/ubxHNRINS.h"
 #include "ubxMessages/ubxSECSIG.h" // Variable-length (Version 3 - see ubxSECSIG.h): header + repeated per-frequency blocks - see AGENTS.md "Adding the variable-length UBX messages"
+#include "ubxMessages/ubxSECUNIQID.h" // Fixed-shape: header + uniqueId modelled as repeated 1-byte "blocks" (5 or 6, version-dependent, derived from actual length like ESF-RAW), replaces the old getUniqueChipId()/getUniqueChipIdStr() - see ubxSECUNIQID.h
 #include "ubxMessages/ubxESFMEAS.h" // Variable-length: header + repeated per-measurement blocks + an optional footer, ring-buffered callback storage (numCallbackCopies=UBX_ESF_MEAS_CALLBACK_BUFFERS) - see AGENTS.md "Adding support for ESF-MEAS"
 #include "ubxMessages/ubxESFRAW.h" // Variable-length: NO header count field at all, block count derived purely from actual received length - see AGENTS.md "Adding support for ESF-RAW and ESF-STATUS"
 #include "ubxMessages/ubxESFSTATUS.h" // Variable-length: header + repeated per-sensor status blocks - see AGENTS.md "Adding support for ESF-RAW and ESF-STATUS"

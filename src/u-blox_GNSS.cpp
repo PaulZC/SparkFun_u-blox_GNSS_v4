@@ -5699,43 +5699,9 @@ bool DevUBLOXGNSS::setESFAutoAlignment(bool enable, uint8_t layer, uint16_t maxW
   return setVal8(UBLOX_CFG_SFIMU_AUTO_MNTALG_ENA, (uint8_t)enable, layer, maxWait);
 }
 
-// Get the RF information using UBX_MON_RF
-bool DevUBLOXGNSS::getRFinformation(UBX_MON_RF_data_t *data, uint16_t maxWait)
-{
-  if (data == nullptr) // Check if the user forgot to include the data pointer
-    return (false);    // Bail
-
-  packetCfg.cls = UBX_CLASS_MON;
-  packetCfg.id = UBX_MON_RF;
-  packetCfg.len = 0;
-  packetCfg.startingSpot = 0;
-
-  if (sendCommand(&packetCfg, maxWait) != SFE_UBLOX_STATUS_DATA_RECEIVED) // We are expecting data and an ACK
-    return (false);
-
-  // Extract the data
-  data->header.version = extractByte(&packetCfg, 0);
-  data->header.nBlocks = extractByte(&packetCfg, 1);
-
-  // Extract the RF information blocks
-  for (uint8_t block = 0; (block < data->header.nBlocks) && (block < UBX_MON_RF_MAX_BLOCKS); block++)
-  {
-    data->blocks[block].blockId = extractByte(&packetCfg, 4 + (block * 24));
-    data->blocks[block].flags.all = extractByte(&packetCfg, 5 + (block * 24));
-    data->blocks[block].antStatus = extractByte(&packetCfg, 6 + (block * 24));
-    data->blocks[block].antPower = extractByte(&packetCfg, 7 + (block * 24));
-    data->blocks[block].postStatus = extractLong(&packetCfg, 8 + (block * 24));
-    data->blocks[block].noisePerMS = extractInt(&packetCfg, 16 + (block * 24));
-    data->blocks[block].agcCnt = extractInt(&packetCfg, 18 + (block * 24));
-    data->blocks[block].jamInd = extractByte(&packetCfg, 20 + (block * 24));
-    data->blocks[block].ofsI = extractSignedChar(&packetCfg, 21 + (block * 24));
-    data->blocks[block].magI = extractByte(&packetCfg, 22 + (block * 24));
-    data->blocks[block].ofsQ = extractSignedChar(&packetCfg, 23 + (block * 24));
-    data->blocks[block].magQ = extractByte(&packetCfg, 24 + (block * 24));
-  }
-
-  return (true);
-}
+// ubxMONRF is now self-registered - see AGENTS.md "Adding the variable-length UBX messages".
+// getRFinformation() (the old poll-only, packetCfg/sendCommand()/extractByte() implementation)
+// has been removed - getMONRF() (below, next to getMONCOMMS()) replaces it.
 
 // Get the extended hardware status using UBX_MON_HW2
 bool DevUBLOXGNSS::getHW2status(UBX_MON_HW2_data_t *data, uint16_t maxWait)
@@ -6397,69 +6363,31 @@ uint8_t * DevUBLOXGNSS::parseSPARTN(uint8_t incoming, bool &valid, uint16_t &len
   return &spartn[0];
 }
 
-// Get the unique chip ID using UBX-SEC-UNIQID
-// The ID is five bytes on the F9 and M9 (version 1) but six bytes on the M10 (version 2)
-bool DevUBLOXGNSS::getUniqueChipId(UBX_SEC_UNIQID_data_t *data, uint16_t maxWait)
+// ubxSECUNIQID is now self-registered - see AGENTS.md "Adding the variable-length UBX messages".
+bool DevUBLOXGNSS::getSECUNIQID(uint16_t maxWait)
 {
-  if (data == nullptr) // Check if the user forgot to include the data pointer
-    return (false);    // Bail
-
-  packetCfg.cls = UBX_CLASS_SEC;
-  packetCfg.id = UBX_SEC_UNIQID;
-  packetCfg.len = 0;
-  packetCfg.startingSpot = 0;
-
-  if (sendCommand(&packetCfg, maxWait) != SFE_UBLOX_STATUS_DATA_RECEIVED) // We are expecting data and an ACK
-    return (false);
-
-  // Extract the data
-  data->version = extractByte(&packetCfg, 0);
-  for (uint8_t i = 0; i < 5; i++)
-    data->uniqueId[i] = extractByte(&packetCfg, i + 4);
-
-  // The ID is five bytes on the F9 and M9 (version 1) but six bytes on the M10 (version 2)
-  if ((data->version == 2) && (packetCfg.len == UBX_SEC_UNIQID_LEN_VERSION2))
-    data->uniqueId[5] = extractByte(&packetCfg, 9);
-  else
-    data->uniqueId[5] = 0;
-
-  return (true);
+  return getUBX(UBX_CLASS_SEC, UBX_SEC_UNIQID, maxWait);
 }
-// Get the unique chip ID as text
-const char *DevUBLOXGNSS::getUniqueChipIdStr(UBX_SEC_UNIQID_data_t *data, uint16_t maxWait)
+
+// Get the unique chip ID as a hex String, e.g. "0123456789AB" - see ubxSECUNIQID.h. Reads from
+// the live _storage populated by the most recent getSECUNIQID() (or getUBX("SEC","UNIQID")); does
+// not poll itself. uniqueId is modelled as 6 repeated 1-byte "blocks" (see ubxSECUNIQID.h), read
+// with getUbxMessageBlockField() - the same generic mechanism as every other variable-length
+// message's blocks.
+String DevUBLOXGNSS::getUniqueChipIdStr(void)
 {
-  static char uniqueId[13] = {'0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '0', '\0'};
-  bool valid = true;
-  bool provided = (data != nullptr);
+  ubxMessage *msg = ubxMessages.find(UBX_CLASS_SEC, UBX_SEC_UNIQID);
 
-  if (!provided)
+  String uniqueId;
+  char hexByte[3];
+  for (uint8_t i = 0; i < getUbxMessageBlockCount(msg); i++)
   {
-    data = new UBX_SEC_UNIQID_data_t;
-    valid = getUniqueChipId(data, maxWait);
+    ubxAnyType value = getUbxMessageBlockField(msg, i, "byte");
+    snprintf(hexByte, sizeof(hexByte), "%02X", (uint8_t)value.U1);
+    uniqueId += hexByte;
   }
 
-  if (valid)
-  {
-    for (uint8_t i = 0; (i < (data->version + 4)) && (i < 6); i++)
-    {
-      uint8_t nibble = data->uniqueId[i] >> 4;
-      if (nibble < 10)
-        uniqueId[(i * 2) + 0] = nibble + '0';
-      else
-        uniqueId[(i * 2) + 0] = nibble + 'A' - 10;
-      nibble = data->uniqueId[i] & 0x0F;
-      if (nibble < 10)
-        uniqueId[(i * 2) + 1] = nibble + '0';
-      else
-        uniqueId[(i * 2) + 1] = nibble + 'A' - 10;
-      uniqueId[(i * 2) + 2] = 0; // NULL-terminate
-    }
-  }
-
-  if (!provided)
-    delete data;
-
-  return ((const char *)uniqueId);
+  return uniqueId;
 }
 
 // CONFIGURATION INTERFACE (protocol v27 and above)
@@ -7463,6 +7391,14 @@ bool DevUBLOXGNSS::getRXMMEASX(uint16_t maxWait)
 bool DevUBLOXGNSS::getMONCOMMS(uint16_t maxWait)
 {
   return getUBX(UBX_CLASS_MON, UBX_MON_COMMS, maxWait);
+}
+
+// ubxMONRF is now self-registered - see AGENTS.md "Adding the variable-length UBX messages".
+// Replaces the old getRFinformation(UBX_MON_RF_data_t*, ...); read fields via
+// getUBXfield()/getUbxMessageBlockField() (with the "nBlocks" header field to bound the loop).
+bool DevUBLOXGNSS::getMONRF(uint16_t maxWait)
+{
+  return getUBX(UBX_CLASS_MON, UBX_MON_RF, maxWait);
 }
 
 // ***** ESF MEAS automatic support
