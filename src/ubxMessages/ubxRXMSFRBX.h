@@ -81,6 +81,14 @@ public:
     const ubxField ubxBlockFields[numBlockFields] = {
         {"dwrd", ubxDataType8bit(UBX_CFG_U4), 0, -1, -1}}; // Raw 32-bit data word - decode per GNSS/subframe downstream
 
+    /**
+     * @brief Construct a new ubxRXMSFRBX object and register it with the UBX message registry.
+     *
+     * UBX-RXM-SFRBX: Broadcast navigation data subframe. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxRXMSFRBX(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

@@ -43,6 +43,14 @@ public:
         {"stdAlt", nmeaDataTypeNumeric, 8},
     };
 
+    /**
+     * @brief Construct a new nmeaGST object and register it with the NMEA message registry.
+     *
+     * NMEA GST: GNSS Pseudo Range Error Statistics. Registers this message's identifier, field table, callback-copy count and
+     * per-port output-enable keys with the base nmeaMessage class via addNMEA(), making it
+     * discoverable by the generic NMEA dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     nmeaGST(void)
     {
         addNMEA(msgId, messageLength, numCallbackCopies, numFields,

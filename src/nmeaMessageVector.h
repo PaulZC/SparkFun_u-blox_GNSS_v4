@@ -35,17 +35,32 @@ class nmeaMessageVector : public SparkFun_UBLOX_GNSS::SfeDebugPrint
 public:
     std::vector<nmeaMessage *> nmeaMessageVectors;
 
+    /**
+     * @brief Construct the vector and populate it with one instance of every registered NMEA message.
+     *
+     * Asks nmeaMessageRegistry to build one instance of every message class that self-registered
+     * via nmeaRegisterMessage() in its own header.
+     */
     nmeaMessageVector(void)
     {
         nmeaMessageRegistry::get().buildAll(nmeaMessageVectors);
     }
 
+    /**
+     * @brief Destroy the vector, deleting every message object it owns.
+     */
     ~nmeaMessageVector(void)
     {
         for (auto msg : nmeaMessageVectors)
             delete msg;
     }
 
+    /**
+     * @brief Find the registered message object for a given NMEA message identifier.
+     *
+     * @param msgId The 3-character NMEA message identifier to look up (e.g. "GGA").
+     * @return Pointer to the matching nmeaMessage, or nullptr if no message is registered under that id.
+     */
     nmeaMessage *find(const char *msgId)
     {
         for (auto msg : nmeaMessageVectors)
@@ -57,11 +72,24 @@ public:
     }
 
     // Look up a registered message by its name.
+    /**
+     * @brief Find the registered message object by its name. Equivalent to find().
+     *
+     * @param msgId The 3-character NMEA message identifier to look up (e.g. "GGA").
+     * @return Pointer to the matching nmeaMessage, or nullptr if no message is registered under that id.
+     */
     nmeaMessage *findByName(const char *msgId)
     {
         return find(msgId);
     }
 
+    /**
+     * @brief Lazily allocate a registered message's raw payload storage.
+     *
+     * @param msgId The NMEA message identifier to look up.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered under msgId, or SFE_UBLOX_STATUS_MEM_ERR if the allocation failed.
+     */
     sfe_ublox_status_e initStorage(const char *msgId)
     {
         nmeaMessage *msg = find(msgId);
@@ -70,6 +98,14 @@ public:
         return (msg->initStorage() ? SFE_UBLOX_STATUS_SUCCESS : SFE_UBLOX_STATUS_MEM_ERR);
     }
 
+    /**
+     * @brief Get whether a registered message is set to be output periodically by the module.
+     *
+     * @param msgId The NMEA message identifier to look up.
+     * @param automatic Out parameter: filled in with the message's automatic-output flag.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered under msgId.
+     */
     sfe_ublox_status_e isAutomatic(const char *msgId, bool *automatic)
     {
         nmeaMessage *msg = find(msgId);
@@ -78,6 +114,14 @@ public:
         *automatic = msg->_automatic;
         return SFE_UBLOX_STATUS_SUCCESS;
     }
+    /**
+     * @brief Set whether a registered message is set to be output periodically by the module.
+     *
+     * @param msgId The NMEA message identifier to look up.
+     * @param automatic The new automatic-output flag value.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered under msgId.
+     */
     sfe_ublox_status_e setAutomatic(const char *msgId, bool automatic)
     {
         nmeaMessage *msg = find(msgId);
@@ -87,6 +131,17 @@ public:
         return SFE_UBLOX_STATUS_SUCCESS;
     }
 
+    /**
+     * @brief Get a registered message's implicit-update flag.
+     *
+     * true means the generic getNMEA()-style call itself parses newly-arrived data for this
+     * message; false means the caller must call checkUblox() itself first.
+     *
+     * @param msgId The NMEA message identifier to look up.
+     * @param implicitUpdateOut Out parameter: filled in with the message's implicit-update flag.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered under msgId.
+     */
     sfe_ublox_status_e implicitUpdate(const char *msgId, bool *implicitUpdateOut)
     {
         nmeaMessage *msg = find(msgId);
@@ -95,6 +150,14 @@ public:
         *implicitUpdateOut = msg->_implicitUpdate;
         return SFE_UBLOX_STATUS_SUCCESS;
     }
+    /**
+     * @brief Set a registered message's implicit-update flag.
+     *
+     * @param msgId The NMEA message identifier to look up.
+     * @param implicitUpdateIn The new implicit-update flag value.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered under msgId.
+     */
     sfe_ublox_status_e setImplicitUpdate(const char *msgId, bool implicitUpdateIn)
     {
         nmeaMessage *msg = find(msgId);
@@ -106,6 +169,14 @@ public:
 
     // A single bool per message - has fresh data arrived since the last time it was reported?
     // Not a per-field bitmask - see AGENTS.md "moduleQueried".
+    /**
+     * @brief Get whether fresh data has arrived for a registered message since it was last reported.
+     *
+     * @param msgId The NMEA message identifier to look up.
+     * @param queried Out parameter: filled in with the message's moduleQueried flag.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered under msgId.
+     */
     sfe_ublox_status_e moduleQueried(const char *msgId, bool *queried)
     {
         nmeaMessage *msg = find(msgId);
@@ -114,6 +185,14 @@ public:
         *queried = msg->_moduleQueried;
         return SFE_UBLOX_STATUS_SUCCESS;
     }
+    /**
+     * @brief Set whether fresh data has arrived for a registered message since it was last reported.
+     *
+     * @param msgId The NMEA message identifier to look up.
+     * @param queried The new moduleQueried flag value.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered under msgId.
+     */
     sfe_ublox_status_e setModuleQueried(const char *msgId, bool queried)
     {
         nmeaMessage *msg = find(msgId);
@@ -123,6 +202,14 @@ public:
         return SFE_UBLOX_STATUS_SUCCESS;
     }
 
+    /**
+     * @brief Get whether a registered message is set to be added to the file buffer (logNMEA()).
+     *
+     * @param msgId The NMEA message identifier to look up.
+     * @param adding Out parameter: filled in with the message's addToFileBuffer flag.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered under msgId.
+     */
     sfe_ublox_status_e getAddToFileBuffer(const char *msgId, bool *adding)
     {
         nmeaMessage *msg = find(msgId);
@@ -131,6 +218,14 @@ public:
         *adding = msg->_addToFileBuffer;
         return SFE_UBLOX_STATUS_SUCCESS;
     }
+    /**
+     * @brief Set whether a registered message is added to the file buffer (used by logNMEA()).
+     *
+     * @param msgId The NMEA message identifier to look up.
+     * @param adding The new addToFileBuffer flag value.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered under msgId.
+     */
     sfe_ublox_status_e setAddToFileBuffer(const char *msgId, bool adding)
     {
         nmeaMessage *msg = find(msgId);
@@ -140,6 +235,15 @@ public:
         return SFE_UBLOX_STATUS_SUCCESS;
     }
 
+    /**
+     * @brief Get a registered message's CFG-MSGOUT key for a given communication port.
+     *
+     * @param msgId The NMEA message identifier to look up.
+     * @param commType Which port's key to return (I2C, SPI, UART1, UART2).
+     * @param key Out parameter: filled in with the UBLOX_CFG_MSGOUT_* key.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered under msgId.
+     */
     sfe_ublox_status_e getMsgOutKey(const char *msgId, uint8_t commType, uint32_t *key)
     {
         nmeaMessage *msg = find(msgId);
@@ -149,6 +253,15 @@ public:
         return SFE_UBLOX_STATUS_SUCCESS;
     }
 
+    /**
+     * @brief Register (or clear) the user callback function for a registered message.
+     *
+     * @param msgId The NMEA message identifier to look up.
+     * @param callbackPtr Function to call once fresh data is waiting for this message, or
+     * nullptr to clear any previously-registered callback.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered under msgId.
+     */
     sfe_ublox_status_e setCallback(const char *msgId, void (*callbackPtr)(nmeaCallbackDataCommon_t *))
     {
         nmeaMessage *msg = find(msgId);
@@ -163,6 +276,20 @@ public:
     // DevUBLOXGNSS::process(), which this mirrors (including its ring-buffered callback write
     // side - see AGENTS.md "Adding support for NMEA GSV messages"). Kept working and consistent
     // with the live path rather than removed, in case a future caller wants a single entry point.
+    /**
+     * @brief Copy freshly-received sentence bytes into a registered message's storage.
+     *
+     * Mirrors the inline NMEA dispatch/ring-buffer logic in DevUBLOXGNSS::process() - see the
+     * comment above this function's definition for why it exists but isn't currently called
+     * from that live path.
+     *
+     * @param msgId The NMEA message identifier to look up.
+     * @param payload Pointer to the newly-received sentence bytes.
+     * @param len Number of bytes received (clamped to the message's _messageLength before
+     * being copied/stored).
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered under msgId, or SFE_UBLOX_STATUS_MEM_ERR if storage could not be allocated.
+     */
     sfe_ublox_status_e storePayload(const char *msgId, const uint8_t *payload, uint16_t len)
     {
         nmeaMessage *msg = find(msgId);
@@ -205,6 +332,16 @@ public:
     }
 
     // Look up one field of one message by name and fill in 'value'.
+    /**
+     * @brief Look up one named field of a registered message's live sentence.
+     *
+     * @param msgId The NMEA message identifier to look up.
+     * @param field Name of the field to extract.
+     * @param value Out parameter: filled in with the field's text if found.
+     * @return SFE_UBLOX_STATUS_SUCCESS if found, SFE_UBLOX_STATUS_INVALID_ARG if no message is
+     * registered under msgId or the field was not found, or SFE_UBLOX_STATUS_MEM_ERR if no data
+     * has arrived for this message yet (its _storage is still unallocated).
+     */
     sfe_ublox_status_e extractValue(const char *msgId, const char *field, String &value)
     {
         nmeaMessage *msg = find(msgId);

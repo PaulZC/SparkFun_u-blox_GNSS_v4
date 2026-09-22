@@ -99,6 +99,14 @@ public:
         {"centFreq", ubxDataType8bit(UBX_CFG_X4), 0, 0, 24}, // See the file header comment above re: tagging a 24-bit sub-field X4/U4, not U1
         {"jammed", ubxDataType8bit(UBX_CFG_L), 0, 24, 1}};
 
+    /**
+     * @brief Construct a new ubxSECSIG object and register it with the UBX message registry.
+     *
+     * UBX-SEC-SIG: Signal security information. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxSECSIG(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

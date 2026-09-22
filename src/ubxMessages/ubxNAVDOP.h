@@ -42,6 +42,14 @@ public:
         {"nDOP", ubxDataType8bit(UBX_CFG_U2), 14, -1, -1},
         {"eDOP", ubxDataType8bit(UBX_CFG_U2), 16, -1, -1}};
 
+    /**
+     * @brief Construct a new ubxNAVDOP object and register it with the UBX message registry.
+     *
+     * UBX-NAV-DOP: Dilution of precision. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxNAVDOP(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

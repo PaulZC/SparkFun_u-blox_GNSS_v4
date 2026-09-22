@@ -98,6 +98,14 @@ public:
         {"missingMeas", ubxDataType8bit(UBX_CFG_L), 3, 2, 1},  // Missing or time-misaligned measurements detected
         {"noisyMeas", ubxDataType8bit(UBX_CFG_L), 3, 3, 1}};   // High measurement noise-level detected
 
+    /**
+     * @brief Construct a new ubxESFSTATUS object and register it with the UBX message registry.
+     *
+     * UBX-ESF-STATUS: External sensor fusion status. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxESFSTATUS(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

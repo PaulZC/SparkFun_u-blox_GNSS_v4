@@ -90,6 +90,14 @@ public:
         {"dataType", ubxDataType8bit(UBX_CFG_U1), 0, 24, 8},  // 0 = no data; 1..255 = data type
         {"sTag", ubxDataType8bit(UBX_CFG_U4), 4, -1, -1}};    // Sensor time tag
 
+    /**
+     * @brief Construct a new ubxESFRAW object and register it with the UBX message registry.
+     *
+     * UBX-ESF-RAW: Raw sensor measurements. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxESFRAW(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

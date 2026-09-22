@@ -52,6 +52,14 @@ public:
         {"carrSoln", ubxDataType8bit(UBX_CFG_U1), 56, 3, 2},
         {"relPosHeadingValid", ubxDataType8bit(UBX_CFG_L), 56, 6, 1}};
 
+    /**
+     * @brief Construct a new ubxNAVDAHEADING object and register it with the UBX message registry.
+     *
+     * UBX-NAV-DAHEADING: Relative positioning information in the NED frame between antenna 1 and antenna 2 of the module. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxNAVDAHEADING(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

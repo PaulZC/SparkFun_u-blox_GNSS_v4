@@ -35,18 +35,72 @@ namespace SparkFun_UBLOX_GNSS
   class SfeDebugPrint
   {
   public:
+    /**
+     * @brief Print a debug message (no trailing newline), if debugging is enabled.
+     *
+     * A no-op unless _printDebug is true; further suppressed if _printLimitedDebug is true and
+     * 'important' is false - see enableDebugging()/enableLimitedDebugging() in u-blox_GNSS.cpp.
+     *
+     * @param message Null-terminated string to print.
+     * @param important If true, print even when limited debugging is active. Defaults to false.
+     */
     void debugPrint(const char *message, bool important = false);             // Safely print debug statements
+    /**
+     * @brief Print a debug value in decimal (no trailing newline), if debugging is enabled.
+     *
+     * @param value The value to print.
+     * @param important If true, print even when limited debugging is active. Defaults to false.
+     */
     void debugPrint(uint32_t value, bool important = false);                  // Safely print debug values
+    /**
+     * @brief Print a debug value in a given base (no trailing newline), if debugging is enabled.
+     *
+     * @param value The value to print.
+     * @param printBase Number base to print in (e.g. HEX, DEC).
+     * @param important If true, print even when limited debugging is active. Defaults to false.
+     */
     void debugPrint(uint32_t value, int printBase, bool important = false);   // Safely print debug values in a given base (e.g. HEX)
+    /**
+     * @brief Print a debug message followed by a newline, if debugging is enabled.
+     *
+     * @param message Null-terminated string to print.
+     * @param important If true, print even when limited debugging is active. Defaults to false.
+     */
     void debugPrintln(const char *message, bool important = false);           // Safely print debug statements
+    /**
+     * @brief Print a debug value in decimal followed by a newline, if debugging is enabled.
+     *
+     * @param value The value to print.
+     * @param important If true, print even when limited debugging is active. Defaults to false.
+     */
     void debugPrintln(uint32_t value, bool important = false);                // Safely print debug values
+    /**
+     * @brief Print a debug value in a given base followed by a newline, if debugging is enabled.
+     *
+     * @param value The value to print.
+     * @param printBase Number base to print in (e.g. HEX, DEC).
+     * @param important If true, print even when limited debugging is active. Defaults to false.
+     */
     void debugPrintln(uint32_t value, int printBase, bool important = false); // Safely print debug values in a given base (e.g. HEX)
+    /**
+     * @brief Print a blank debug line, if debugging is enabled and not in limited-debug mode.
+     */
     void debugPrintln(void);                                                  // Safely print a blank debug line
 
     // Copies debug state (which port to print to, and whether printing is enabled) from another
     // SfeDebugPrint object. Public - and taking the state rather than pulling it - because the
     // caller is normally DevUBLOXGNSS, reaching in from OUTSIDE to push its own state onto its
     // separately-inherited ubxMessages/nmeaMessages member objects. See the file comment above.
+    /**
+     * @brief Copy debug state (output stream and enabled flags) from another SfeDebugPrint.
+     *
+     * Lets DevUBLOXGNSS::enableDebugging()/disableDebugging() push its own state onto its
+     * separately-inherited ubxMessages/nmeaMessages member objects right after updating it, so
+     * all three stay in sync per-instance without any shared/static state - see the file-level
+     * comment above.
+     *
+     * @param other The SfeDebugPrint object whose debug state to copy.
+     */
     void copyDebugStateFrom(const SfeDebugPrint &other)
     {
       _debugSerial = other._debugSerial;

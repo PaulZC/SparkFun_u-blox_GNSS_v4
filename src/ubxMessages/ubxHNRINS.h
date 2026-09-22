@@ -50,6 +50,14 @@ public:
         {"yAccel", ubxDataType8bit(UBX_CFG_I4), 28, -1, -1},
         {"zAccel", ubxDataType8bit(UBX_CFG_I4), 32, -1, -1}};
 
+    /**
+     * @brief Construct a new ubxHNRINS object and register it with the UBX message registry.
+     *
+     * UBX-HNR-INS: High rate vehicle dynamics information. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxHNRINS(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

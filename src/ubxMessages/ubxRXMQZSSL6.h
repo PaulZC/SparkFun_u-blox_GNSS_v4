@@ -105,6 +105,14 @@ public:
     const ubxField ubxBlockFields[numBlockFields] = {
         {"msgBytes", ubxDataType8bit(UBX_CFG_U1), 0, -1, -1}}; // One raw QZSS L6 payload byte
 
+    /**
+     * @brief Construct a new ubxRXMQZSSL6 object and register it with the UBX message registry.
+     *
+     * UBX-RXM-QZSSL6: QZSS L6 data (NEO-D9C). Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxRXMQZSSL6(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

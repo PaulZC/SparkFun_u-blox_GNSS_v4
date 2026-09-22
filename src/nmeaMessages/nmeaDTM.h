@@ -46,6 +46,14 @@ public:
         {"refDatum", nmeaDataTypeString, 8},
     };
 
+    /**
+     * @brief Construct a new nmeaDTM object and register it with the NMEA message registry.
+     *
+     * NMEA DTM: Datum Reference. Registers this message's identifier, field table, callback-copy count and
+     * per-port output-enable keys with the base nmeaMessage class via addNMEA(), making it
+     * discoverable by the generic NMEA dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     nmeaDTM(void)
     {
         addNMEA(msgId, messageLength, numCallbackCopies, numFields,

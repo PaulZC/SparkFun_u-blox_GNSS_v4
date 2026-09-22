@@ -51,6 +51,14 @@ public:
         {"navStatus", nmeaDataTypeChar, 13},
     };
 
+    /**
+     * @brief Construct a new nmeaRMC object and register it with the NMEA message registry.
+     *
+     * NMEA RMC: Recommended minimum data. Registers this message's identifier, field table, callback-copy count and
+     * per-port output-enable keys with the base nmeaMessage class via addNMEA(), making it
+     * discoverable by the generic NMEA dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     nmeaRMC(void)
     {
         addNMEA(msgId, messageLength, numCallbackCopies, numFields,

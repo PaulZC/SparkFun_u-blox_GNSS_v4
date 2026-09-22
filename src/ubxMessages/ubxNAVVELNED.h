@@ -43,6 +43,14 @@ public:
         {"sAcc", ubxDataType8bit(UBX_CFG_U4), 28, -1, -1},
         {"cAcc", ubxDataType8bit(UBX_CFG_U4), 32, -1, -1}};
 
+    /**
+     * @brief Construct a new ubxNAVVELNED object and register it with the UBX message registry.
+     *
+     * UBX-NAV-VELNED: Velocity solution in NED. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxNAVVELNED(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

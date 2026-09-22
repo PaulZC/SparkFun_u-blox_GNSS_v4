@@ -46,8 +46,22 @@ public:
         const uint8_t fieldNumber;  // Field number, starting from the Message ID
     } nmeaField;
 
+    /**
+     * @brief Construct a new, unregistered nmeaMessage object.
+     *
+     * Leaves every field at its default (no msgId, no field table, no storage allocated). A
+     * subclass calls addNMEA() from its own constructor to actually register its identity and
+     * metadata - see addNMEA() below.
+     */
     nmeaMessage(void) {}
 
+    /**
+     * @brief Destroy this nmeaMessage, freeing any lazily-allocated storage.
+     *
+     * Frees _storage and _callbackStorage if they were ever allocated (via initStorage() /
+     * initCallbackStorage()). Safe to call even if neither was ever allocated, since each is
+     * nullptr until first use.
+     */
     virtual ~nmeaMessage(void)
     {
         if (_storage != nullptr)
@@ -57,6 +71,12 @@ public:
     }
 
     // Does this object represent this message?
+    /**
+     * @brief Check whether this message object represents the given NMEA message identifier.
+     *
+     * @param msgId The 3-character NMEA message identifier to test against (e.g. "GGA").
+     * @return true if this object's registered _msgId matches, false otherwise.
+     */
     bool amI(const char *msgId) const
     {
         return (strcmp(_msgId, msgId) == 0);
@@ -65,6 +85,17 @@ public:
     // Lazily allocate _storage - only when the message is actually used. This is how "delete the
     // header, save the RAM" (AGENTS.md) is meant to work for a message that is never instantiated
     // at all - see nmeaMessageVector.h.
+    /**
+     * @brief Lazily allocate this message's raw payload storage (_storage), if not already done.
+     *
+     * Allocates and zero-fills a buffer of _messageLength bytes on first call; subsequent calls
+     * are a no-op. This is what lets a message that is never instantiated/used avoid consuming
+     * any RAM for its payload - see the class-level comment above for the "delete the header,
+     * save the RAM" design intent.
+     *
+     * @return true if _storage is non-null after the call (already allocated, or successfully
+     * allocated now); false if the allocation failed.
+     */
     bool initStorage(void)
     {
         if (_storage == nullptr)
@@ -76,6 +107,15 @@ public:
         return (_storage != nullptr);
     }
 
+    /**
+     * @brief Lazily allocate this message's callback ring-buffer storage (_callbackStorage), if
+     * not already done.
+     *
+     * Allocates _numCallbackCopies slots of _messageLength bytes each, the first time a
+     * callback is registered for this message. Subsequent calls are a no-op.
+     *
+     * @return true if _callbackStorage is non-null after the call, false if the allocation failed.
+     */
     bool initCallbackStorage(void)
     {
         if (_callbackStorage == nullptr)
@@ -87,6 +127,12 @@ public:
         return (_callbackStorage != nullptr);
     }
 
+    /**
+     * @brief Get this message's CFG-MSGOUT key for the given communication port.
+     *
+     * @param commType Index into _msgOutKeys - which port's key to return (I2C, SPI, UART1, UART2).
+     * @return The UBLOX_CFG_MSGOUT_* configuration key used to enable/disable this message on that port.
+     */
     uint32_t getMsgOutKey(uint8_t commType) const
     {
         return _msgOutKeys[commType];
@@ -105,6 +151,30 @@ public:
     // a block-field lookup reads; it's ignored unless 'fieldsOverride' is given. Every existing
     // caller omits all three and gets exactly today's behavior. See AGENTS.md "Adding support for
     // NMEA GSV messages".
+    /**
+     * @brief Look up one field of this message, by name, in a given NMEA sentence buffer.
+     *
+     * Walks the comma-delimited sentence in 'buffer' to find field 'fieldName' and returns its
+     * text, converted according to that field's nmeaDataType (see nmeaFieldFormats_t above).
+     * Shared core used both for a live/polled read (from this object's own _storage) and for a
+     * callback read (from _callbackStorage) - see getNmeaMessageField() and
+     * getNmeaMessageBlockField()/getNmeaMessageBlockFieldCallback() in u-blox_GNSS.cpp.
+     *
+     * @param buffer The NMEA sentence bytes to search (this message's _storage, or its
+     * _callbackStorage), which must start with '$'.
+     * @param fieldName Name of the field to find, matched against each entry's fieldName.
+     * @param value Out parameter: filled in with the field's text (converted per its data
+     * type), or cleared to an empty String on failure.
+     * @param fieldsOverride Optional field table to search instead of this object's own
+     * _fields - used to search a repeated block's own field table (see _blockFields, e.g. NMEA
+     * GSV's per-satellite blocks). Defaults to nullptr (search _fields).
+     * @param numFieldsOverride Number of entries in 'fieldsOverride'; ignored when
+     * 'fieldsOverride' is nullptr.
+     * @param blockIndex Which repeated block a block-field lookup should read; ignored unless
+     * 'fieldsOverride' is given. Defaults to 0.
+     * @return true if 'fieldName' was found (and *value filled in); false if 'buffer' is null,
+     * malformed, too short, 'blockIndex' is out of range, or the field name was not found.
+     */
     bool extractFieldFrom(const uint8_t *buffer, const char *fieldName, String &value,
                            const void *fieldsOverride = nullptr, uint8_t numFieldsOverride = 0,
                            uint16_t blockIndex = 0) const
@@ -346,6 +416,29 @@ public:
     // e.g. GSV's per-satellite blocks. They default to nullptr/0, so every existing message
     // subclass (which passes exactly today's 6 arguments) is unaffected. See AGENTS.md "Adding
     // support for NMEA GSV messages".
+    /**
+     * @brief Register this message's identity, field table and metadata with the base class.
+     *
+     * Called once, from the subclass's own constructor, to populate every _* member below with
+     * the subclass's message identifier, field table(s) and configuration keys, and to reset
+     * all storage pointers and callback bookkeeping to their initial "nothing allocated yet"
+     * state.
+     *
+     * @param msgId The 3-character NMEA message identifier (e.g. "GGA").
+     * @param messageLength Maximum message length in bytes (an actual received sentence may be shorter).
+     * @param numCallbackCopies Number of ring-buffer slots to allocate for callback storage.
+     * @param numFields Number of entries in 'nmeaFields' (header + footer fields only - excludes 'numBlockFields').
+     * @param nmeaFields Pointer to this message's own, permanently-lived field table.
+     * @param msgOutKeys Four UBLOX_CFG_MSGOUT_* keys (I2C, SPI, UART1, UART2) used to enable/disable
+     * this message's automatic output.
+     * @param blockFields Optional field table describing one repeated block, for a
+     * variable-length message (e.g. NMEA GSV's per-satellite blocks). Defaults to nullptr (no
+     * repeated blocks).
+     * @param numBlockFields Number of entries in 'blockFields'. Defaults to 0.
+     * @param numHeaderFields Number of header fields before the first repeated block (also the
+     * field-table position of the first footer field). Defaults to 0.
+     * @param maxNumBlocks Upper bound on the number of repeated blocks. Defaults to 0.
+     */
     void addNMEA(const char *msgId, uint8_t messageLength, uint8_t numCallbackCopies, uint8_t numFields,
                 const void *nmeaFields, const uint32_t *msgOutKeys,
                 const void *blockFields = nullptr, uint8_t numBlockFields = 0,

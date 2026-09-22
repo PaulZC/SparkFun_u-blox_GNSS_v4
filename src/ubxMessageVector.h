@@ -83,6 +83,13 @@ class ubxMessageVector : public SparkFun_UBLOX_GNSS::SfeDebugPrint
 public:
     std::vector<ubxMessage *> ubxMessageVectors;
 
+    /**
+     * @brief Construct the vector and populate it with one instance of every registered message.
+     *
+     * Asks ubxMessageRegistry to build one instance of every message class that self-registered
+     * via ubxRegisterMessage() in its own header - see the class-level comment above and
+     * AGENTS.md "Message Class self-registration".
+     */
     ubxMessageVector(void)
     {
         // Each header included above (e.g. ubxNAVPVT.h) self-registers a builder for its
@@ -93,12 +100,23 @@ public:
         ubxMessageRegistry::get().buildAll(ubxMessageVectors);
     }
 
+    /**
+     * @brief Destroy the vector, deleting every message object it owns.
+     */
     ~ubxMessageVector(void)
     {
         for (auto msg : ubxMessageVectors)
             delete msg;
     }
 
+    /**
+     * @brief Find the registered message object for a given UBX Class/ID.
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @return Pointer to the matching ubxMessage, or nullptr if no message is registered for
+     * that Class/ID.
+     */
     ubxMessage *find(uint8_t Class, uint8_t ID)
     {
         for (auto msg : ubxMessageVectors)
@@ -113,6 +131,14 @@ public:
     // than its numeric Class/ID - backs DevUBLOXGNSS::setAutoCallbackPtr(), which takes names
     // because that's what a user calling it from a sketch has to hand, per AGENTS.md
     // "setAutoCallbackPtr" and CallbackExample1_NAVHPPOSLLH.ino.
+    /**
+     * @brief Find the registered message object by its human-readable class/id name.
+     *
+     * @param classStr Class mnemonic to match (e.g. "NAV").
+     * @param idStr Message mnemonic to match (e.g. "HPPOSLLH").
+     * @return Pointer to the matching ubxMessage, or nullptr if no message is registered under
+     * that name pair.
+     */
     ubxMessage *findByName(const char *classStr, const char *idStr)
     {
         for (auto msg : ubxMessageVectors)
@@ -123,6 +149,14 @@ public:
         return nullptr;
     }
 
+    /**
+     * @brief Lazily allocate a registered message's raw payload storage.
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered for Class/ID, or SFE_UBLOX_STATUS_MEM_ERR if the allocation failed.
+     */
     sfe_ublox_status_e initStorage(uint8_t Class, uint8_t ID)
     {
         ubxMessage *msg = find(Class, ID);
@@ -131,6 +165,15 @@ public:
         return (msg->initStorage() ? SFE_UBLOX_STATUS_SUCCESS : SFE_UBLOX_STATUS_MEM_ERR);
     }
 
+    /**
+     * @brief Get whether a registered message is set to be output periodically by the module.
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @param automatic Out parameter: filled in with the message's automatic-output flag.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered for Class/ID.
+     */
     sfe_ublox_status_e isAutomatic(uint8_t Class, uint8_t ID, bool *automatic)
     {
         ubxMessage *msg = find(Class, ID);
@@ -139,6 +182,15 @@ public:
         *automatic = msg->_automatic;
         return SFE_UBLOX_STATUS_SUCCESS;
     }
+    /**
+     * @brief Set whether a registered message is set to be output periodically by the module.
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @param automatic The new automatic-output flag value.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered for Class/ID.
+     */
     sfe_ublox_status_e setAutomatic(uint8_t Class, uint8_t ID, bool automatic)
     {
         ubxMessage *msg = find(Class, ID);
@@ -148,6 +200,18 @@ public:
         return SFE_UBLOX_STATUS_SUCCESS;
     }
 
+    /**
+     * @brief Get a registered message's implicit-update flag.
+     *
+     * true means the generic getUBX()-style call itself parses newly-arrived data for this
+     * message; false means the caller must call checkUblox() itself first.
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @param implicitUpdateOut Out parameter: filled in with the message's implicit-update flag.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered for Class/ID.
+     */
     sfe_ublox_status_e implicitUpdate(uint8_t Class, uint8_t ID, bool *implicitUpdateOut)
     {
         ubxMessage *msg = find(Class, ID);
@@ -156,6 +220,15 @@ public:
         *implicitUpdateOut = msg->_implicitUpdate;
         return SFE_UBLOX_STATUS_SUCCESS;
     }
+    /**
+     * @brief Set a registered message's implicit-update flag.
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @param implicitUpdateIn The new implicit-update flag value.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered for Class/ID.
+     */
     sfe_ublox_status_e setImplicitUpdate(uint8_t Class, uint8_t ID, bool implicitUpdateIn)
     {
         ubxMessage *msg = find(Class, ID);
@@ -167,6 +240,15 @@ public:
 
     // A single bool per message - has fresh data arrived since the last time it was reported?
     // Not a per-field bitmask - see AGENTS.md "moduleQueried".
+    /**
+     * @brief Get whether fresh data has arrived for a registered message since it was last reported.
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @param queried Out parameter: filled in with the message's moduleQueried flag.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered for Class/ID.
+     */
     sfe_ublox_status_e moduleQueried(uint8_t Class, uint8_t ID, bool *queried)
     {
         ubxMessage *msg = find(Class, ID);
@@ -175,6 +257,15 @@ public:
         *queried = msg->_moduleQueried;
         return SFE_UBLOX_STATUS_SUCCESS;
     }
+    /**
+     * @brief Set whether fresh data has arrived for a registered message since it was last reported.
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @param queried The new moduleQueried flag value.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered for Class/ID.
+     */
     sfe_ublox_status_e setModuleQueried(uint8_t Class, uint8_t ID, bool queried)
     {
         ubxMessage *msg = find(Class, ID);
@@ -184,6 +275,15 @@ public:
         return SFE_UBLOX_STATUS_SUCCESS;
     }
 
+    /**
+     * @brief Get whether a registered message is set to be added to the file buffer (logUBX()).
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @param adding Out parameter: filled in with the message's addToFileBuffer flag.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered for Class/ID.
+     */
     sfe_ublox_status_e getAddToFileBuffer(uint8_t Class, uint8_t ID, bool *adding)
     {
         ubxMessage *msg = find(Class, ID);
@@ -192,6 +292,15 @@ public:
         *adding = msg->_addToFileBuffer;
         return SFE_UBLOX_STATUS_SUCCESS;
     }
+    /**
+     * @brief Set whether a registered message is added to the file buffer (used by logUBX()).
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @param adding The new addToFileBuffer flag value.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered for Class/ID.
+     */
     sfe_ublox_status_e setAddToFileBuffer(uint8_t Class, uint8_t ID, bool adding)
     {
         ubxMessage *msg = find(Class, ID);
@@ -201,6 +310,16 @@ public:
         return SFE_UBLOX_STATUS_SUCCESS;
     }
 
+    /**
+     * @brief Get a registered message's CFG-MSGOUT key for a given communication port.
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @param commType Which port's key to return (I2C, SPI, UART1, UART2).
+     * @param key Out parameter: filled in with the UBLOX_CFG_MSGOUT_* key.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered for Class/ID.
+     */
     sfe_ublox_status_e getMsgOutKey(uint8_t Class, uint8_t ID, uint8_t commType, uint32_t *key)
     {
         ubxMessage *msg = find(Class, ID);
@@ -210,6 +329,16 @@ public:
         return SFE_UBLOX_STATUS_SUCCESS;
     }
 
+    /**
+     * @brief Register (or clear) the user callback function for a registered message.
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @param callbackPtr Function to call once fresh data is waiting for this message, or
+     * nullptr to clear any previously-registered callback.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered for Class/ID.
+     */
     sfe_ublox_status_e setCallback(uint8_t Class, uint8_t ID, void (*callbackPtr)(ubxCallbackDataCommon_t *))
     {
         ubxMessage *msg = find(Class, ID);
@@ -227,6 +356,25 @@ public:
     // (its one call site, processUBXpacket(), has them straight from msg->checksumA/checksumB) -
     // needed to synthesize the complete raw UBX frame for _callbackRawFrame - see AGENTS.md
     // "Adding support for ESF-MEAS" and ubxMessage::writeCallbackRawFrame().
+    /**
+     * @brief Copy freshly-received payload bytes into a registered message's storage.
+     *
+     * Copies into the message's live _storage (marking it fresh via _moduleQueried), and, if a
+     * callback is registered, also freezes a copy into the message's separate ring-buffered
+     * _callbackStorage - see the longer design note above this function's definition for how
+     * the ring buffer is filled and what happens when it is full.
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @param payload Pointer to the newly-received payload bytes.
+     * @param len Number of payload bytes received (clamped to the message's _messageLength
+     * before being copied/stored).
+     * @param checksumA First UBX checksum byte (CK_A) of the received frame, needed to
+     * synthesize a complete raw frame for the callback path.
+     * @param checksumB Second UBX checksum byte (CK_B) of the received frame.
+     * @return SFE_UBLOX_STATUS_SUCCESS on success, SFE_UBLOX_STATUS_INVALID_ARG if no message
+     * is registered for Class/ID, or SFE_UBLOX_STATUS_MEM_ERR if storage could not be allocated.
+     */
     sfe_ublox_status_e storePayload(uint8_t Class, uint8_t ID, const uint8_t *payload, uint16_t len, uint8_t checksumA, uint8_t checksumB)
     {
         ubxMessage *msg = find(Class, ID);
@@ -297,6 +445,17 @@ public:
     // DevUBLOXGNSS::getUBXfield() in u-blox_GNSS.cpp. The actual field-table walk and byte/bit
     // extraction now live once, on ubxMessage itself (extractFieldFrom()), so the same code also
     // backs the callback read path (getUbxMessageField()) - see ubxMessage.h.
+    /**
+     * @brief Look up one named field of a registered message's live payload.
+     *
+     * @param Class The UBX message class to look up.
+     * @param ID The UBX message ID (within Class) to look up.
+     * @param field Name of the field to extract.
+     * @param value Out parameter: filled in with the field's tagged value if found.
+     * @return SFE_UBLOX_STATUS_SUCCESS if found, SFE_UBLOX_STATUS_INVALID_ARG if no message is
+     * registered for Class/ID or the field was not found, or SFE_UBLOX_STATUS_MEM_ERR if no
+     * data has arrived for this message yet (its _storage is still unallocated).
+     */
     sfe_ublox_status_e extractValue(uint8_t Class, uint8_t ID, const char *field, ubxAnyType *value)
     {
         ubxMessage *msg = find(Class, ID);

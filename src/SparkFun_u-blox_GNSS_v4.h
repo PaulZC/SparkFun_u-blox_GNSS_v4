@@ -50,6 +50,9 @@
 class SFE_UBLOX_GNSS : public DevUBLOXGNSS
 {
 public:
+  /**
+   * @brief Construct an SFE_UBLOX_GNSS object configured for I2C communication.
+   */
   SFE_UBLOX_GNSS() { _commType = COMM_TYPE_I2C; }
 
   ///////////////////////////////////////////////////////////////////////
@@ -74,6 +77,16 @@ public:
   //
   // Version 1:
   // User skips passing in an I2C object which then defaults to Wire.
+  /**
+   * @brief Initialize I2C communication with the GNSS module using the default Wire port.
+   *
+   * Must be called before any other method that interacts with the device.
+   *
+   * @param deviceAddress I2C address of the module. Defaults to kUBLOXGNSSDefaultAddress.
+   * @param maxWait Timeout in milliseconds for module communication. Defaults to kUBLOXGNSSDefaultMaxWait.
+   * @param assumeSuccess If true, skip waiting for "signs of life" and assume the module is present. Defaults to false.
+   * @return true if signs of life were seen (or assumeSuccess is true), false on startup failure.
+   */
   bool begin(uint8_t deviceAddress = kUBLOXGNSSDefaultAddress, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait, bool assumeSuccess = false)
   {
     // Setup  I2C object and pass into the superclass
@@ -88,6 +101,17 @@ public:
 
   // Version 2:
   //  User passes in an I2C object and an address (optional).
+  /**
+   * @brief Initialize I2C communication with the GNSS module using a caller-supplied Wire port.
+   *
+   * Must be called before any other method that interacts with the device.
+   *
+   * @param wirePort The TwoWire (Wire) instance to use.
+   * @param deviceAddress I2C address of the module. Defaults to kUBLOXGNSSDefaultAddress.
+   * @param maxWait Timeout in milliseconds for module communication. Defaults to kUBLOXGNSSDefaultMaxWait.
+   * @param assumeSuccess If true, skip waiting for "signs of life" and assume the module is present. Defaults to false.
+   * @return true if signs of life were seen (or assumeSuccess is true), false on startup failure.
+   */
   bool begin(TwoWire &wirePort, uint8_t deviceAddress = kUBLOXGNSSDefaultAddress, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait, bool assumeSuccess = false)
   {
     // Setup  I2C object and pass into the superclass
@@ -108,6 +132,9 @@ private:
 class SFE_UBLOX_GNSS_SPI : public DevUBLOXGNSS
 {
 public:
+  /**
+   * @brief Construct an SFE_UBLOX_GNSS_SPI object configured for SPI communication.
+   */
   SFE_UBLOX_GNSS_SPI() { _commType = COMM_TYPE_SPI; }
 
   ///////////////////////////////////////////////////////////////////////
@@ -133,6 +160,16 @@ public:
   // Version 1:
   // User skips passing in an SPI object which then defaults to SPI.
 
+  /**
+   * @brief Initialize SPI communication with the GNSS module using the default SPI port and settings.
+   *
+   * Must be called before any other method that interacts with the device.
+   *
+   * @param cs The chip-select pin to drive for this module (required).
+   * @param maxWait Timeout in milliseconds for module communication. Defaults to kUBLOXGNSSDefaultMaxWait.
+   * @param assumeSuccess If true, skip waiting for "signs of life" and assume the module is present. Defaults to false.
+   * @return true if signs of life were seen (or assumeSuccess is true), false on startup failure.
+   */
   bool begin(uint8_t cs, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait, bool assumeSuccess = false)
   {
     // Setup a SPI object and pass into the superclass
@@ -148,6 +185,18 @@ public:
 
   // Version 2:
   // User passes in an SPI object and SPISettings (optional).
+  /**
+   * @brief Initialize SPI communication using a caller-supplied SPI port and transaction settings.
+   *
+   * Must be called before any other method that interacts with the device.
+   *
+   * @param spiPort The SPIClass instance to use.
+   * @param cs The chip-select pin to drive for this module (required).
+   * @param ismSettings SPISettings (clock, bit order, mode) applied on every transaction.
+   * @param maxWait Timeout in milliseconds for module communication. Defaults to kUBLOXGNSSDefaultMaxWait.
+   * @param assumeSuccess If true, skip waiting for "signs of life" and assume the module is present. Defaults to false.
+   * @return true if signs of life were seen (or assumeSuccess is true), false on startup failure.
+   */
   bool begin(SPIClass &spiPort, uint8_t cs, SPISettings ismSettings, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait, bool assumeSuccess = false)
   {
     // Setup a SPI object and pass into the superclass
@@ -162,6 +211,18 @@ public:
 
   // Version 3:
   // User passes in an SPI object and SPI speed (optional).
+  /**
+   * @brief Initialize SPI communication using a caller-supplied SPI port and clock speed.
+   *
+   * Must be called before any other method that interacts with the device.
+   *
+   * @param spiPort The SPIClass instance to use.
+   * @param cs The chip-select pin to drive for this module (required).
+   * @param spiSpeed SPI clock speed in Hz.
+   * @param maxWait Timeout in milliseconds for module communication. Defaults to kUBLOXGNSSDefaultMaxWait.
+   * @param assumeSuccess If true, skip waiting for "signs of life" and assume the module is present. Defaults to false.
+   * @return true if signs of life were seen (or assumeSuccess is true), false on startup failure.
+   */
   bool begin(SPIClass &spiPort, uint8_t cs, uint32_t spiSpeed, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait, bool assumeSuccess = false)
   {
     // Setup a SPI object and pass into the superclass
@@ -182,6 +243,9 @@ private:
 class SFE_UBLOX_GNSS_SERIAL : public DevUBLOXGNSS
 {
 public:
+  /**
+   * @brief Construct an SFE_UBLOX_GNSS_SERIAL object configured for Serial (UART) communication.
+   */
   SFE_UBLOX_GNSS_SERIAL() { _commType = COMM_TYPE_SERIAL; }
 
   ///////////////////////////////////////////////////////////////////////
@@ -201,6 +265,16 @@ public:
   //  serialPort  The Serial Stream
   //  retval      true on success, false on startup failure
   //
+  /**
+   * @brief Initialize Serial communication with the GNSS module using a caller-supplied Stream.
+   *
+   * Must be called before any other method that interacts with the device.
+   *
+   * @param serialPort The Stream (e.g. a HardwareSerial/SoftwareSerial) to use.
+   * @param maxWait Timeout in milliseconds for module communication. Defaults to kUBLOXGNSSDefaultMaxWait.
+   * @param assumeSuccess If true, skip waiting for "signs of life" and assume the module is present. Defaults to false.
+   * @return true if signs of life were seen (or assumeSuccess is true), false on startup failure.
+   */
   bool begin(Stream &serialPort, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait, bool assumeSuccess = false)
   {
     // Setup Serial object and pass into the superclass
@@ -221,8 +295,22 @@ private:
 class SFE_UBLOX_GNSS_SUPER : public DevUBLOXGNSS // A Super Class - all three in one
 {
 public:
+  /**
+   * @brief Construct an SFE_UBLOX_GNSS_SUPER object. Communication bus is chosen by which begin() overload is called.
+   */
   SFE_UBLOX_GNSS_SUPER(){};
 
+  /**
+   * @brief Initialize I2C communication with the GNSS module using the default Wire port.
+   *
+   * Selects the I2C bus for this instance. Must be called before any other method that
+   * interacts with the device.
+   *
+   * @param deviceAddress I2C address of the module. Defaults to kUBLOXGNSSDefaultAddress.
+   * @param maxWait Timeout in milliseconds for module communication. Defaults to kUBLOXGNSSDefaultMaxWait.
+   * @param assumeSuccess If true, skip waiting for "signs of life" and assume the module is present. Defaults to false.
+   * @return true if signs of life were seen (or assumeSuccess is true), false on startup failure.
+   */
   bool begin(uint8_t deviceAddress = kUBLOXGNSSDefaultAddress, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait, bool assumeSuccess = false)
   {
      _commType = COMM_TYPE_I2C;
@@ -237,6 +325,18 @@ public:
     return this->DevUBLOXGNSS::init(maxWait, assumeSuccess);
   }
 
+  /**
+   * @brief Initialize I2C communication with the GNSS module using a caller-supplied Wire port.
+   *
+   * Selects the I2C bus for this instance. Must be called before any other method that
+   * interacts with the device.
+   *
+   * @param wirePort The TwoWire (Wire) instance to use.
+   * @param deviceAddress I2C address of the module. Defaults to kUBLOXGNSSDefaultAddress.
+   * @param maxWait Timeout in milliseconds for module communication. Defaults to kUBLOXGNSSDefaultMaxWait.
+   * @param assumeSuccess If true, skip waiting for "signs of life" and assume the module is present. Defaults to false.
+   * @return true if signs of life were seen (or assumeSuccess is true), false on startup failure.
+   */
   bool begin(TwoWire &wirePort, uint8_t deviceAddress = kUBLOXGNSSDefaultAddress, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait, bool assumeSuccess = false)
   {
      _commType = COMM_TYPE_I2C;
@@ -251,6 +351,19 @@ public:
     return this->DevUBLOXGNSS::init(maxWait, assumeSuccess);
   }
 
+  /**
+   * @brief Initialize SPI communication using a caller-supplied SPI port and transaction settings.
+   *
+   * Selects the SPI bus for this instance. Must be called before any other method that
+   * interacts with the device.
+   *
+   * @param spiPort The SPIClass instance to use.
+   * @param cs The chip-select pin to drive for this module (required).
+   * @param ismSettings SPISettings (clock, bit order, mode) applied on every transaction.
+   * @param maxWait Timeout in milliseconds for module communication. Defaults to kUBLOXGNSSDefaultMaxWait.
+   * @param assumeSuccess If true, skip waiting for "signs of life" and assume the module is present. Defaults to false.
+   * @return true if signs of life were seen (or assumeSuccess is true), false on startup failure.
+   */
   bool begin(SPIClass &spiPort, uint8_t cs, SPISettings ismSettings, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait, bool assumeSuccess = false)
   {
      _commType = COMM_TYPE_SPI;
@@ -265,6 +378,19 @@ public:
     return this->DevUBLOXGNSS::init(maxWait, assumeSuccess);
   }
 
+  /**
+   * @brief Initialize SPI communication using a caller-supplied SPI port and clock speed.
+   *
+   * Selects the SPI bus for this instance. Must be called before any other method that
+   * interacts with the device.
+   *
+   * @param spiPort The SPIClass instance to use.
+   * @param cs The chip-select pin to drive for this module (required).
+   * @param spiSpeed SPI clock speed in Hz. Defaults to 4 MHz.
+   * @param maxWait Timeout in milliseconds for module communication. Defaults to kUBLOXGNSSDefaultMaxWait.
+   * @param assumeSuccess If true, skip waiting for "signs of life" and assume the module is present. Defaults to false.
+   * @return true if signs of life were seen (or assumeSuccess is true), false on startup failure.
+   */
   bool begin(SPIClass &spiPort, uint8_t cs, uint32_t spiSpeed = 4000000, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait, bool assumeSuccess = false)
   {
      _commType = COMM_TYPE_SPI;
@@ -279,6 +405,17 @@ public:
     return this->DevUBLOXGNSS::init(maxWait, assumeSuccess);
   }
 
+  /**
+   * @brief Initialize Serial communication with the GNSS module using a caller-supplied Stream.
+   *
+   * Selects the Serial bus for this instance. Must be called before any other method that
+   * interacts with the device.
+   *
+   * @param serialPort The Stream (e.g. a HardwareSerial/SoftwareSerial) to use.
+   * @param maxWait Timeout in milliseconds for module communication. Defaults to kUBLOXGNSSDefaultMaxWait.
+   * @param assumeSuccess If true, skip waiting for "signs of life" and assume the module is present. Defaults to false.
+   * @return true if signs of life were seen (or assumeSuccess is true), false on startup failure.
+   */
   bool begin(Stream &serialPort, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait, bool assumeSuccess = false)
   {
      _commType = COMM_TYPE_SERIAL;

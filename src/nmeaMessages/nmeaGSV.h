@@ -66,6 +66,14 @@ public:
         {"cno", nmeaDataTypeNumeric, 3},
     };
 
+    /**
+     * @brief Construct a new nmeaGSV object and register it with the NMEA message registry.
+     *
+     * NMEA GSV: GNSS Satellites in View. Registers this message's identifier, field table, callback-copy count and
+     * per-port output-enable keys with the base nmeaMessage class via addNMEA(), making it
+     * discoverable by the generic NMEA dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     nmeaGSV(void)
     {
         addNMEA(msgId, messageLength, numCallbackCopies, numFields,

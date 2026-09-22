@@ -42,6 +42,14 @@ public:
         {"accPitch", ubxDataType8bit(UBX_CFG_U4), 24, -1, -1},
         {"accHeading", ubxDataType8bit(UBX_CFG_U4), 28, -1, -1}};
 
+    /**
+     * @brief Construct a new ubxNAVATT object and register it with the UBX message registry.
+     *
+     * UBX-NAV-ATT: Vehicle attitude solution. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxNAVATT(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

@@ -92,6 +92,14 @@ public:
         {"rfBlockGnssBand", ubxDataType8bit(UBX_CFG_U1), 21, -1, -1}}; // 0=unknown; 1=L1 band; 2=L2 band; 3=L3 band; 4=L5 band
         // reserved2[2] at bytes 22-23 is not exposed
 
+    /**
+     * @brief Construct a new ubxMONRF object and register it with the UBX message registry.
+     *
+     * UBX-MON-RF: RF information. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxMONRF(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

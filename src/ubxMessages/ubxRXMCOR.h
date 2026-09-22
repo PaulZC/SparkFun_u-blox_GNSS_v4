@@ -48,6 +48,14 @@ public:
         {"msgType", ubxDataType8bit(UBX_CFG_U2), 8, -1, -1},
         {"msgSubType", ubxDataType8bit(UBX_CFG_U2), 10, -1, -1}};
 
+    /**
+     * @brief Construct a new ubxRXMCOR object and register it with the UBX message registry.
+     *
+     * UBX-RXM-COR: Differential correction input status. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxRXMCOR(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

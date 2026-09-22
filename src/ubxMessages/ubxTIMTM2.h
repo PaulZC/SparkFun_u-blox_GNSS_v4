@@ -51,6 +51,14 @@ public:
         {"towSubMsF", ubxDataType8bit(UBX_CFG_U4), 20, -1, -1},
         {"accEst", ubxDataType8bit(UBX_CFG_U4), 24, -1, -1}};
 
+    /**
+     * @brief Construct a new ubxTIMTM2 object and register it with the UBX message registry.
+     *
+     * UBX-TIM-TM2: Time mark data. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxTIMTM2(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

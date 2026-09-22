@@ -91,6 +91,14 @@ public:
         {"pseuRangeRMSErr", ubxDataType8bit(UBX_CFG_U1), 21, -1, -1}};
         // reserved5[2] (bytes 22-23) is not exposed
 
+    /**
+     * @brief Construct a new ubxRXMMEASX object and register it with the UBX message registry.
+     *
+     * UBX-RXM-MEASX: Satellite measurements for RRLP. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxRXMMEASX(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

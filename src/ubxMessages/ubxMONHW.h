@@ -52,6 +52,14 @@ public:
         {"pullH", ubxDataType8bit(UBX_CFG_U4), 52, -1, -1},
         {"pullL", ubxDataType8bit(UBX_CFG_U4), 56, -1, -1}};
 
+    /**
+     * @brief Construct a new ubxMONHW object and register it with the UBX message registry.
+     *
+     * UBX-MON-HW: Hardware status. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxMONHW(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

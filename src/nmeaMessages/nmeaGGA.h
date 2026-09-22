@@ -49,6 +49,14 @@ public:
         {"diffStation", nmeaDataTypeNumeric, 14},
 };
 
+    /**
+     * @brief Construct a new nmeaGGA object and register it with the NMEA message registry.
+     *
+     * NMEA GGA: Global Positioning System Fix Data. Registers this message's identifier, field table, callback-copy count and
+     * per-port output-enable keys with the base nmeaMessage class via addNMEA(), making it
+     * discoverable by the generic NMEA dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     nmeaGGA(void)
     {
         addNMEA(msgId, messageLength, numCallbackCopies, numFields,

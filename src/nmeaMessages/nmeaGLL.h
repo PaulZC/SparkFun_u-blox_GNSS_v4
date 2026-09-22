@@ -42,6 +42,14 @@ public:
         {"posMode", nmeaDataTypeChar, 7},
     };
 
+    /**
+     * @brief Construct a new nmeaGLL object and register it with the NMEA message registry.
+     *
+     * NMEA GLL: Latitude and longitude, with time of position fix and status. Registers this message's identifier, field table, callback-copy count and
+     * per-port output-enable keys with the base nmeaMessage class via addNMEA(), making it
+     * discoverable by the generic NMEA dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     nmeaGLL(void)
     {
         addNMEA(msgId, messageLength, numCallbackCopies, numFields,

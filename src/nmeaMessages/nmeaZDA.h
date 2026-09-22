@@ -43,6 +43,14 @@ public:
         {"ltzn", nmeaDataTypeNumeric, 6},
     };
 
+    /**
+     * @brief Construct a new nmeaZDA object and register it with the NMEA message registry.
+     *
+     * NMEA ZDA: Time and Date. Registers this message's identifier, field table, callback-copy count and
+     * per-port output-enable keys with the base nmeaMessage class via addNMEA(), making it
+     * discoverable by the generic NMEA dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     nmeaZDA(void)
     {
         addNMEA(msgId, messageLength, numCallbackCopies, numFields,

@@ -87,6 +87,14 @@ public:
         {"magDec", ubxDataType8bit(UBX_CFG_I2), 88, -1, -1},
         {"magAcc", ubxDataType8bit(UBX_CFG_U2), 90, -1, -1}};
 
+    /**
+     * @brief Construct a new ubxNAVPVT object and register it with the UBX message registry.
+     *
+     * UBX-NAV-PVT: Navigation position velocity time solution. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxNAVPVT(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

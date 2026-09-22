@@ -96,6 +96,14 @@ public:
         // msgs0..msgs3 map 1:1 to the header's protId0..protId3 - number of successfully parsed
         // messages for each of the (up to 4) protocols reported in this port's row
 
+    /**
+     * @brief Construct a new ubxMONCOMMS object and register it with the UBX message registry.
+     *
+     * UBX-MON-COMMS: Comm port information. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxMONCOMMS(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

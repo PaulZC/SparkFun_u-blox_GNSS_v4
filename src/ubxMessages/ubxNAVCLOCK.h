@@ -39,6 +39,14 @@ public:
         {"tAcc", ubxDataType8bit(UBX_CFG_U4), 12, -1, -1},
         {"fAcc", ubxDataType8bit(UBX_CFG_U4), 16, -1, -1}};
 
+    /**
+     * @brief Construct a new ubxNAVCLOCK object and register it with the UBX message registry.
+     *
+     * UBX-NAV-CLOCK: Clock solution. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxNAVCLOCK(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

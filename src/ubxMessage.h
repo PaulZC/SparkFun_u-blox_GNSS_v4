@@ -64,6 +64,16 @@ typedef struct ubxAnyType
     // would lose precision, and none of the currently-registered messages have one. The trade-off:
     // Serial.print() will show a trailing ".00" for integer fields (double's default 2 decimal
     // places) rather than a clean integer - cosmetic, not a correctness issue.
+    /**
+     * @brief Convert this tagged union to a double, based on which member ubxDataType selects.
+     *
+     * The single, unambiguous implicit numeric conversion for ubxAnyType - see the design note
+     * above this operator's definition for why one conversion to double (rather than a
+     * template or a per-type Factory) is the chosen approach.
+     *
+     * @return The stored value widened/converted to double, or 0.0 for an unrecognized
+     * ubxDataType tag (including the "field not found" sentinel set by getUbxMessageField()).
+     */
     operator double() const
     {
         switch (ubxDataType)
@@ -144,8 +154,22 @@ public:
         const ubxField &firstField;
     } ubxMessageVersion;
 
+    /**
+     * @brief Construct a new, unregistered ubxMessage object.
+     *
+     * Leaves every field at its default (Class/ID 0, no field table, no storage allocated). A
+     * subclass calls addClassID() from its own constructor to actually register its identity
+     * and metadata - see addClassID() below.
+     */
     ubxMessage(void) {}
 
+    /**
+     * @brief Destroy this ubxMessage, freeing any lazily-allocated storage.
+     *
+     * Frees _storage, _callbackStorage, _callbackActualLength and _callbackRawFrame if they
+     * were ever allocated (via initStorage() / initCallbackStorage()). Safe to call even if
+     * none of them were ever allocated, since each is nullptr until first use.
+     */
     virtual ~ubxMessage(void)
     {
         if (_storage != nullptr)
@@ -159,6 +183,13 @@ public:
     }
 
     // Does this object represent this Class/ID?
+    /**
+     * @brief Check whether this message object represents the given UBX Class/ID.
+     *
+     * @param Class The UBX message class to test against.
+     * @param ID The UBX message ID (within Class) to test against.
+     * @return true if this object's registered Class and ID both match, false otherwise.
+     */
     bool amI(uint8_t Class, uint8_t ID) const
     {
         return (Class == _Class) && (ID == _ID);
@@ -167,6 +198,17 @@ public:
     // Lazily allocate _storage - only when the message is actually used. This is how "delete the
     // header, save the RAM" (AGENTS.md) is meant to work for a message that is never instantiated
     // at all - see ubxMessageVector.h.
+    /**
+     * @brief Lazily allocate this message's raw payload storage (_storage), if not already done.
+     *
+     * Allocates and zero-fills a buffer of _messageLength bytes on first call; subsequent calls
+     * are a no-op. This is what lets a message that is never instantiated/used avoid consuming
+     * any RAM for its payload - see the class-level comment above for the "delete the header,
+     * save the RAM" design intent.
+     *
+     * @return true if _storage is non-null after the call (already allocated, or successfully
+     * allocated now); false if the allocation failed.
+     */
     bool initStorage(void)
     {
         if (_storage == nullptr)
@@ -201,6 +243,17 @@ public:
     // automatic capability rather than restructuring _callbackStorage's existing payload-only
     // layout, which every field-extraction call site across every other registered message already
     // depends on.
+    /**
+     * @brief Lazily allocate this message's callback ring-buffer storage, if not already done.
+     *
+     * Allocates _callbackStorage (_numCallbackCopies slots of _messageLength bytes each),
+     * _callbackActualLength (one uint16_t per slot) and _callbackRawFrame (one complete raw
+     * UBX frame per slot) together, the first time a callback is registered for this message -
+     * see DevUBLOXGNSS::setAutoCallbackPtr(). Subsequent calls are a no-op for whichever of the
+     * three are already allocated.
+     *
+     * @return true if all three buffers are non-null after the call, false if any allocation failed.
+     */
     bool initCallbackStorage(void)
     {
         if (_callbackStorage == nullptr)
@@ -225,6 +278,12 @@ public:
         return (_callbackStorage != nullptr) && (_callbackActualLength != nullptr) && (_callbackRawFrame != nullptr);
     }
 
+    /**
+     * @brief Get this message's CFG-MSGOUT key for the given communication port.
+     *
+     * @param commType Index into _msgOutKeys - which port's key to return (I2C, SPI, UART1, UART2).
+     * @return The UBLOX_CFG_MSGOUT_* configuration key used to enable/disable this message on that port.
+     */
     uint32_t getMsgOutKey(uint8_t commType) const
     {
         return _msgOutKeys[commType];
@@ -234,6 +293,14 @@ public:
     // unsigned value. Shared by extractFieldFrom() below (moved here from ubxMessageVector.h so it
     // can be used from either _storage or _callbackStorage, and by any ubxMessage, without a
     // circular ubxMessage.h <-> ubxMessageVector.h include).
+    /**
+     * @brief Extract a little-endian unsigned integer of 1, 2, 4 or 8 bytes from a buffer.
+     *
+     * @param storage The byte buffer to read from.
+     * @param offset Byte offset within 'storage' of the first (least significant) byte.
+     * @param width Number of bytes to read (1, 2, 4 or 8).
+     * @return The decoded unsigned value, widened to uint64_t.
+     */
     static uint64_t extractUnsignedBytes(const uint8_t *storage, uint16_t offset, uint8_t width)
     {
         uint64_t val = 0;
@@ -243,6 +310,15 @@ public:
     }
 
     // Extract 'bitWidth' bits (<= 32) starting at bit 'startBit' within the byte at 'offset'.
+    /**
+     * @brief Extract a sub-byte bit field from a buffer.
+     *
+     * @param storage The byte buffer to read from.
+     * @param offset Byte offset within 'storage' of the byte containing 'startBit'.
+     * @param startBit Bit offset (0-7) within the byte at 'offset' where the field starts.
+     * @param bitWidth Width of the field in bits (<= 32).
+     * @return The extracted bit field, right-aligned and masked to 'bitWidth' bits.
+     */
     static uint32_t extractBits(const uint8_t *storage, uint16_t offset, uint8_t startBit, uint8_t bitWidth)
     {
         uint32_t acc = 0;
@@ -265,6 +341,25 @@ public:
     // that has a header (described by _fields) plus a variable number of identically-shaped
     // repeated blocks (each described by _blockFields). Every existing caller omits these two
     // arguments and gets exactly today's behavior.
+    /**
+     * @brief Look up one field of this message, by name, in a given payload buffer.
+     *
+     * Shared core used both for a live/polled read (from this object's own _storage) and for a
+     * callback read (from a slot of _callbackStorage) - see getUbxMessageField() below and
+     * ubxMessageVector::extractValue().
+     *
+     * @param buffer The payload bytes to search (this message's _storage, or one
+     * _callbackStorage slot).
+     * @param fieldName Name of the field to find, matched against each entry's fieldName.
+     * @param value Out parameter: filled in with the field's tagged value if found.
+     * @param fieldsOverride Optional field table to search instead of this object's own
+     * _fields - used to search a repeated block's own field table (see _blockFields). Defaults
+     * to nullptr (search _fields).
+     * @param numFieldsOverride Number of entries in 'fieldsOverride'; ignored when
+     * 'fieldsOverride' is nullptr.
+     * @return true if 'fieldName' was found (and *value filled in); false if 'buffer' is null
+     * or the field name was not found in the searched table.
+     */
     bool extractFieldFrom(const uint8_t *buffer, const char *fieldName, ubxAnyType *value,
                            const ubxField *fieldsOverride = nullptr, uint8_t numFieldsOverride = 0) const
     {
@@ -365,6 +460,22 @@ public:
     // alone (bounded by _maxBlocks), with no header value to intersect against. Returns 0 if this
     // message has no block support at all (_blockFields == nullptr), or buffer/actualLength don't
     // leave room for even the block header.
+    /**
+     * @brief Defensively compute how many repeated blocks are actually present in a buffer.
+     *
+     * For a variable-length message registered with block support (see addClassID()'s
+     * blockFields/... parameters), returns the number of complete repeated blocks that fit
+     * within 'actualLength', cross-checked against this message's own header count field (if
+     * it set one via _blockCountField) and capped at _maxBlocks. See the longer design note
+     * above this function's definition for how the with-/without-a-trustworthy-header-field
+     * cases differ.
+     *
+     * @param buffer The payload buffer to measure (this message's live _storage, or a
+     * _callbackStorage slot).
+     * @param actualLength The real received byte length of 'buffer' (not _messageLength).
+     * @return The defensive block count, or 0 if this message has no block support at all
+     * (_blockFields == nullptr) or 'buffer' is null.
+     */
     uint16_t getBlockCount(const uint8_t *buffer, uint16_t actualLength) const
     {
         if ((_blockFields == nullptr) || (buffer == nullptr))
@@ -401,6 +512,19 @@ public:
     // "footer value happens to be zero" - inferring presence from the footer bytes themselves would
     // be unsafe, since a ring slot or _storage can hold stale trailing bytes from a previous, longer
     // message (see ubxMessageVector::storePayload()).
+    /**
+     * @brief Extract a named field from this message's optional trailing footer group, if present.
+     *
+     * @param buffer The payload buffer to read from.
+     * @param actualLength The real received byte length of 'buffer'.
+     * @param blockCount The defensive block count for this particular message (see
+     * getBlockCount()), used to compute where the footer starts.
+     * @param fieldName Name of the footer field to find.
+     * @param value Out parameter: filled in with the field's tagged value if found.
+     * @return true if this message has a footer, the footer was actually present given
+     * 'actualLength', and 'fieldName' was found within it; false otherwise (leaving *value
+     * untouched).
+     */
     bool extractFooterFieldFrom(const uint8_t *buffer, uint16_t actualLength, uint16_t blockCount,
                                  const char *fieldName, ubxAnyType *value) const
     {
@@ -425,6 +549,20 @@ public:
     // _callbackStorage, so the length field this writes always matches the payload bytes actually
     // present in the frame (0xB5/0x62 are UBX_SYNCH_1/UBX_SYNCH_2 from u-blox_Class_and_ID.h,
     // written as literals here rather than adding that #include to this already-leaf header).
+    /**
+     * @brief Synthesize a complete raw UBX frame for one callback ring-buffer slot.
+     *
+     * Writes sync bytes, Class, ID, length, a copy of the payload, and the checksum into
+     * _callbackRawFrame at 'slotIndex', so the frame can later be relayed verbatim from inside
+     * a callback - see getUbxMessageRawLengthCallback()/getUbxMessageRawPtrCallback() in
+     * u-blox_GNSS.cpp. No-op if _callbackRawFrame has not been allocated yet.
+     *
+     * @param slotIndex Which ring-buffer slot to write into.
+     * @param payload Pointer to the payload bytes to copy into the frame.
+     * @param len Payload length in bytes (assumed already clamped to _messageLength by the caller).
+     * @param checksumA First UBX checksum byte (CK_A).
+     * @param checksumB Second UBX checksum byte (CK_B).
+     */
     void writeCallbackRawFrame(uint8_t slotIndex, const uint8_t *payload, uint16_t len, uint8_t checksumA, uint8_t checksumB)
     {
         if (_callbackRawFrame == nullptr)
@@ -455,6 +593,39 @@ public:
     // calibTtag) - see AGENTS.md "Adding support for ESF-MEAS" and getBlockCount()/
     // extractFooterFieldFrom() above. They default to nullptr/nullptr/0/0, so every message
     // registered before ESF-MEAS (which passes exactly today's 14 arguments) is unaffected.
+    /**
+     * @brief Register this message's identity, field table and metadata with the base class.
+     *
+     * Called once, from the subclass's own constructor, to populate every _* member below with
+     * the subclass's Class/ID, field table(s) and configuration keys, and to reset all storage
+     * pointers and callback bookkeeping to their initial "nothing allocated yet" state.
+     *
+     * @param Class The UBX message class.
+     * @param ID The UBX message ID (within Class).
+     * @param classStr Human-readable 3-letter class mnemonic (e.g. "NAV").
+     * @param idStr Human-readable message mnemonic (e.g. "PVT").
+     * @param messageLength Payload length in bytes (the fixed/header part for a
+     * variable-length message).
+     * @param numCallbackCopies Number of ring-buffer slots to allocate for callback storage.
+     * @param numFields Number of entries in 'ubxFields'.
+     * @param ubxFields Pointer to this message's own, permanently-lived field table.
+     * @param msgOutKeys Four UBLOX_CFG_MSGOUT_* keys (I2C, SPI, UART1, UART2) used to
+     * enable/disable this message's automatic output.
+     * @param blockFields Optional field table describing one repeated block, for a
+     * variable-length message (e.g. UBX-NAV-SAT's per-SV blocks). Defaults to nullptr (no
+     * repeated blocks).
+     * @param numBlockFields Number of entries in 'blockFields'. Defaults to 0.
+     * @param blockHeaderLength Bytes before the first repeated block. Defaults to 0.
+     * @param blockLength Bytes per repeated block. Defaults to 0.
+     * @param maxBlocks Upper bound on the number of repeated blocks. Defaults to 0.
+     * @param blockCountField Optional name of a header field to cross-check defensively
+     * against the actual received length, for a message whose header count field cannot be
+     * trusted (e.g. ESF-MEAS's numMeas). Defaults to nullptr.
+     * @param footerFields Optional field table describing an optional trailing footer group
+     * (e.g. ESF-MEAS's calibTtag). Defaults to nullptr.
+     * @param numFooterFields Number of entries in 'footerFields'. Defaults to 0.
+     * @param footerLength Bytes in the footer group. Defaults to 0.
+     */
     void addClassID(uint8_t Class, uint8_t ID, const char *classStr, const char *idStr,
                      uint16_t messageLength, uint8_t numCallbackCopies, uint8_t numFields,
                      const void *ubxFields, const uint32_t *msgOutKeys,

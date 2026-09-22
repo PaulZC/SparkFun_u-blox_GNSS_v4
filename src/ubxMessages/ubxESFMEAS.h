@@ -117,6 +117,14 @@ public:
     const ubxField ubxFooterFields[numFooterFields] = {
         {"calibTtag", ubxDataType8bit(UBX_CFG_U4), 0, -1, -1}}; // OPTIONAL: Receiver local time calibrated (ms) - offset is relative to the start of the footer
 
+    /**
+     * @brief Construct a new ubxESFMEAS object and register it with the UBX message registry.
+     *
+     * UBX-ESF-MEAS: External sensor fusion measurements. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxESFMEAS(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

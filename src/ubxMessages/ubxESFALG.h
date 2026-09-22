@@ -46,6 +46,14 @@ public:
         {"pitch", ubxDataType8bit(UBX_CFG_I2), 12, -1, -1},
         {"roll", ubxDataType8bit(UBX_CFG_I2), 14, -1, -1}};
 
+    /**
+     * @brief Construct a new ubxESFALG object and register it with the UBX message registry.
+     *
+     * UBX-ESF-ALG: IMU alignment information. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxESFALG(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

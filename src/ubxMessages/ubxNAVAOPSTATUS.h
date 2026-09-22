@@ -38,6 +38,14 @@ public:
         {"useAOP", ubxDataType8bit(UBX_CFG_L), 4, 0, 1},
         {"status", ubxDataType8bit(UBX_CFG_U1), 5, -1, -1}};
 
+    /**
+     * @brief Construct a new ubxNAVAOPSTATUS object and register it with the UBX message registry.
+     *
+     * UBX-NAV-AOPSTATUS: AssistNow Autonomous status. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxNAVAOPSTATUS(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

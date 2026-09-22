@@ -47,6 +47,14 @@ public:
         {"valid", ubxDataType8bit(UBX_CFG_I1), 36, -1, -1},
         {"active", ubxDataType8bit(UBX_CFG_I1), 37, -1, -1}};
 
+    /**
+     * @brief Construct a new ubxNAVSVIN object and register it with the UBX message registry.
+     *
+     * UBX-NAV-SVIN: Survey-in data. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxNAVSVIN(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

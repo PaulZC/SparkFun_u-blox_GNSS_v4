@@ -48,6 +48,14 @@ public:
         {"validUTC", ubxDataType8bit(UBX_CFG_L), 19, 2, 1},
         {"utcStandard", ubxDataType8bit(UBX_CFG_U1), 19, 4, 4}};
 
+    /**
+     * @brief Construct a new ubxNAVTIMEUTC object and register it with the UBX message registry.
+     *
+     * UBX-NAV-TIMEUTC: UTC time solution. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxNAVTIMEUTC(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

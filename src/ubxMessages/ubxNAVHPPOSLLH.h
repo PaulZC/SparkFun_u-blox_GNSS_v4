@@ -48,6 +48,14 @@ public:
         {"hAcc", ubxDataType8bit(UBX_CFG_U4), 28, -1, -1},
         {"vAcc", ubxDataType8bit(UBX_CFG_U4), 32, -1, -1}};
 
+    /**
+     * @brief Construct a new ubxNAVHPPOSLLH object and register it with the UBX message registry.
+     *
+     * UBX-NAV-HPPOSLLH: High precision geodetic position solution. Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxNAVHPPOSLLH(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,

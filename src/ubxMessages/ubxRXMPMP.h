@@ -109,6 +109,14 @@ public:
     const ubxField ubxBlockFields[numBlockFields] = {
         {"userData", ubxDataType8bit(UBX_CFG_U1), 0, -1, -1}}; // One raw userData byte
 
+    /**
+     * @brief Construct a new ubxRXMPMP object and register it with the UBX message registry.
+     *
+     * UBX-RXM-PMP: PMP raw data (NEO-D9S). Registers this message's Class/ID, field table, callback-copy count and
+     * per-port output-enable keys with the base ubxMessage class via addClassID(), making it
+     * discoverable by the generic UBX dispatch, field-lookup, polling and auto-message
+     * machinery in DevUBLOXGNSS.
+     */
     ubxRXMPMP(void)
     {
         addClassID(Class, ID, classStr, idStr, messageLength, numCallbackCopies,
