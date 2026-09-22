@@ -1280,6 +1280,121 @@ record. Summary of what shipped:
   both), this class's field table will misparse those specific messages, the same way it would for
   any message whose real-world version doesn't match what was assumed.
 
+## Adding support for RXM-QZSSL6
+
+Please add RXM-QZSSL6 to `class` `ubxMessages`. You may need to refer to
+https://content.u-blox.com/sites/default/files/u-blox-D9-QZS-1.01_InterfaceDescription_UBX-21031777.pdf
+for the full message description. RXM-QZSSL6 is like RXM-PMP in that in can not be polled, only
+made periodic. And, importantly, the QZSSL6 messages are output two at a time. Please implement
+`const uint8_t numCallbackCopies = UBX_RXM_QZSSL6_NUM_CHANNELS;` where `UBX_RXM_QZSSL6_NUM_CHANNELS`
+is 2.
+
+### Implemented
+
+Implemented directly, no proposal - like RXM-PMP (Phase 32), nothing here is architecturally
+novel: QZSSL6's header-plus-opaque-payload shape is the familiar pattern already established by
+NAV-SAT/RXM-RAWX/RXM-MEASX/MON-COMMS/SEC-SIG/ESF-RAW/RXM-PMP. The one genuinely new wrinkle is the
+`numCallbackCopies = 2` ring buffer the user explicitly asked for - see below. See
+`claude/v4-migration-status.md` (Phase 33) for the as-built record. Summary of what shipped:
+
+- `class ubxRXMQZSSL6` (`src/ubxMessages/ubxRXMQZSSL6.h`) - self-registered, consulting the u-blox
+  D9-QZS 1.01 Interface Description (UBX-21031777) for the exact field layout, cross-checked
+  against the old v3 code's own `UBX_RXM_QZSSL6_data_t` struct (which agreed). QZSSL6 cannot be
+  polled - it is "Output" only, same convention as RXM-PMP/ESF-RAW (no `getRXMQZSSL6()` wrapper;
+  the old v3 API never had one either - it only ever offered a raw-message callback,
+  `setRXMQZSSL6messageCallbackPtr`, no field-based one at all).
+- **Unlike RXM-PMP, QZSSL6's payload is FIXED length, not variable** - a single, unconditional
+  264-byte payload (a 14-byte header + a fixed 250-byte `msgBytes` array), with no byte-count field
+  anywhere in the header. Matching ESF-RAW's precedent (Phase 31) for a message with no
+  block-count field at all, `blockCountField` is left at its default `nullptr` -
+  `getUbxMessageBlockCount()`/`...Callback()` fall back to the actual-length-derived count, which
+  for this message always comes out to the full 250 (264 - 14 header bytes, / 1 byte per block),
+  matching `maxBlocks` exactly since the length never actually varies. `msgBytes` itself (the raw
+  QZSS L6 payload, whose own format is defined by a different specification, IS-QZSS-L6-001, not
+  otherwise modelled by this repo) is opaque payload data, so - exactly like RXM-PMP's `userData` -
+  it is modelled as 0..`UBX_RXM_QZSSL6_DATALEN` (250) repeated 1-byte "blocks" rather than a
+  struct of named fields.
+- **The instructed `numCallbackCopies = UBX_RXM_QZSSL6_NUM_CHANNELS` (2) is the one real design
+  point in this phase, and it is a genuine departure from every other output-only status-like
+  message registered so far (MON-COMMS/SEC-SIG/RXM-PMP/ESF-STATUS, all `numCallbackCopies = 1`).**
+  QZSSL6 messages are output two at a time - one per L6 reception channel (Channel A / Channel B) -
+  so a single callback slot would let the second message of a pair silently overwrite the first
+  before `checkCallbacks()` gets a chance to drain it, the same problem RXM-SFRBX's/ESF-MEAS's
+  ring buffers solve for a burst of many messages. QZSSL6 gets the identical ring-buffer machinery
+  (generic since Phase 23/Phase 30), just with a ring of exactly 2 rather than a larger
+  burst-sized number - and, unlike RXM-SFRBX's/ESF-MEAS's buffer counts, this is an exact
+  instruction (there are always exactly 2 channels, per the Interface Description), not an
+  estimate that might need raising after real traffic.
+- **`chInfo` (a 2-byte header field) is decoded into four sub-fields per the Interface
+  Description's bit breakdown**: `chn` (bits 9:8, receiver channel 0/1), `msgName` (bit 10,
+  0=L6D/1=L6E), `errStatus` (bits 13:12, 0=unknown/1=error-free/2=erroneous), `chName` (bits 15:14,
+  channel name 0=A/1=B). All four share `chInfo`'s own byte offset (10) as their `startByte`, with
+  `startBit` set to their bit position within the 2-byte field (8/10/12/14) -
+  `ubxMessage::extractBits()` already supports a `startBit` beyond the first byte, reading as many
+  little-endian bytes as `startBit`+`bitWidth` spans (the same mechanism SEC-SIG's 24-bit
+  `centFreq` (Phase 28) relies on, just spanning via a `startBit` offset here instead of a wide
+  `bitWidth`) - this is the first message in the registry to actually exercise that part of the
+  mechanism, though it was already implicitly proven correct by extension of the `centFreq` case.
+  The raw `chInfo` value is also exposed as a plain field, for a caller that wants to decode it a
+  different way.
+- **Full migration of the old v3 scaffolding, same depth as RXM-PMP (Phase 32):** removed
+  `packetUBXRXMQZSSL6message` (the `UBX_RXM_QZSSL6_message_t *` member) and
+  `initPacketUBXRXMQZSSL6message()` from `u-blox_GNSS.h`/`.cpp`; removed the destructor's cleanup
+  block; removed the `autoLookup()`/`processUBXpacket()` branches for QZSSL6 under
+  `case UBX_CLASS_RXM:` (the case label stays alive - UBX_RXM_SFRBX/RXM_RAWX/RXM_MEASX are still
+  handled there too, via comments pointing at the registry); removed the `checkCallbacks()` manual
+  callback-firing block - each replaced with a short retiring comment pointing at this section.
+  Removed `setRXMQZSSL6messageCallbackPtr()` entirely (declaration and definition) - it does not
+  survive even as a thin wrapper, since the generic `setAutoCallbackPtr()` (by name
+  "RXM"/"QZSSL6") now does the same job, and the message-push use case is covered by the raw-frame
+  relay accessors instead, per the same reasoning already applied to RXM-PMP.
+- **Incidental finding while removing the dead v3 scaffolding, not a bug introduced by this
+  phase:** the old `processUBXpacket()` code carried two comments directly above its QZSSL6
+  parsing block - "Note: length is variable with version 0x01" and "Note: the field positions
+  depend on the version" - that describe RXM-PMP's version-dependent layout (Phase 32), not
+  QZSSL6's. QZSSL6's payload has always been fixed-length with a single field layout; these
+  appear to have been a copy-paste artifact from adjacent PMP-era v3 code. They are gone now,
+  along with the rest of that dead block - noted here since they could otherwise have been
+  mistaken for a real QZSSL6 versioning concern.
+- **`u-blox_structs.h`**: removed only `ubxQZSSL6AutomaticFlags`/`UBX_RXM_QZSSL6_t` (the v3
+  RAM-management wrapper struct) - kept `UBX_RXM_QZSSL6_data_t`/`UBX_RXM_QZSSL6_message_data_t`
+  (the wire-format structs) as documented reference, matching every prior migration. Unlike
+  RXM-PMP's struct, `UBX_RXM_QZSSL6_data_t` needed no version-layout caveat added, since QZSSL6 has
+  only one layout.
+- **Verified statically:** confirmed every field's byte offset in the new `ubxRXMQZSSL6.h` against
+  the old v3 code's own `UBX_RXM_QZSSL6_data_t` struct layout in `u-blox_structs.h` (version@0,
+  svId@1, cno@2, timeTag@4, groupDelay@8, bitErrCorr@9, chInfo@10, reserved0@12-13, msgBytes@14)
+  and against the u-blox D9-QZS 1.01 Interface Description's own field table, which agreed.
+  Confirmed `numFields` (11) and `numBlockFields` (1) match the field tables' literal entry
+  counts. Confirmed the `addClassID()` call's argument order matches the existing extended
+  signature exactly (the same 15-positional-argument shape as RXM-PMP's call). Confirmed
+  `UBLOX_CFG_MSGOUT_UBX_RXM_QZSSL6_{I2C,SPI,UART1,UART2}` all exist in `u-blox_config_keys.h`
+  (USB deliberately unused, per the repo-wide convention), and that
+  `UBX_RXM_QZSSL6 = 0x73`/`UBX_CLASS_RXM = 0x02` are already defined in `u-blox_Class_and_ID.h`.
+  Confirmed brace/paren balance held on every touched file against the pre-edit baseline
+  (`ubxMessageVector.h` 24/24 braces, 126/126 parens; `u-blox_GNSS.h` 34/34 braces, 901/901
+  parens - up from 892/892, balanced; `u-blox_GNSS.cpp` 1009/1009 braces, down from 1023/1023
+  (blocks removed), 4583/4585 parens - the same pre-existing -2 paren quirk documented since
+  Phase 9, confirmed unchanged, not newly introduced; `u-blox_structs.h` 286/286 braces, down from
+  290/290 (one struct definition removed), 390/390 parens; the new `ubxRXMQZSSL6.h` 17/17 braces,
+  66/66 parens, 8050 bytes). Confirmed the new file is LF-only, matching every other file in
+  `ubxMessages/`, and confirmed CRLF preserved on every touched core file. Grepped the whole
+  `src/` tree afterward for `packetUBXRXMQZSSL6message`/`ubxQZSSL6AutomaticFlags`/
+  `UBX_RXM_QZSSL6_t`/`setRXMQZSSL6messageCallbackPtr`/`initPacketUBXRXMQZSSL6message` and
+  confirmed every remaining hit is a comment, not live code. Also grepped the `examples/` folder
+  for the retired function and for `UBX_RXM_QZSSL6`/`QZSSL6` generally - no example references
+  RXM-QZSSL6 at all, so nothing there needed updating or is at risk of failing to compile from
+  this change.
+- **Not yet done:** this implementation has NOT been compiled (Docker still unavailable in every
+  sandbox tried so far) and has NOT been hardware-validated - no `CallbackExample`-style sketch
+  exists yet for RXM-QZSSL6, and testing it needs a NEO-D9C (a different, QZSS-L6-focused module
+  from the ZED-F9R/ZED-X20P used for every other phase's hardware validation so far, and also
+  different from RXM-PMP's NEO-D9S). The `numCallbackCopies = 2` ring buffer is the main thing
+  worth confirming against real hardware: specifically, that both channels' messages really do
+  arrive close enough together that a 2-slot ring (rather than a larger one) is genuinely
+  sufficient, and that `checkCallbacks()` drains both before either could be overwritten by the
+  next epoch's pair.
+
 ## Test
 
 Compile the example code in examples/Example1\_PositionVelocityTime using the batch file compile\_example.bat.

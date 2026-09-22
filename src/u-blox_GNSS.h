@@ -763,11 +763,21 @@ public:
   // can disable it by calling (e.g.) setVal8(UBLOX_CFG_MSGOUT_UBX_RXM_PMP_I2C, 0) - the NEO-D9S
   // does not support UBX-CFG-MSG, but does support UBX-CFG-VALSET, which is what setVal8() uses.
 
-  // Configure a callback for the UBX-RXM-QZSSL6 messages produced by the NEO-D9C
-  // Note: on the NEO-D9C, the UBX-RXM-QZSSL6 messages are enabled by default on all ports.
-  //       You can disable them by calling (e.g.) setVal8(UBLOX_CFG_MSGOUT_UBX_RXM_QZSSL6_I2C, 0)
-  //       The NEO-D9C does not support UBX-CFG-MSG
-  bool setRXMQZSSL6messageCallbackPtr(void (*callbackPointerPtr)(UBX_RXM_QZSSL6_message_data_t *)); // Use this if you want all of the QZSSL6 message (including sync chars, checksum, etc.) to push to a GNSS
+  // UBX-RXM-QZSSL6 is now a registered v4 message (ubxRXMQZSSL6) - see AGENTS.md "Adding
+  // support for RXM-QZSSL6". setRXMQZSSL6messageCallbackPtr is retired; use the generic
+  // setAutoCallbackPtr above instead (by name "RXM"/"QZSSL6"), then
+  // getUbxMessageFieldCallback()/getUbxMessageBlockFieldCallback()/
+  // getUbxMessageBlockCountCallback() to read the fields/msgBytes bytes - remember
+  // numCallbackCopies is 2 for this message (UBX_RXM_QZSSL6_NUM_CHANNELS), not 1, since
+  // QZSSL6 is output two at a time (one per L6 reception channel). There is no
+  // getRXMQZSSL6() - QZSSL6 cannot be polled, it is "Output" only, same as RXM-PMP/ESF-RAW.
+  // setRXMQZSSL6messageCallbackPtr's "push the whole message" use case is now covered
+  // generically, for ANY message with a callback registered, by
+  // getUbxMessageRawLengthCallback()/getUbxMessageRawPtrCallback() (added in Phase 30, for
+  // ESF-MEAS) - not reimplemented here, same treatment as RXM-PMP (Phase 32). Note: on the
+  // NEO-D9C, UBX-RXM-QZSSL6 is enabled by default on all ports; you can disable it by calling
+  // (e.g.) setVal8(UBLOX_CFG_MSGOUT_UBX_RXM_QZSSL6_I2C, 0) - the NEO-D9C does not support
+  // UBX-CFG-MSG, but does support UBX-CFG-VALSET, which is what setVal8() uses.
 
 
   // UBX-RXM-SFRBX is now a registered v4 message (ubxRXMSFRBX) - see AGENTS.md "Adding support
@@ -1174,7 +1184,9 @@ public:
 
   ubxMessageVector ubxMessages; // v4 scaffolding - the registry of per-message objects. See AGENTS.md "Reference Scaffolding"
 
-  UBX_RXM_QZSSL6_message_t *packetUBXRXMQZSSL6message = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
+  // packetUBXRXMQZSSL6message no longer exists - ubxRXMQZSSL6 is now self-registered and
+  // destroyed by ubxMessageVector's own destructor - see AGENTS.md "Adding support for
+  // RXM-QZSSL6".
   // packetUBXRXMSFRBX no longer exists - ubxRXMSFRBX is now self-registered - see AGENTS.md
   // "Adding support for RXM-SFRBX".
   // packetUBXRXMRAWX/packetUBXRXMMEASX no longer exist - ubxRXMRAWX/ubxRXMMEASX are now
@@ -1252,7 +1264,8 @@ protected:
   bool initGeofenceParams();  // Allocate RAM for currentGeofenceParams and initialize it
   bool initModuleSWVersion(); // Allocate RAM for moduleSWVersion and initialize it
 
-  bool initPacketUBXRXMQZSSL6message(); // Allocate RAM for packetUBXRXMQZSSL6raw and initialize it
+  // initPacketUBXRXMQZSSL6message() no longer exists - ubxRXMQZSSL6 is now self-registered -
+  // see AGENTS.md "Adding support for RXM-QZSSL6".
   // initPacketUBXRXMPMP()/initPacketUBXRXMPMPmessage() no longer exist - ubxRXMPMP is now
   // self-registered - see AGENTS.md "Adding support for RXM-PMP".
   // initPacketUBXESFSTATUS() no longer exists - ubxESFSTATUS is now self-registered - see

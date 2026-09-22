@@ -1839,11 +1839,18 @@ typedef struct
   uint8_t checksumB;
 } UBX_RXM_PMP_message_data_t;
 
-// UBX-RXM-QZSSL6 (0x02 0x73): QZSS L6 raw data (D9C modules)
-#define UBX_RXM_QZSSL6_NUM_CHANNELS 2
+// UBX-RXM-QZSSL6 (0x02 0x73): QZSS L6 raw data (D9C modules). ubxRXMQZSSL6
+// (src/ubxMessages/ubxRXMQZSSL6.h) is now self-registered - see AGENTS.md "Adding support for
+// RXM-QZSSL6". UBX_RXM_QZSSL6_NUM_CHANNELS/_DATALEN/_MAX_LEN below are still used (as
+// numCallbackCopies/the block table's maxBlocks/messageLength respectively).
+const uint16_t UBX_RXM_QZSSL6_NUM_CHANNELS = 2;
 const uint16_t UBX_RXM_QZSSL6_DATALEN = 250;
 const uint16_t UBX_RXM_QZSSL6_MAX_LEN = UBX_RXM_QZSSL6_DATALEN + 14;
 
+// UBX_RXM_QZSSL6_data_t is kept as documented reference for the message's wire format, exactly
+// as UBX_RXM_PMP_data_t/UBX_RXM_SFRBX_data_t/UBX_MON_COMMS_data_t/UBX_SEC_SIG_data_t were kept -
+// unlike RXM-PMP, QZSSL6's payload has a single, fixed layout (no version-dependent field
+// placement to worry about).
 typedef struct
 {
   uint8_t version;                          // Message version (0x00 / 0x01)
@@ -1857,23 +1864,16 @@ typedef struct
   uint8_t msgBytes[UBX_RXM_QZSSL6_DATALEN]; // Bytes in a QZSS L6 message
 } UBX_RXM_QZSSL6_data_t;
 
-struct ubxQZSSL6AutomaticFlags
-{
-  union
-  {
-    uint8_t all;
-    struct
-    {
-      uint8_t automatic : 1;                                   // Will this message be delivered and parsed "automatically" (without polling)
-      uint8_t implicitUpdate : 1;                              // Is the update triggered by accessing stale data (=true) or by a call to checkUblox (=false)
-      uint8_t addToFileBuffer : 1;                             // Should the raw UBX data be added to the file buffer?
-      uint8_t callbackCopyValid : UBX_RXM_QZSSL6_NUM_CHANNELS; // Is the copies of the data structs used by the callback valid/fresh?
-    } bits;
-  } flags;
-};
+// ubxQZSSL6AutomaticFlags/UBX_RXM_QZSSL6_t (retired - see below) were the v3 RAM-management
+// wrapper (automaticFlags + callbackPointerPtr + callbackData) - retired, ubxRXMQZSSL6 is now
+// self-registered, using the generic ring-buffered _callbackStorage/_callbackRawFrame mechanism
+// instead (with numCallbackCopies = UBX_RXM_QZSSL6_NUM_CHANNELS, i.e. a 2-slot ring, one per L6
+// reception channel) - see AGENTS.md "Adding support for RXM-QZSSL6".
 
-// Define a struct to hold the entire QZSSL6 message so the whole thing can be pushed to a GNSS.
-// Remember that the length of the payload could be variable (with version 1 messages).
+// UBX_RXM_QZSSL6_message_data_t is kept as documented reference for the raw frame's layout,
+// exactly as UBX_RXM_PMP_message_data_t was kept - used automatically, for any registered message
+// with a callback, by getUbxMessageRawLengthCallback()/getUbxMessageRawPtrCallback() (Phase 30) -
+// see AGENTS.md "Adding support for ESF-MEAS".
 typedef struct
 {
   uint8_t sync1; // 0xB5
@@ -1886,14 +1886,6 @@ typedef struct
   uint8_t checksumA;
   uint8_t checksumB;
 } UBX_RXM_QZSSL6_message_data_t;
-
-// The QZSSL6 data can only be accessed via a callback. QZSSL6 cannot be polled.
-typedef struct
-{
-  ubxQZSSL6AutomaticFlags automaticFlags;
-  void (*callbackPointerPtr)(UBX_RXM_QZSSL6_message_data_t *);
-  UBX_RXM_QZSSL6_message_data_t *callbackData;
-} UBX_RXM_QZSSL6_message_t;
 
 // CFG-specific structs - deleted at v3.0
 

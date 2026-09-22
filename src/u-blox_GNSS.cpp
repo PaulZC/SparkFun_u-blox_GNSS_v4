@@ -130,15 +130,9 @@ void DevUBLOXGNSS::end(void)
   // and destroyed by ubxMessageVector's own destructor. See AGENTS.md "Adding support for
   // RXM-PMP".
 
-  if (packetUBXRXMQZSSL6message != nullptr)
-  {
-    if (packetUBXRXMQZSSL6message->callbackData != nullptr)
-    {
-      delete[] packetUBXRXMQZSSL6message->callbackData;
-    }
-    delete packetUBXRXMQZSSL6message;
-    packetUBXRXMQZSSL6message = nullptr;
-  }
+  // packetUBXRXMQZSSL6message no longer exists - ubxRXMQZSSL6 is now self-registered and
+  // destroyed by ubxMessageVector's own destructor. See AGENTS.md "Adding support for
+  // RXM-QZSSL6".
 
   // packetUBXRXMSFRBX no longer exists - ubxRXMSFRBX is now self-registered and destroyed by
   // ubxMessageVector's own destructor. See AGENTS.md "Adding support for RXM-SFRBX".
@@ -805,16 +799,11 @@ bool DevUBLOXGNSS::autoLookup(uint8_t Class, uint8_t ID, uint16_t *maxSize)
     // are now self-registered) - see AGENTS.md "Adding the variable-length UBX messages".
     break;
   case UBX_CLASS_RXM:
-    // UBX_RXM_SFRBX, UBX_RXM_RAWX, UBX_RXM_MEASX and UBX_RXM_PMP are all handled above via the
-    // registry (ubxRXMSFRBX/ubxRXMRAWX/ubxRXMMEASX/ubxRXMPMP are now self-registered) - see
-    // AGENTS.md "Adding the variable-length UBX messages", "Adding support for RXM-SFRBX" and
-    // "Adding support for RXM-PMP".
-    if (ID == UBX_RXM_QZSSL6)
-    {
-      if (maxSize != nullptr)
-        *maxSize = UBX_RXM_QZSSL6_MAX_LEN;
-      return (packetUBXRXMQZSSL6message != nullptr);
-    }
+    // UBX_RXM_SFRBX, UBX_RXM_RAWX, UBX_RXM_MEASX, UBX_RXM_PMP and UBX_RXM_QZSSL6 are all
+    // handled above via the registry (ubxRXMSFRBX/ubxRXMRAWX/ubxRXMMEASX/ubxRXMPMP/
+    // ubxRXMQZSSL6 are now self-registered) - see AGENTS.md "Adding the variable-length UBX
+    // messages", "Adding support for RXM-SFRBX", "Adding support for RXM-PMP" and "Adding
+    // support for RXM-QZSSL6".
     break;
   case UBX_CLASS_MON:
     // UBX_MON_COMMS is handled above via the registry (ubxMONCOMMS is now self-registered) -
@@ -2007,37 +1996,14 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
       // are now self-registered) - see AGENTS.md "Adding the variable-length UBX messages".
       break;
     case UBX_CLASS_RXM:
-      // UBX_RXM_PMP is now a registered v4 message (ubxRXMPMP) - see AGENTS.md "Adding support
-      // for RXM-PMP". processUBXpacket() no longer parses it here; the registry-first branch at
-      // the top of this function (ubxMessages.storePayload()) does that generically, including
-      // writing into _callbackStorage/_callbackActualLength and _callbackRawFrame.
-      if (msg->id == UBX_RXM_QZSSL6)
-      // Note: length is variable with version 0x01
-      // Note: the field positions depend on the version
-      {
-        // Full QZSSL6 message, including Class, ID and checksum
-        for (int ch = 0; ch < UBX_RXM_QZSSL6_NUM_CHANNELS; ch++)
-        {
-          if (0 == (packetUBXRXMQZSSL6message->automaticFlags.flags.bits.callbackCopyValid & (1 << ch)))
-          {
-
-            packetUBXRXMQZSSL6message->callbackData[ch].sync1 = UBX_SYNCH_1;
-            packetUBXRXMQZSSL6message->callbackData[ch].sync2 = UBX_SYNCH_2;
-            packetUBXRXMQZSSL6message->callbackData[ch].cls = UBX_CLASS_RXM;
-            packetUBXRXMQZSSL6message->callbackData[ch].ID = UBX_RXM_QZSSL6;
-            packetUBXRXMQZSSL6message->callbackData[ch].lengthLSB = msg->len & 0xFF;
-            packetUBXRXMQZSSL6message->callbackData[ch].lengthMSB = msg->len >> 8;
-
-            memcpy(packetUBXRXMQZSSL6message->callbackData[ch].payload, msg->payload, msg->len);
-
-            packetUBXRXMQZSSL6message->callbackData[ch].checksumA = msg->checksumA;
-            packetUBXRXMQZSSL6message->callbackData[ch].checksumB = msg->checksumB;
-
-            packetUBXRXMQZSSL6message->automaticFlags.flags.bits.callbackCopyValid |= (1 << ch);
-            break; // abort when added
-          }
-        }
-      }
+      // UBX_RXM_PMP and UBX_RXM_QZSSL6 are now registered v4 messages (ubxRXMPMP/ubxRXMQZSSL6) -
+      // see AGENTS.md "Adding support for RXM-PMP" and "Adding support for RXM-QZSSL6".
+      // processUBXpacket() no longer parses either here; the registry-first branch at the top
+      // of this function (ubxMessages.storePayload()) does that generically for both, including
+      // writing into _callbackStorage/_callbackActualLength and _callbackRawFrame - and, for
+      // QZSSL6 specifically, into the correct one of its 2 ring-buffer slots
+      // (numCallbackCopies = UBX_RXM_QZSSL6_NUM_CHANNELS), same ring-buffer write logic already
+      // used for RXM-SFRBX/ESF-MEAS.
       // UBX_RXM_SFRBX is now a registered v4 message (ubxRXMSFRBX) - see AGENTS.md "Adding
       // support for RXM-SFRBX". processUBXpacket() no longer parses it here; the registry-first
       // branch at the top of this function (ubxMessages.storePayload()) does that generically,
@@ -3304,22 +3270,11 @@ void DevUBLOXGNSS::checkCallbacks(void)
   // above (ubxNAVSAT/ubxNAVSIG are now self-registered) - see AGENTS.md "Adding the
   // variable-length UBX messages".
 
-  // UBX_RXM_PMP's callback is now dispatched by the generic registry walk above (ubxRXMPMP is
-  // now self-registered) - see AGENTS.md "Adding support for RXM-PMP".
-
-  if (packetUBXRXMQZSSL6message != nullptr)                         // If RAM has been allocated for message storage
-    if (packetUBXRXMQZSSL6message->callbackData != nullptr)         // If RAM has been allocated for the copy of the data
-      if (packetUBXRXMQZSSL6message->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-      {
-        for (int ch = 0; ch < UBX_RXM_QZSSL6_NUM_CHANNELS; ch++)
-        {
-          if (packetUBXRXMQZSSL6message->automaticFlags.flags.bits.callbackCopyValid & (1 << ch)) // If the copy of the data is valid
-          {
-            packetUBXRXMQZSSL6message->callbackPointerPtr(&packetUBXRXMQZSSL6message->callbackData[ch]); // Call the callback
-            packetUBXRXMQZSSL6message->automaticFlags.flags.bits.callbackCopyValid &= ~(1 << ch);        // clear it
-          }
-        }
-      }
+  // UBX_RXM_PMP's and UBX_RXM_QZSSL6's callbacks are now dispatched by the generic registry
+  // walk above (ubxRXMPMP/ubxRXMQZSSL6 are now self-registered) - see AGENTS.md "Adding support
+  // for RXM-PMP" and "Adding support for RXM-QZSSL6". QZSSL6's 2-slot ring buffer
+  // (numCallbackCopies = UBX_RXM_QZSSL6_NUM_CHANNELS) is drained the same draining-while-loop
+  // way as RXM-SFRBX/ESF-MEAS, oldest slot first - see the generic ring-buffer walk above.
 
   // UBX_RXM_SFRBX's callback is now dispatched by the generic registry walk above
   // (ubxRXMSFRBX is now self-registered, with its own ring-buffered _callbackStorage) - see
@@ -7446,45 +7401,15 @@ bool DevUBLOXGNSS::getNAVSIG(uint16_t maxWait)
 // initPacketUBXRXMPMPmessage() are retired; use the generic setAutoCallbackPtr() instead (by
 // name "RXM"/"PMP").
 
-// ***** RXM QZSSL6 automatic support
-
-// Callback receives a pointer to the data, instead of _all_ the data. Much kinder on the stack!
-bool DevUBLOXGNSS::setRXMQZSSL6messageCallbackPtr(void (*callbackPointerPtr)(UBX_RXM_QZSSL6_message_data_t *))
-{
-  if (packetUBXRXMQZSSL6message == nullptr)
-    initPacketUBXRXMQZSSL6message();        // Check that RAM has been allocated for the data
-  if (packetUBXRXMQZSSL6message == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  if (packetUBXRXMQZSSL6message->callbackData == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    packetUBXRXMQZSSL6message->callbackData = new UBX_RXM_QZSSL6_message_data_t[UBX_RXM_QZSSL6_NUM_CHANNELS]; // Allocate RAM for the main struct
-  }
-
-  if (packetUBXRXMQZSSL6message->callbackData == nullptr)
-  {
-    debugPrintln("setAutoRXMQZSSL6messagecallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  packetUBXRXMQZSSL6message->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// PRIVATE: Allocate RAM for packetUBXRXMQZSSL6message and initialize it
-bool DevUBLOXGNSS::initPacketUBXRXMQZSSL6message()
-{
-  packetUBXRXMQZSSL6message = new UBX_RXM_QZSSL6_message_t; // Allocate RAM for the main struct
-  if (packetUBXRXMQZSSL6message == nullptr)
-  {
-    debugPrintln("initPacketUBXRXMQZSSL6message: RAM alloc failed!", true); // Important
-    return (false);
-  }
-  packetUBXRXMQZSSL6message->automaticFlags.flags.all = 0;
-  packetUBXRXMQZSSL6message->callbackPointerPtr = nullptr;
-  packetUBXRXMQZSSL6message->callbackData = nullptr;
-  return (true);
-}
+// UBX-RXM-QZSSL6 is now a registered v4 message (ubxRXMQZSSL6) - see AGENTS.md "Adding
+// support for RXM-QZSSL6". setRXMQZSSL6messageCallbackPtr/initPacketUBXRXMQZSSL6message are
+// retired; use the generic setAutoCallbackPtr() instead (by name "RXM"/"QZSSL6"), then
+// getUbxMessageFieldCallback()/getUbxMessageBlockFieldCallback()/
+// getUbxMessageBlockCountCallback() to read the fields/msgBytes bytes. QZSSL6's old v3
+// "push the whole message" use case is now covered generically, for ANY message with a
+// callback registered, by getUbxMessageRawLengthCallback()/getUbxMessageRawPtrCallback()
+// (added in Phase 30, for ESF-MEAS) - not reimplemented here, same treatment as RXM-PMP
+// (Phase 32).
 
 // UBX-RXM-SFRBX is now a registered v4 message (ubxRXMSFRBX) - see AGENTS.md "Adding support
 // for RXM-SFRBX". setAutoRXMSFRBX/setAutoRXMSFRBXrate/setAutoRXMSFRBXcallbackPtr/
