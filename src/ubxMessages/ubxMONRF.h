@@ -63,7 +63,7 @@ public:
         {"nBlocks", ubxDataType8bit(UBX_CFG_U1), 1, -1, -1},
         {"recInf", ubxDataType8bit(UBX_CFG_X1), 2, -1, -1},
         {"msgSource", ubxDataType8bit(UBX_CFG_U1), 2, 0, 2}};
-        // reserved0[2] at bytes 2-3 is not exposed
+        // reserved0 at byte 3 is not exposed
 
     // Block field table - one entry per field in a SINGLE 24-byte RF block. Offsets are
     // relative to the start of the block, not the message - see the (removed) UBX_MON_RF_block_t
@@ -89,7 +89,7 @@ public:
         {"magI", ubxDataType8bit(UBX_CFG_U1), 18, -1, -1},
         {"ofsQ", ubxDataType8bit(UBX_CFG_I1), 19, -1, -1},
         {"magQ", ubxDataType8bit(UBX_CFG_U1), 20, -1, -1},
-        {"rfBlockGnssBand", ubxDataType8bit(UBX_CFG_U1), 20, -1, -1}}; // 0=unknown; 1=L1 band; 2=L2 band; 3=L3 band; 4=L5 band
+        {"rfBlockGnssBand", ubxDataType8bit(UBX_CFG_U1), 21, -1, -1}}; // 0=unknown; 1=L1 band; 2=L2 band; 3=L3 band; 4=L5 band
         // reserved2[2] at bytes 22-23 is not exposed
 
     ubxMONRF(void)
