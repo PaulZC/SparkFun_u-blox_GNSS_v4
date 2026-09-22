@@ -400,9 +400,6 @@ public:
   // getMONRF() - see AGENTS.md "Adding the variable-length UBX messages" - declared alongside
   // getMONCOMMS() below, under "Receiver status (MON)".
 
-  // Extended hardware status
-  bool getHW2status(UBX_MON_HW2_data_t *data = nullptr, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get the extended hardware status using UBX_MON_HW2
-
   // UBX-CFG-NAVX5 - get/set the ackAiding byte. If ackAiding is 1, UBX-MGA-ACK messages will be sent by the module to acknowledge the MGA data
   uint8_t getAckAiding(uint8_t layer = VAL_LAYER_RAM, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);                     // Get the ackAiding byte - returns 255 if the sendCommand fails
   bool setAckAiding(uint8_t ackAiding, uint8_t layer = VAL_LAYER_RAM_BBR, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Set the ackAiding byte
@@ -1053,8 +1050,7 @@ public:
 
   bool getMONHW(uint16_t maxWait = kUBLOXGNSSDefaultMaxWait);
 
-  bool getHWstatus(UBX_MON_HW_data_t *data = nullptr, uint16_t maxWait = kUBLOXGNSSDefaultMaxWait); // Get the hardware status using UBX_MON_HW
-  sfe_ublox_antenna_status_e getAntennaStatus();         // Get the antenna status (aStatus) using UBX_MON_HW
+  sfe_ublox_antenna_status_e getAntennaStatus(); // Get the antenna status (aStatus) using UBX_MON_RF. MON-HW is mostly deprecated.
 
   // Helper functions for ESF
   // For safety, call getESFroll/pitch/yaw inside an if(getESFALG()) or if(getUBX("ESF","ALG"))

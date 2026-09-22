@@ -149,4 +149,31 @@ void loop()
 
   Serial.print(".");
   delay(50);
+
+  static unsigned long lastAntennaStatus = 0;
+  if ((millis() - lastAntennaStatus) > 5000) // Call getAntennaStatus every 5 seconds
+  {
+    Serial.println();
+    Serial.print("Combined antenna status: ");
+    switch(myGNSS.getAntennaStatus())
+    {
+      default:
+      case SFE_UBLOX_ANTENNA_STATUS_DONTKNOW:
+        Serial.println("DONT KNOW");
+        break;
+      case SFE_UBLOX_ANTENNA_STATUS_INIT:
+        Serial.println("INIT");
+        break;
+      case SFE_UBLOX_ANTENNA_STATUS_OK:
+        Serial.println("OK");
+        break;
+      case SFE_UBLOX_ANTENNA_STATUS_SHORT:
+        Serial.println("SHORT");
+        break;
+      case SFE_UBLOX_ANTENNA_STATUS_OPEN:
+        Serial.println("OPEN");
+        break;
+    }
+    lastAntennaStatus = millis();
+  }
 }

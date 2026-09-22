@@ -257,56 +257,8 @@ const uint16_t UBX_MON_COMMS_MAX_LEN = 8 + (40 * UBX_MON_COMMS_MAX_PORTS);
 // UBX-MON-HW (0x0A 0x09): Hardware status
 const uint16_t UBX_MON_HW_LEN = 60;
 
-typedef struct
-{
-  uint32_t pinSel;     // Mask of pins set as peripheral/PIO
-  uint32_t pinBank;    // Mask of pins set as bank A/B
-  uint32_t pinDir;     // Mask of pins set as input/output
-  uint32_t pinVal;     // Mask of pins value low/high
-  uint16_t noisePerMS; // Noise level as measured by the GPS core
-  uint16_t agcCnt;     // AGC monitor (counts SIGHI xor SIGLO, range 0 to 8191)
-  uint8_t aStatus;     // Status of the antenna supervisor state machine (0=INIT, 1=DONTKNOW, 2=OK, 3=SHORT, 4=OPEN)
-  uint8_t aPower;      // Current power status of antenna (0=OFF, 1=ON, 2=DONTKNOW)
-  union
-  {
-    uint8_t all;
-    struct
-    {
-      uint8_t rtcCalib : 1;     // RTC is calibrated
-      uint8_t safeBoot : 1;     // Safeboot mode (0 = inactive, 1 = active)
-      uint8_t jammingState : 2; // Output from jamming/interference monitor (0 = unknown or feature disabled,
-                                // 1 = ok - no significant jamming,
-                                // 2 = warning - interference visible but fix OK,
-                                // 3 = critical - interference visible and no fix)
-      uint8_t xtalAbsent : 1;   // RTC xtal has been determined to be absent
-    } bits;
-  } flags;
-  uint8_t reserved1;    // Reserved
-  uint32_t usedMask;    // Mask of pins that are used by the virtual pin manager
-  uint8_t VP[17];       // Array of pin mappings for each of the 17 physical pins
-  uint8_t jamInd;       // CW jamming indicator, scaled (0 = no CW jamming, 255 = strong CW jamming)
-  uint8_t reserved2[2]; // Reserved
-  uint32_t pinIrq;      // Mask of pins value using the PIO Irq
-  uint32_t pullH;       // Mask of pins value using the PIO pull high resistor
-  uint32_t pullL;       // Mask of pins value using the PIO pull low resistor
-} UBX_MON_HW_data_t;
-
 // UBX-MON-HW2 (0x0A 0x0B): Extended hardware status
 const uint16_t UBX_MON_HW2_LEN = 28;
-
-typedef struct
-{
-  int8_t ofsI;       // Imbalance of I-part of complex signal, scaled (-128 = max. negative imbalance, 127 = max. positive imbalance)
-  uint8_t magI;      // Magnitude of I-part of complex signal, scaled (0 = no signal, 255 = max. magnitude)
-  int8_t ofsQ;       // Imbalance of Q-part of complex signal, scaled (-128 = max. negative imbalance, 127 = max. positive imbalance)
-  uint8_t magQ;      // Magnitude of Q-part of complex signal, scaled (0 = no signal, 255 = max. magnitude)
-  uint8_t cfgSource; // Source of low-level configuration (114 = ROM, 111 = OTP, 112 = config pins, 102 = flash image)
-  uint8_t reserved0[3];
-  uint32_t lowLevCfg; // Low-level configuration (obsolete for protocol versions greater than 15.00)
-  uint8_t reserved1[8];
-  uint32_t postStatus;  // POST status word
-  uint8_t reserved2[4]; // Reserved
-} UBX_MON_HW2_data_t;
 
 // UBX-MON-RF (0x0a 0x38): RF information
 const uint16_t UBX_MON_RF_MAX_BLOCKS = 3; // "The band which the RF block represents is subject to product configuration."

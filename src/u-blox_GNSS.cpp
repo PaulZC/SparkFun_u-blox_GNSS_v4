@@ -5703,32 +5703,6 @@ bool DevUBLOXGNSS::setESFAutoAlignment(bool enable, uint8_t layer, uint16_t maxW
 // getRFinformation() (the old poll-only, packetCfg/sendCommand()/extractByte() implementation)
 // has been removed - getMONRF() (below, next to getMONCOMMS()) replaces it.
 
-// Get the extended hardware status using UBX_MON_HW2
-bool DevUBLOXGNSS::getHW2status(UBX_MON_HW2_data_t *data, uint16_t maxWait)
-{
-  if (data == nullptr) // Check if the user forgot to include the data pointer
-    return (false);    // Bail
-
-  packetCfg.cls = UBX_CLASS_MON;
-  packetCfg.id = UBX_MON_HW2;
-  packetCfg.len = 0;
-  packetCfg.startingSpot = 0;
-
-  if (sendCommand(&packetCfg, maxWait) != SFE_UBLOX_STATUS_DATA_RECEIVED) // We are expecting data and an ACK
-    return (false);
-
-  // Extract the data
-  data->ofsI = extractSignedChar(&packetCfg, 0);
-  data->magI = extractByte(&packetCfg, 1);
-  data->ofsQ = extractSignedChar(&packetCfg, 2);
-  data->magQ = extractByte(&packetCfg, 3);
-  data->cfgSource = extractByte(&packetCfg, 4);
-  data->lowLevCfg = extractLong(&packetCfg, 8); // Low-level configuration (obsolete for protocol versions greater than 15.00)
-  data->postStatus = extractLong(&packetCfg, 20);
-
-  return (true);
-}
-
 // UBX-CFG-NAVX5 - get/set the ackAiding byte. If ackAiding is 1, UBX-MGA-ACK messages will be sent by the module to acknowledge the MGA data
 uint8_t DevUBLOXGNSS::getAckAiding(uint8_t layer, uint16_t maxWait) // Get the ackAiding byte - returns 255 if the sendCommand fails
 {
@@ -8786,39 +8760,45 @@ bool DevUBLOXGNSS::getMONHW(uint16_t maxWait)
   return getUBX(UBX_CLASS_MON, UBX_MON_HW, maxWait);
 }
 
-// Get the hardware status (including jamming) using UBX_MON_HW
-bool DevUBLOXGNSS::getHWstatus(UBX_MON_HW_data_t *data, uint16_t maxWait)
-{
-  // TODO
-
-  // if (data == nullptr) // Check if the user forgot to include the data pointer
-  //   return (false);    // Bail
-
-  //       ubxMessage *msg = find(Class, ID);
-  //       if (msg == nullptr)
-  //           return SFE_UBLOX_STATUS_INVALID_ARG;
-  //       if (msg->_storage == nullptr)
-  //           return SFE_UBLOX_STATUS_MEM_ERR; // No data has arrived for this message yet
-
-  //       return msg->extractFieldFrom(msg->_storage, field, value) ? SFE_UBLOX_STATUS_SUCCESS : SFE_UBLOX_STATUS_INVALID_ARG;
-
-  // if (!getMONHW(maxWait))
-  //   return (false);
-
-  // memcpy(data, &packetUBXMONHW->data, sizeof(UBX_MON_HW_data_t));
-
-  // packetUBXMONHW->moduleQueried.moduleQueried.all = 0; // Mark all datums as stale
-
-  return (true);
-}
-
 // Return the aStatus: 0=INIT, 1=DONTKNOW, 2=OK, 3=SHORT, 4=OPEN
+// Previously, getAntennaStatus returned aStatus from MON-HW.
+// But MON-HW is only supported on older platforms.
+// A safer approach is to report the worst antStatus from MON-RF.
+// The sfe_ublox_antenna_status_e is not arranged in order of worseness...
+// SFE_UBLOX_ANTENNA_STATUS_SHORT is (IMHO) worse than SFE_UBLOX_ANTENNA_STATUS_OPEN.
+// So, we need to be clever when finding the worst status.
 sfe_ublox_antenna_status_e DevUBLOXGNSS::getAntennaStatus()
 {
-  ubxAnyType value;
-  if (!getUBXfield(UBX_CLASS_MON, UBX_MON_HW, "aStatus", &value))
-    return (sfe_ublox_antenna_status_e)0;
-  return (sfe_ublox_antenna_status_e)value.U1;
+  sfe_ublox_antenna_status_e antStatus = SFE_UBLOX_ANTENNA_STATUS_DONTKNOW;
+
+  if (!getUBX(UBX_CLASS_MON, UBX_MON_RF)) // Use the default maxWait if polling
+    return antStatus; // Return DONT KNOW
+
+  const sfe_ublox_antenna_status_e antStatusByPriority[] = {
+    SFE_UBLOX_ANTENNA_STATUS_INIT,
+    SFE_UBLOX_ANTENNA_STATUS_DONTKNOW,
+    SFE_UBLOX_ANTENNA_STATUS_OK,
+    SFE_UBLOX_ANTENNA_STATUS_OPEN, // OPEN is less worse than SHORT
+    SFE_UBLOX_ANTENNA_STATUS_SHORT, // SHORT is worst
+  };
+
+  const uint8_t numAntStatus = sizeof(antStatusByPriority) / sizeof(antStatusByPriority[0]);
+
+  uint8_t worstStatus = 0;
+  
+  ubxMessage *msg = ubxMessages.findByName("MON","RF");
+
+  // Check the antStatus of all blocks
+  for (uint8_t b = 0; b < getUbxMessageBlockCount(msg); b++)
+  {
+    sfe_ublox_antenna_status_e thisAntStatus = (sfe_ublox_antenna_status_e)((uint8_t)getUbxMessageBlockField(msg, b, "antStatus"));
+    for (uint8_t p = 0; p < numAntStatus; p++)
+      if (thisAntStatus == antStatusByPriority[p]) // Step through, from best to worst, find a match
+        if (p > worstStatus)
+          worstStatus = p; // Record the worst status of all blocks
+  }
+
+  return antStatusByPriority[worstStatus]; // Convert worstStatus back into actual status
 }
 
 // ***** Helper functions for the NEO-F10N
