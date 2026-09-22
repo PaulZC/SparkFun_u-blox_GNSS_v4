@@ -751,12 +751,17 @@ public:
 
   // Receiver Manager Messages (RXM)
 
-  // Configure a callback for the UBX-RXM-PMP messages produced by the NEO-D9S
-  // Note: on the NEO-D9S, the UBX-RXM-PMP messages are enabled by default on all ports.
-  //       You can disable them by calling (e.g.) setVal8(UBLOX_CFG_MSGOUT_UBX_RXM_PMP_I2C, 0)
-  //       The NEO-D9S does not support UBX-CFG-MSG
-  bool setRXMPMPcallbackPtr(void (*callbackPointerPtr)(UBX_RXM_PMP_data_t *));                // Callback receives a pointer to the data, instead of _all_ the data. Much kinder on the stack!
-  bool setRXMPMPmessageCallbackPtr(void (*callbackPointerPtr)(UBX_RXM_PMP_message_data_t *)); // Use this if you want all of the PMP message (including sync chars, checksum, etc.) to push to a GNSS
+  // UBX-RXM-PMP is now a registered v4 message (ubxRXMPMP) - see AGENTS.md "Adding support for
+  // RXM-PMP". setRXMPMPcallbackPtr/setRXMPMPmessageCallbackPtr are retired; use the generic
+  // setAutoCallbackPtr above instead (by name "RXM"/"PMP"), then getUbxMessageFieldCallback()/
+  // getUbxMessageBlockFieldCallback()/getUbxMessageBlockCountCallback() to read the fields/userData
+  // bytes. There is no getRXMPMP() - PMP cannot be polled, it is "Output" only, same as ESF-RAW.
+  // setRXMPMPmessageCallbackPtr's "push the whole message" use case is now covered generically, for
+  // ANY message with a callback registered, by getUbxMessageRawLengthCallback()/
+  // getUbxMessageRawPtrCallback() (added in Phase 30, for ESF-MEAS) - not reimplemented here, per
+  // explicit instruction. Note: on the NEO-D9S, UBX-RXM-PMP is enabled by default on all ports; you
+  // can disable it by calling (e.g.) setVal8(UBLOX_CFG_MSGOUT_UBX_RXM_PMP_I2C, 0) - the NEO-D9S
+  // does not support UBX-CFG-MSG, but does support UBX-CFG-VALSET, which is what setVal8() uses.
 
   // Configure a callback for the UBX-RXM-QZSSL6 messages produced by the NEO-D9C
   // Note: on the NEO-D9C, the UBX-RXM-QZSSL6 messages are enabled by default on all ports.
@@ -1169,13 +1174,13 @@ public:
 
   ubxMessageVector ubxMessages; // v4 scaffolding - the registry of per-message objects. See AGENTS.md "Reference Scaffolding"
 
-  UBX_RXM_PMP_t *packetUBXRXMPMP = nullptr;                      // Pointer to struct. RAM will be allocated for this if/when necessary
-  UBX_RXM_PMP_message_t *packetUBXRXMPMPmessage = nullptr;       // Pointer to struct. RAM will be allocated for this if/when necessary
   UBX_RXM_QZSSL6_message_t *packetUBXRXMQZSSL6message = nullptr; // Pointer to struct. RAM will be allocated for this if/when necessary
   // packetUBXRXMSFRBX no longer exists - ubxRXMSFRBX is now self-registered - see AGENTS.md
   // "Adding support for RXM-SFRBX".
   // packetUBXRXMRAWX/packetUBXRXMMEASX no longer exist - ubxRXMRAWX/ubxRXMMEASX are now
   // self-registered - see AGENTS.md "Adding the variable-length UBX messages".
+  // packetUBXRXMPMP/packetUBXRXMPMPmessage no longer exist - ubxRXMPMP is now self-registered -
+  // see AGENTS.md "Adding support for RXM-PMP".
 
   // packetUBXMONCOMMS no longer exists - ubxMONCOMMS is now self-registered - see AGENTS.md
   // "Adding the variable-length UBX messages".
@@ -1247,9 +1252,9 @@ protected:
   bool initGeofenceParams();  // Allocate RAM for currentGeofenceParams and initialize it
   bool initModuleSWVersion(); // Allocate RAM for moduleSWVersion and initialize it
 
-  bool initPacketUBXRXMPMP();           // Allocate RAM for packetUBXRXMPMP and initialize it
-  bool initPacketUBXRXMPMPmessage();    // Allocate RAM for packetUBXRXMPMPRaw and initialize it
   bool initPacketUBXRXMQZSSL6message(); // Allocate RAM for packetUBXRXMQZSSL6raw and initialize it
+  // initPacketUBXRXMPMP()/initPacketUBXRXMPMPmessage() no longer exist - ubxRXMPMP is now
+  // self-registered - see AGENTS.md "Adding support for RXM-PMP".
   // initPacketUBXESFSTATUS() no longer exists - ubxESFSTATUS is now self-registered - see
   // AGENTS.md "Adding support for ESF-RAW and ESF-STATUS".
   // initPacketUBXESFMEAS() no longer exists - ubxESFMEAS is now self-registered - see AGENTS.md

@@ -1811,16 +1811,21 @@ typedef struct
 
 } UBX_RXM_PMP_data_t;
 
-// The PMP data can only be accessed via a callback. PMP cannot be polled.
-typedef struct
-{
-  ubxAutomaticFlags automaticFlags;
-  void (*callbackPointerPtr)(UBX_RXM_PMP_data_t *);
-  UBX_RXM_PMP_data_t *callbackData;
-} UBX_RXM_PMP_t;
+// UBX_RXM_PMP_t/UBX_RXM_PMP_message_t (the v3 RAM-management wrapper structs - automaticFlags +
+// callbackPointerPtr + callbackData) are retired - ubxRXMPMP (src/ubxMessages/ubxRXMPMP.h) is
+// now self-registered - see AGENTS.md "Adding support for RXM-PMP". UBX_RXM_PMP_data_t above is
+// kept as documented reference for the message's wire format, exactly as UBX_RXM_SFRBX_data_t/
+// UBX_MON_COMMS_data_t/UBX_SEC_SIG_data_t were kept - NOTE: ubxRXMPMP only correctly models
+// Version 0x01's byte layout, not Version 0x00's (they genuinely disagree on field placement,
+// unlike SEC-SIG's Version 2/3) - see the deliberate-limitation note in ubxRXMPMP.h.
 
 // Define a struct to hold the entire PMP message so the whole thing can be pushed to a GNSS.
 // Remember that the length of the payload could be variable (with version 1 messages).
+// UBX_RXM_PMP_message_t (the v3 RAM-management wrapper) is retired - the raw-frame relay
+// mechanism added for ESF-MEAS (getUbxMessageRawLengthCallback()/getUbxMessageRawPtrCallback())
+// now covers this "push the whole message" use case generically, for any registered message with
+// a callback - see AGENTS.md "Adding support for RXM-PMP". UBX_RXM_PMP_message_data_t below is
+// kept as documented reference for the raw frame's layout.
 typedef struct
 {
   uint8_t sync1; // 0xB5
@@ -1833,14 +1838,6 @@ typedef struct
   uint8_t checksumA;
   uint8_t checksumB;
 } UBX_RXM_PMP_message_data_t;
-
-// The PMP data can only be accessed via a callback. PMP cannot be polled.
-typedef struct
-{
-  ubxAutomaticFlags automaticFlags;
-  void (*callbackPointerPtr)(UBX_RXM_PMP_message_data_t *);
-  UBX_RXM_PMP_message_data_t *callbackData;
-} UBX_RXM_PMP_message_t;
 
 // UBX-RXM-QZSSL6 (0x02 0x73): QZSS L6 raw data (D9C modules)
 #define UBX_RXM_QZSSL6_NUM_CHANNELS 2

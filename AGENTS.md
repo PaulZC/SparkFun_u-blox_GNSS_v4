@@ -1116,14 +1116,169 @@ blocks pattern already established by NAV-SAT/RXM-SFRBX/MON-COMMS/SEC-SIG/ESF-ME
   `getRawSensorMeasurement`, `getSensorFusionStatus`, `setAutoESFRAW*`, `setAutoESFSTATUS*`,
   `assumeAutoESF*`, `logESFRAW`, `logESFSTATUS`, `initPacketUBXESFRAW`, `initPacketUBXESFSTATUS`)
   and confirmed every remaining hit is a comment, not live code.
-- **Not yet done**: this implementation has NOT been compiled - Docker has been unavailable in
-  every sandbox tried this engagement. It also has NOT been hardware-validated - unlike ESF-MEAS/
-  MON-COMMS/SEC-SIG, no `CallbackExample`-style sketch has been written for either message yet.
-  `numCallbackCopies = 1` for both is a design decision (explicitly instructed), not an estimate to
-  validate the way `UBX_ESF_MEAS_CALLBACK_BUFFERS`/`UBX_RXM_SFRBX_CALLBACK_BUFFERS` were - but the
-  block-count fallback (`getBlockCount()`'s new no-`_blockCountField` path) and the field tables
-  themselves are unvalidated against real hardware traffic, same caution as every other message at
-  this stage.
+- **Not yet done:** at the time this section was first written, neither message had been compiled
+  with `compile_example.bat` (Docker has been unavailable in every sandbox tried this engagement)
+  or hardware-validated. **Both gaps are now closed for both messages - see the two
+  hardware-validation postscripts immediately below.** `numCallbackCopies = 1` for both was always
+  a design decision (explicitly instructed), not an estimate to validate the way
+  `UBX_ESF_MEAS_CALLBACK_BUFFERS`/`UBX_RXM_SFRBX_CALLBACK_BUFFERS` were, so there is no equivalent
+  "may need raising" caveat to track for either message.
+
+- **Hardware-validation postscript (ESF-RAW, added after the user tested `CallbackExample11_ESFRAW`
+  on real hardware over I2C):** the user's own sketch (not written by Claude) registered a callback,
+  printed `getUbxMessageBlockCountCallback()` as "Measurements: N", then looped over that count
+  printing each block's decoded sensor value (X/Y/Z accelerometer, X/Y/Z gyro, temperature - `type`
+  determined from `dataType` and `dataField` unshifted per sensor type in the sketch, mirroring the
+  ESF-MEAS example) alongside `sTag` as "Sensor time". Result: compiled with no errors or warnings,
+  and printed **"Measurements: 7"** on every burst, with all 7 sensor readings present, plausible,
+  and self-consistent (accel ~[0.71, 1.67, 9.92] m/s^2 - a believable gravity-dominated static
+  reading; gyro readings all near zero; temperature a stable ~31 deg C), and every reading within a
+  given burst sharing the same `sTag` value, changing consistently burst-to-burst (6793763 ->
+  6794009 -> 6794271 -> 6794529). This is the first real-hardware exercise of the actual-length-only
+  `getBlockCount()` fallback added in this phase specifically for ESF-RAW (the one new piece of
+  base-class logic this phase's work actually depended on, as opposed to just another field-table
+  class) - since ESF-RAW has no block-count field to cross-check against, "7" printed correctly and
+  consistently on every single burst is the only confirmation available that the fallback's
+  `(actualLength - blockHeaderLength) / blockLength` arithmetic is correct, and it is. Also confirms
+  the 24-bit `dataField` sub-field's `X4`/`U4` tagging (reused from SEC-SIG/ESF-MEAS) decoding
+  correctly for a third message, and `sTag`'s plain 32-bit `U4` block field. **ESF-RAW is now
+  considered hardware-validated.**
+
+- **Hardware-validation postscript (ESF-STATUS, added after the user tested
+  `CallbackExample12_ESFSTATUS` on real hardware):** the user's own sketch (not written by Claude)
+  compiled with no errors or warnings, registered a callback, printed `iTOW` as "TOW", looked up
+  `fusionMode` against a small label table ("0: Initialization mode"), read `numSens` directly
+  (per the ordinary convention documented above - not via `getUbxMessageBlockCount()`) and printed
+  it as "Sensors: N", then looped over that count printing each block's `type` sub-field as a
+  sensor name (Gyro X/Y/Z, Accel X/Y/Z, Speed Ticks) alongside `ready` and `calibStatus`
+  (label-mapped to "not calibrated") and the plain `freq` field. Result: **"Sensors: 7" on every
+  burst**, with all 7 named correctly and in a stable order (Z Gyro, Speed Ticks, Y Gyro, X Gyro,
+  X/Y/Z Accel), each with a plausible, per-sensor-correct `freq` (50 Hz for every IMU axis, 10 Hz
+  for Speed Ticks - matching the ZED-F9R's typical configured output rates) and `ready = 1`
+  throughout; `iTOW` advanced by exactly 1000 ms per burst (194474000 -> 194475000 -> 194476000),
+  consistent with the sketch's polling cadence; `fusionMode` read as 0 ("Initialization mode")
+  consistently, plausible for a receiver that had not yet completed sensor fusion calibration.
+  This confirms: the 4 header fields (`iTOW`, `fusionMode`, `numSens` - `version` wasn't printed
+  by the sketch but shares the same header-field extraction path); the per-block `type` sub-field
+  (`sensStatus1`, bits 0-5) correctly distinguishing all 7 ZED-F9R IMU/wheel-tick sensor types; and
+  the `ready` (`sensStatus1` bit 6) and `calibStatus` (`sensStatus2` bits 0-1) sub-fields decoding
+  correctly alongside `type` from the *same* byte, confirming the multi-sub-field-per-byte bit
+  extraction (already used by MON-COMMS's `txErrors` and SEC-SIG's `sigSecFlags`) works correctly
+  for ESF-STATUS's denser packing too. The sketch didn't print `used` (`sensStatus1` bit 7),
+  `timeStatus` (`sensStatus2` bits 2-3), or any of the four `faults` sub-fields
+  (`badMeas`/`badTTag`/`missingMeas`/`noisyMeas`) - those remain formally unexercised by name, but
+  they use the identical bit-extraction mechanism as `ready`/`calibStatus`, which did print
+  correctly, so there is no reason to expect them to behave differently. **ESF-STATUS is now
+  considered hardware-validated**, with that one narrow caveat. **UBX-ESF-STATUS and UBX-ESF-RAW
+  are both hardware-validated as of this postscript - Phase 31 is complete.**
+
+## Adding support for RXM-PMP
+
+Please add RXM-PMP to `class` `ubxMessages`. You will see that the existing v3 code contains
+`setRXMPMPcallbackPtr` and `setRXMPMPmessageCallbackPtr`. You do not need to provide the second
+`message` method. Treat RXM-PMP like a standard variable-length UBX message. If the user wants to
+write ("push") the complete message from a callback to another device, they can use the raw frame
+accessors you added.
+
+### Implemented
+
+Implemented directly, no proposal - RXM-PMP's payload is the familiar header-plus-variable-length-
+data shape already established by NAV-SAT/RXM-RAWX/RXM-MEASX/MON-COMMS/SEC-SIG/ESF-RAW, so nothing
+here is architecturally novel. See `claude/v4-migration-status.md` (Phase 32) for the as-built
+record. Summary of what shipped:
+
+- `class ubxRXMPMP` (`src/ubxMessages/ubxRXMPMP.h`) - self-registered, following the same
+  variable-length pattern as every message above. `numCallbackCopies = 1` (an ordinary single-slot
+  "latest wins" message, like MON-COMMS/SEC-SIG - not a burst message like RXM-SFRBX/ESF-MEAS).
+  PMP cannot be polled - it is "Output" only, same convention as ESF-RAW (no `getRXMPMP()`
+  wrapper; the old v3 API never had one either).
+- **Real design problem found while investigating, not mentioned in the request: RXM-PMP has TWO
+  genuinely different wire layouts, selected by its `version` byte, and unlike SEC-SIG's Version 2
+  vs Version 3 (which turned out to share an identical layout, Phase 29), PMP's two versions
+  actually disagree on where fields sit.** Version 0x00 is FIXED length (528 bytes always):
+  `userData` is a fixed 504 bytes starting right after the 20-byte common header (byte 20), and
+  `fecBits`/`ebno` sit AFTER `userData`, at bytes 524/526. Version 0x01 is VARIABLE length (24 +
+  `numBytesUserData`, up to 528): `fecBits`/`ebno`/a reserved byte sit right after the header
+  (bytes 20/22/23), and `userData` is variable-length (0..504 bytes, per `numBytesUserData`),
+  starting at byte 24. The old v3 code's own comment confirmed this asymmetry directly: "Note:
+  length is variable with version 0x01" - i.e. NOT variable with version 0x00. The v4 field-table
+  mechanism has one fixed byte offset per field, so it cannot represent "this field's position
+  depends on a runtime byte value" - **this class therefore only correctly models Version 0x01's
+  layout**, which is also the one actually matching the instruction to "treat RXM-PMP like a
+  standard variable-length UBX message" (0x01 is the version that is actually variable-length). A
+  real Version 0x00 message would be misparsed by this class - same category of accepted,
+  deliberate limitation as SEC-SIG Version 1 being left unmodelled (Phase 28). **Nothing in this
+  repo has confirmed which version a real NEO-D9S actually outputs** - per the Phase 29 SEC-SIG
+  surprise (a receiver's real output can differ from what looks like the current documented
+  version), this is worth checking against real hardware before trusting this class outright.
+- `userData` is opaque payload data (PMP correction data bound for the D9S's downstream receiver),
+  not a struct of named values, so it is modelled as 0..`UBX_RXM_PMP_MAX_USER_DATA` (504) repeated
+  1-byte "blocks" (`blockLength = 1`) rather than a header/block/footer record layout.
+  `numBytesUserData` is passed as `blockCountField`, so `getUbxMessageBlockCount()`/`...Callback()`
+  give a defensively-clamped count (the ESF-MEAS-style pattern: minimum of the header field's own
+  value and what actually fits in the received length) - not the ESF-RAW no-field-at-all fallback,
+  since Version 0x01 does have a real, documented count field.
+- **`setRXMPMPmessageCallbackPtr()` (the old v3 "push the whole message, including sync/checksum
+  bytes, to another device" API) is NOT reimplemented, per the user's explicit instruction**: the
+  generic raw-frame relay mechanism added for ESF-MEAS (Phase 30) -
+  `getUbxMessageRawLengthCallback()`/`getUbxMessageRawPtrCallback()`, automatic for ANY message
+  with a callback registered - already covers exactly that use case, for every message, not just
+  PMP. `setRXMPMPcallbackPtr()` (the field-level callback) is retired too, replaced by the generic
+  `setAutoCallbackPtr()` (by name "RXM"/"PMP"), same as every other migrated message.
+- **Full migration of the old v3 scaffolding, same depth as MON-COMMS/SEC-SIG/ESF-RAW/ESF-STATUS:**
+  removed `packetUBXRXMPMP`/`packetUBXRXMPMPmessage` (the two `UBX_RXM_PMP_t *`/
+  `UBX_RXM_PMP_message_t *` members) and `initPacketUBXRXMPMP()`/`initPacketUBXRXMPMPmessage()`
+  from `u-blox_GNSS.h`/`.cpp`; removed the destructor's cleanup blocks for both; removed the
+  `autoLookup()`/`processUBXpacket()` branches for RXM-PMP under `case UBX_CLASS_RXM:` (the case
+  label stays alive - UBX_RXM_QZSSL6/RXM_SFRBX/RXM_RAWX/RXM_MEASX still have code or comments
+  there); removed the `checkCallbacks()` manual callback-firing blocks for both - each replaced
+  with a short retiring comment pointing at this section. Removed `setRXMPMPcallbackPtr()` and
+  `setRXMPMPmessageCallbackPtr()` entirely (declarations and definitions) - neither survives even
+  as a thin wrapper, since the generic `setAutoCallbackPtr()` (by name "RXM"/"PMP") now does the
+  same job, and the message-push use case is covered by the raw-frame relay accessors instead, per
+  the instruction.
+- **`u-blox_structs.h`**: removed only `UBX_RXM_PMP_t`/`UBX_RXM_PMP_message_t` (the v3
+  RAM-management wrapper structs) - kept `UBX_RXM_PMP_data_t`/`UBX_RXM_PMP_message_data_t` (the
+  wire-format structs) as documented reference, matching every prior migration, with a note on
+  `UBX_RXM_PMP_data_t` recording the Version 0x00/0x01 layout difference and that only 0x01 is
+  modelled.
+- **Verified statically:** confirmed every field's byte offset in the new `ubxRXMPMP.h` against
+  the real v3 `processUBXpacket()` extraction code (`extractInt(msg, 2)` for `numBytesUserData`,
+  `extractLong(msg, 4/8/12)` for `timeTag`/`uniqueWord[0]`/`uniqueWord[1]`, `extractInt(msg, 16)`
+  for `serviceIdentifier`, `extractByte(msg, 18/19)` for `spare`/`uniqueWordBitErrors`, the
+  Version-0x01 branch's `extractInt(msg, 20)`/`extractByte(msg, 22)` for `fecBits`/`ebno`, and
+  `userData` starting at byte 24) before trusting the field table - not just against
+  `UBX_RXM_PMP_data_t`'s struct layout, since the struct itself doesn't distinguish the two
+  versions' byte offsets the way the actual extraction code does. Confirmed `numFields` (10) and
+  `numBlockFields` (1) match the field tables' literal entry counts. Confirmed the `addClassID()`
+  call's argument order matches the existing extended signature exactly (15 positional arguments -
+  through `blockCountField`, omitting the trailing footer parameters via their defaults, same
+  shape as ESF-MEAS's call but without a footer). Confirmed
+  `UBLOX_CFG_MSGOUT_UBX_RXM_PMP_{I2C,SPI,UART1,UART2}` all exist in `u-blox_config_keys.h`, and
+  that `UBX_RXM_PMP = 0x72`/`UBX_CLASS_RXM = 0x02` are already defined in `u-blox_Class_and_ID.h`.
+  Confirmed brace/paren balance held on every touched file against the pre-edit baseline
+  (`ubxMessageVector.h` 24/24 braces, 125/125 parens; `u-blox_GNSS.h` 34/34 braces, 892/892 parens
+  - up from 889/889, balanced; `u-blox_GNSS.cpp` 1023/1023 braces, down from 1048/1048 (blocks
+  removed), 4607/4609 parens - the same pre-existing -2 paren quirk documented since Phase 9,
+  confirmed unchanged, not newly introduced; `u-blox_structs.h` 290/290 braces, down from 292/292
+  (two struct definitions removed), 387/387 parens; the new `ubxRXMPMP.h` 16/16 braces, 63/63
+  parens, 8364 bytes). Confirmed the new file is LF-only, matching every other file in
+  `ubxMessages/`, and confirmed CRLF preserved on every touched core file. Grepped the whole
+  `src/` tree afterward for `UBX_RXM_PMP_t`/`UBX_RXM_PMP_message_t`/`setRXMPMPcallbackPtr`/
+  `setRXMPMPmessageCallbackPtr`/`initPacketUBXRXMPMP`/`initPacketUBXRXMPMPmessage` and confirmed
+  every remaining hit is a comment, not live code. Also grepped the `examples/` folder for the two
+  retired functions and for `UBX_RXM_PMP` generally - no example references RXM-PMP at all, so
+  nothing there needed updating or is at risk of failing to compile from this change.
+- **Not yet done:** this implementation has NOT been compiled (Docker still unavailable in every
+  sandbox tried so far) and has NOT been hardware-validated - no `CallbackExample`-style sketch
+  exists yet for RXM-PMP, and testing it needs a NEO-D9S (a different, correction-data-focused
+  module from the ZED-F9R/ZED-X20P used for every other phase's hardware validation so far), so
+  this may need different hardware than what has validated everything up to Phase 31.
+  `numCallbackCopies = 1` is an ordinary design choice, not an estimate, so there is no "may need
+  raising" caveat to track. The Version 0x00/0x01 limitation above is the main thing worth
+  confirming against real hardware: if a real NEO-D9S turns out to send Version 0x00 (or a mix of
+  both), this class's field table will misparse those specific messages, the same way it would for
+  any message whose real-world version doesn't match what was assumed.
 
 ## Test
 

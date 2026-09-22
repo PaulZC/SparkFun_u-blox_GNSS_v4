@@ -126,25 +126,9 @@ void DevUBLOXGNSS::end(void)
   // self-registered and destroyed by ubxMessageVector's own destructor. See AGENTS.md
   // "Adding the variable-length UBX messages".
 
-  if (packetUBXRXMPMP != nullptr)
-  {
-    if (packetUBXRXMPMP->callbackData != nullptr)
-    {
-      delete packetUBXRXMPMP->callbackData;
-    }
-    delete packetUBXRXMPMP;
-    packetUBXRXMPMP = nullptr;
-  }
-
-  if (packetUBXRXMPMPmessage != nullptr)
-  {
-    if (packetUBXRXMPMPmessage->callbackData != nullptr)
-    {
-      delete packetUBXRXMPMPmessage->callbackData;
-    }
-    delete packetUBXRXMPMPmessage;
-    packetUBXRXMPMPmessage = nullptr;
-  }
+  // packetUBXRXMPMP/packetUBXRXMPMPmessage no longer exist - ubxRXMPMP is now self-registered
+  // and destroyed by ubxMessageVector's own destructor. See AGENTS.md "Adding support for
+  // RXM-PMP".
 
   if (packetUBXRXMQZSSL6message != nullptr)
   {
@@ -821,21 +805,15 @@ bool DevUBLOXGNSS::autoLookup(uint8_t Class, uint8_t ID, uint16_t *maxSize)
     // are now self-registered) - see AGENTS.md "Adding the variable-length UBX messages".
     break;
   case UBX_CLASS_RXM:
-    // UBX_RXM_SFRBX, UBX_RXM_RAWX and UBX_RXM_MEASX are all handled above via the registry
-    // (ubxRXMSFRBX/ubxRXMRAWX/ubxRXMMEASX are now self-registered) - see AGENTS.md "Adding the
-    // variable-length UBX messages" and "Adding support for RXM-SFRBX".
+    // UBX_RXM_SFRBX, UBX_RXM_RAWX, UBX_RXM_MEASX and UBX_RXM_PMP are all handled above via the
+    // registry (ubxRXMSFRBX/ubxRXMRAWX/ubxRXMMEASX/ubxRXMPMP are now self-registered) - see
+    // AGENTS.md "Adding the variable-length UBX messages", "Adding support for RXM-SFRBX" and
+    // "Adding support for RXM-PMP".
     if (ID == UBX_RXM_QZSSL6)
     {
       if (maxSize != nullptr)
         *maxSize = UBX_RXM_QZSSL6_MAX_LEN;
       return (packetUBXRXMQZSSL6message != nullptr);
-    }
-    else if (ID == UBX_RXM_PMP)
-    {
-      // PMP is a special case as it has both struct and message packages
-      if (maxSize != nullptr)
-        *maxSize = UBX_RXM_PMP_MAX_LEN;
-      return ((packetUBXRXMPMP != nullptr) || (packetUBXRXMPMPmessage != nullptr));
     }
     break;
   case UBX_CLASS_MON:
@@ -2029,70 +2007,11 @@ void DevUBLOXGNSS::processUBXpacket(ubxPacket *msg)
       // are now self-registered) - see AGENTS.md "Adding the variable-length UBX messages".
       break;
     case UBX_CLASS_RXM:
-      if (msg->id == UBX_RXM_PMP)
-      // Note: length is variable with version 0x01
-      // Note: the field positions depend on the version
-      {
-        // Parse various byte fields into storage - but only if we have memory allocated for it.
-        // By default, new PMP data will always overwrite 'old' data (data which is valid but which has not yet been read by the callback).
-        // To prevent this, uncomment the line two lines below
-        if ((packetUBXRXMPMP != nullptr) && (packetUBXRXMPMP->callbackData != nullptr)
-            //&& (packetUBXRXMPMP->automaticFlags.flags.bits.callbackCopyValid == false) // <=== Uncomment this line to prevent new data from overwriting 'old'
-        )
-        {
-          packetUBXRXMPMP->callbackData->version = extractByte(msg, 0);
-          packetUBXRXMPMP->callbackData->numBytesUserData = extractInt(msg, 2);
-          packetUBXRXMPMP->callbackData->timeTag = extractLong(msg, 4);
-          packetUBXRXMPMP->callbackData->uniqueWord[0] = extractLong(msg, 8);
-          packetUBXRXMPMP->callbackData->uniqueWord[1] = extractLong(msg, 12);
-          packetUBXRXMPMP->callbackData->serviceIdentifier = extractInt(msg, 16);
-          packetUBXRXMPMP->callbackData->spare = extractByte(msg, 18);
-          packetUBXRXMPMP->callbackData->uniqueWordBitErrors = extractByte(msg, 19);
-
-          if (packetUBXRXMPMP->callbackData->version == 0x00)
-          {
-            packetUBXRXMPMP->callbackData->fecBits = extractInt(msg, 524);
-            packetUBXRXMPMP->callbackData->ebno = extractByte(msg, 526);
-          }
-          else // if (packetUBXRXMPMP->data.version == 0x01)
-          {
-            packetUBXRXMPMP->callbackData->fecBits = extractInt(msg, 20);
-            packetUBXRXMPMP->callbackData->ebno = extractByte(msg, 22);
-          }
-
-          uint16_t userDataStart = (packetUBXRXMPMP->callbackData->version == 0x00) ? 20 : 24;
-          uint16_t userDataLength = (packetUBXRXMPMP->callbackData->version == 0x00) ? 504 : (packetUBXRXMPMP->callbackData->numBytesUserData);
-          for (uint16_t i = 0; (i < userDataLength) && (i < 504); i++)
-          {
-            packetUBXRXMPMP->callbackData->userData[i] = extractByte(msg, i + userDataStart);
-          }
-
-          packetUBXRXMPMP->automaticFlags.flags.bits.callbackCopyValid = true; // Mark the data as valid
-        }
-
-        // Full PMP message, including Class, ID and checksum
-        // By default, new PMP data will always overwrite 'old' data (data which is valid but which has not yet been read by the callback).
-        // To prevent this, uncomment the line two lines below
-        if ((packetUBXRXMPMPmessage != nullptr) && (packetUBXRXMPMPmessage->callbackData != nullptr)
-            //&& (packetUBXRXMPMPmessage->automaticFlags.flags.bits.callbackCopyValid == false) // <=== Uncomment this line to prevent new data from overwriting 'old'
-        )
-        {
-          packetUBXRXMPMPmessage->callbackData->sync1 = UBX_SYNCH_1;
-          packetUBXRXMPMPmessage->callbackData->sync2 = UBX_SYNCH_2;
-          packetUBXRXMPMPmessage->callbackData->cls = UBX_CLASS_RXM;
-          packetUBXRXMPMPmessage->callbackData->ID = UBX_RXM_PMP;
-          packetUBXRXMPMPmessage->callbackData->lengthLSB = msg->len & 0xFF;
-          packetUBXRXMPMPmessage->callbackData->lengthMSB = msg->len >> 8;
-
-          memcpy(packetUBXRXMPMPmessage->callbackData->payload, msg->payload, msg->len);
-
-          packetUBXRXMPMPmessage->callbackData->checksumA = msg->checksumA;
-          packetUBXRXMPMPmessage->callbackData->checksumB = msg->checksumB;
-
-          packetUBXRXMPMPmessage->automaticFlags.flags.bits.callbackCopyValid = true; // Mark the data as valid
-        }
-      }
-      else if (msg->id == UBX_RXM_QZSSL6)
+      // UBX_RXM_PMP is now a registered v4 message (ubxRXMPMP) - see AGENTS.md "Adding support
+      // for RXM-PMP". processUBXpacket() no longer parses it here; the registry-first branch at
+      // the top of this function (ubxMessages.storePayload()) does that generically, including
+      // writing into _callbackStorage/_callbackActualLength and _callbackRawFrame.
+      if (msg->id == UBX_RXM_QZSSL6)
       // Note: length is variable with version 0x01
       // Note: the field positions depend on the version
       {
@@ -3385,27 +3304,8 @@ void DevUBLOXGNSS::checkCallbacks(void)
   // above (ubxNAVSAT/ubxNAVSIG are now self-registered) - see AGENTS.md "Adding the
   // variable-length UBX messages".
 
-  if (packetUBXRXMPMP != nullptr)                                               // If RAM has been allocated for message storage
-    if (packetUBXRXMPMP->callbackData != nullptr)                               // If RAM has been allocated for the copy of the data
-      if (packetUBXRXMPMP->automaticFlags.flags.bits.callbackCopyValid == true) // If the copy of the data is valid
-      {
-        if (packetUBXRXMPMP->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          packetUBXRXMPMP->callbackPointerPtr(packetUBXRXMPMP->callbackData); // Call the callback
-        }
-        packetUBXRXMPMP->automaticFlags.flags.bits.callbackCopyValid = false; // Mark the data as stale
-      }
-
-  if (packetUBXRXMPMPmessage != nullptr)                                               // If RAM has been allocated for message storage
-    if (packetUBXRXMPMPmessage->callbackData != nullptr)                               // If RAM has been allocated for the copy of the data
-      if (packetUBXRXMPMPmessage->automaticFlags.flags.bits.callbackCopyValid == true) // If the copy of the data is valid
-      {
-        if (packetUBXRXMPMPmessage->callbackPointerPtr != nullptr) // If the pointer to the callback has been defined
-        {
-          packetUBXRXMPMPmessage->callbackPointerPtr(packetUBXRXMPMPmessage->callbackData); // Call the callback
-        }
-        packetUBXRXMPMPmessage->automaticFlags.flags.bits.callbackCopyValid = false; // Mark the data as stale
-      }
+  // UBX_RXM_PMP's callback is now dispatched by the generic registry walk above (ubxRXMPMP is
+  // now self-registered) - see AGENTS.md "Adding support for RXM-PMP".
 
   if (packetUBXRXMQZSSL6message != nullptr)                         // If RAM has been allocated for message storage
     if (packetUBXRXMQZSSL6message->callbackData != nullptr)         // If RAM has been allocated for the copy of the data
@@ -7541,83 +7441,10 @@ bool DevUBLOXGNSS::getNAVSIG(uint16_t maxWait)
   return getUBX(UBX_CLASS_NAV, UBX_NAV_SIG, maxWait);
 }
 
-// ***** RXM PMP automatic support
-
-// Callback receives a pointer to the data, instead of _all_ the data. Much kinder on the stack!
-bool DevUBLOXGNSS::setRXMPMPcallbackPtr(void (*callbackPointerPtr)(UBX_RXM_PMP_data_t *))
-{
-  if (packetUBXRXMPMP == nullptr)
-    initPacketUBXRXMPMP();        // Check that RAM has been allocated for the data
-  if (packetUBXRXMPMP == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  if (packetUBXRXMPMP->callbackData == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    packetUBXRXMPMP->callbackData = new UBX_RXM_PMP_data_t; // Allocate RAM for the main struct
-  }
-
-  if (packetUBXRXMPMP->callbackData == nullptr)
-  {
-    debugPrintln("setAutoRXMPMPcallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  packetUBXRXMPMP->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// PRIVATE: Allocate RAM for packetUBXRXMPMP and initialize it
-bool DevUBLOXGNSS::initPacketUBXRXMPMP()
-{
-  packetUBXRXMPMP = new UBX_RXM_PMP_t; // Allocate RAM for the main struct
-  if (packetUBXRXMPMP == nullptr)
-  {
-    debugPrintln("initPacketUBXRXMPMP: RAM alloc failed!", true); // Important
-    return (false);
-  }
-  packetUBXRXMPMP->automaticFlags.flags.all = 0;
-  packetUBXRXMPMP->callbackPointerPtr = nullptr;
-  packetUBXRXMPMP->callbackData = nullptr;
-  return (true);
-}
-
-// Callback receives a pointer to the data, instead of _all_ the data. Much kinder on the stack!
-bool DevUBLOXGNSS::setRXMPMPmessageCallbackPtr(void (*callbackPointerPtr)(UBX_RXM_PMP_message_data_t *))
-{
-  if (packetUBXRXMPMPmessage == nullptr)
-    initPacketUBXRXMPMPmessage();        // Check that RAM has been allocated for the data
-  if (packetUBXRXMPMPmessage == nullptr) // Only attempt this if RAM allocation was successful
-    return false;
-
-  if (packetUBXRXMPMPmessage->callbackData == nullptr) // Check if RAM has been allocated for the callback copy
-  {
-    packetUBXRXMPMPmessage->callbackData = new UBX_RXM_PMP_message_data_t; // Allocate RAM for the main struct
-  }
-
-  if (packetUBXRXMPMPmessage->callbackData == nullptr)
-  {
-    debugPrintln("setAutoRXMPMPmessagecallbackPtr: RAM alloc failed!", true); // Important
-    return (false);
-  }
-
-  packetUBXRXMPMPmessage->callbackPointerPtr = callbackPointerPtr;
-  return (true);
-}
-
-// PRIVATE: Allocate RAM for packetUBXRXMPMPmessage and initialize it
-bool DevUBLOXGNSS::initPacketUBXRXMPMPmessage()
-{
-  packetUBXRXMPMPmessage = new UBX_RXM_PMP_message_t; // Allocate RAM for the main struct
-  if (packetUBXRXMPMPmessage == nullptr)
-  {
-    debugPrintln("initPacketUBXRXMPMPmessage: RAM alloc failed!", true); // Important
-    return (false);
-  }
-  packetUBXRXMPMPmessage->automaticFlags.flags.all = 0;
-  packetUBXRXMPMPmessage->callbackPointerPtr = nullptr;
-  packetUBXRXMPMPmessage->callbackData = nullptr;
-  return (true);
-}
+// UBX-RXM-PMP is now a registered v4 message (ubxRXMPMP) - see AGENTS.md "Adding support for
+// RXM-PMP". setRXMPMPcallbackPtr()/initPacketUBXRXMPMP()/setRXMPMPmessageCallbackPtr()/
+// initPacketUBXRXMPMPmessage() are retired; use the generic setAutoCallbackPtr() instead (by
+// name "RXM"/"PMP").
 
 // ***** RXM QZSSL6 automatic support
 

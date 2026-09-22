@@ -53,6 +53,7 @@
 #include "ubxMessages/ubxRXMMEASX.h" // Variable-length: header + repeated per-satellite blocks - see AGENTS.md "Adding the variable-length UBX messages"
 #include "ubxMessages/ubxRXMRAWX.h" // Variable-length: header + repeated per-measurement blocks - see AGENTS.md "Adding the variable-length UBX messages"
 #include "ubxMessages/ubxRXMSFRBX.h" // Variable-length: header + repeated 4-byte data words, ring-buffered callback storage (numCallbackCopies=14) - see AGENTS.md "Adding support for RXM-SFRBX"
+#include "ubxMessages/ubxRXMPMP.h" // Variable-length: header + repeated 1-byte userData "blocks" - only Version 0x01's layout is modelled, see ubxRXMPMP.h
 #include "ubxMessages/ubxMONCOMMS.h"
 #include "ubxMessages/ubxMONHW.h"
 #include "ubxMessages/ubxMONHW2.h"
