@@ -39,7 +39,28 @@ void printESFSTATUSdata(ubxCallbackDataCommon_t *theData)
     Serial.print(F("TOW:          "));
     Serial.println(iTOW);
 
-    // numSens indicates how many sensor groups the data contains.
+    uint8_t fusionMode = (uint8_t)myGNSS.getUbxMessageFieldCallback(msg, "fusionMode");
+    Serial.print("fusionMode:   ");
+    switch (fusionMode)
+    {
+      case 0: // 0: Initialization mode
+        Serial.println("0: Initialization mode");
+        break;
+      case 1: // 1: Fusion mode
+        Serial.println("1: Fusion mode");
+        break;
+      case 2: // 2: Suspended fusion mode
+        Serial.println("2: Suspended fusion mode");
+        break;
+      case 3: // 3: Disabled
+        Serial.println("3: Disabled");
+        break;
+      default:
+        Serial.println("UNKNOWN");
+        break;
+    }
+
+      // numSens indicates how many sensor groups the data contains.
     // As a test, compare it to getUbxMessageBlockCount()
     uint8_t numSens = (uint8_t)myGNSS.getUbxMessageFieldCallback(msg, "numSens");
     Serial.print(F("Sensors:      "));
@@ -76,47 +97,51 @@ void printESFSTATUSdata(ubxCallbackDataCommon_t *theData)
       switch (dataType)
       {
       case 5:
-        Serial.print(F("Z Gyro:       "));
+        Serial.println(F("Z Gyro:       "));
         break;
       case 6:
-        Serial.print(F("Front Left:   "));
+        Serial.println(F("Front Left:   "));
         break;
       case 7:
-        Serial.print(F("Front Right:  "));
+        Serial.println(F("Front Right:  "));
         break;
       case 8:
-        Serial.print(F("Rear Left:    "));
+        Serial.println(F("Rear Left:    "));
         break;
       case 9:
-        Serial.print(F("Rear Right:   "));
+        Serial.println(F("Rear Right:   "));
         break;
       case 10:
-        Serial.print(F("Speed Ticks:  "));
+        Serial.println(F("Speed Ticks:  "));
         break;
       case 11:
-        Serial.print(F("Speed:        "));
+        Serial.println(F("Speed:        "));
         break;
       case 12:
-        Serial.print(F("Temp:         "));
+        Serial.println(F("Temp:         "));
         break;
       case 13:
-        Serial.print(F("Y Gyro:       "));
+        Serial.println(F("Y Gyro:       "));
         break;
       case 14:
-        Serial.print(F("X Gyro:       "));
+        Serial.println(F("X Gyro:       "));
         break;
       case 16:
-        Serial.print(F("X Accel:      "));
+        Serial.println(F("X Accel:      "));
         break;
       case 17:
-        Serial.print(F("Y Accel:      "));
+        Serial.println(F("Y Accel:      "));
         break;
       case 18:
-        Serial.print(F("Z Accel:      "));
+        Serial.println(F("Z Accel:      "));
         break;
       default:
         break;
       }
+
+      uint8_t ready = (uint8_t)myGNSS.getUbxMessageBlockFieldCallback(msg, i, "ready");
+      Serial.print("ready:        ");
+      Serial.println(ready);
 
       uint8_t calibStatus = (uint8_t)myGNSS.getUbxMessageBlockFieldCallback(msg, i, "calibStatus");
       Serial.print("calibStatus:  ");
@@ -136,6 +161,10 @@ void printESFSTATUSdata(ubxCallbackDataCommon_t *theData)
           Serial.println("UNKNOWN");
           break;
       }
+
+      uint8_t freq = (uint8_t)myGNSS.getUbxMessageBlockFieldCallback(msg, i, "freq");
+      Serial.print("freq (Hz):    ");
+      Serial.println(freq);
     }
   }
 }
