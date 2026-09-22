@@ -309,7 +309,7 @@ typedef struct
 } UBX_MON_HW2_data_t;
 
 // UBX-MON-RF (0x0a 0x38): RF information
-const uint16_t UBX_MON_RF_MAX_BLOCKS = 2; // 0 = L1; 1 = L2 / L5
+const uint16_t UBX_MON_RF_MAX_BLOCKS = 3; // "The band which the RF block represents is subject to product configuration."
 const uint16_t UBX_MON_RF_MAX_LEN = 4 + (24 * UBX_MON_RF_MAX_BLOCKS);
 
 // UBX_MON_RF_header_t/_block_t/_data_t (the wire-format reference structs) have all been
