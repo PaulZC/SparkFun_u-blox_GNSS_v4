@@ -24,12 +24,19 @@ u-blox make some incredible GNSS receivers covering everything from low-cost, hi
 This library is the new and improved version of the very popular SparkFun u-blox GNSS Arduino Library. v4 contains some big changes and improvements:
 
 * Written by AI, directed by SparkFun
-  * We used Claude to write this library, giving it careful direction using v3 as the starting point
+  * We used Claude to rewrite this library, giving it careful direction using v3 as the starting point
+  * It was quite the journey, taking around eight working days from start to highly polished finish
+  * If you want to see how we did it, the files are in the [AGENTS](./AGENTS) folder
 * v4 is a fresh start
   * It avoids the repetitive coding style of v3
   * Each UBX message type is supported by its own code Class
+  * Each NMEA message type is also supported by its own code Class
+  * **Unneeded UBX and NMEA message classes can be commented if needed - to save both RAM and program memory**
+  * Message fields (both UBX and NMEA) can be found and extracted **by name**
+  * Both Polling and Periodic messages are supported - with Callbacks for Periodic messages
 * v4 is **not** backward-compatible with v3
-  * But we have added helper methods to make migrating to v4 as easy as possible
+  * But we have included many helper methods to make migrating to v4 as easy as possible
+  * Please see [PollingExample1_PositionVelocityTime]() for details
 
 ## Compatibility
 
