@@ -37,11 +37,6 @@ void newPMP(ubxCallbackDataCommon_t *theData)
 
   Serial.println();
 
-  uint8_t numMeas = (uint8_t)myLBand.getUbxMessageFieldCallback(msg, "numMeas");
-  Serial.print(F("New RAWX data received. It contains "));
-  Serial.print(numMeas); // Print numMeas (Number of measurements / blocks)
-  Serial.print(F(" measurements."));
-
   Serial.println(F("New PMP data received:"));
 
   Serial.print(F("PMP message version: "));
