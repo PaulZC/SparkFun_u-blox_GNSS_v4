@@ -43,7 +43,7 @@ void newQZSSL6(ubxCallbackDataCommon_t *theData)
   Serial.print(F("svId:                   "));
   Serial.println((uint8_t)myQZSS.getUbxMessageFieldCallback(msg, "svId"));
   
-  Serial.print(F("cno (dBHz):               "));
+  Serial.print(F("cno (dBHz):             "));
   // getUbxMessageFieldCallback returns double by default. No casting needed.
   double ebno = myQZSS.getUbxMessageFieldCallback(msg, "cno") * 0.00390625; //Convert cno to dB : multiply by 2^-8
   Serial.println(ebno, 3);
