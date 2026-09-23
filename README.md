@@ -51,12 +51,12 @@ v4 of the library provides support for generation X20, F9 and M10 u-blox GNSS mo
 
 ## Repository Contents
 
-* [**examples**](examples) - Example sketches for the library (.ino). Run these from the Arduino IDE.
-* [**src**](src) - Source files for the library (.cpp, .h).
-* [**keywords.txt**](keywords.txt) - Keywords from this library that will be highlighted in the Arduino IDE.
-* [**library.properties**](library.properties) - General library properties for the Arduino package manager.
-* [**keys**](keys) - The u-blox Configuration Interface Key IDs extracted from multiple Interface Descriptions
-* [**Utils**](Utils) - Python utilities we wrote to help analyze UBX/NMEA/RTC data and UBX format log files
+* [**examples**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/examples) - Example sketches for the library (.ino). Run these from the Arduino IDE.
+* [**src**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/src) - Source files for the library (.cpp, .h).
+* [**keywords.txt**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/keywords.txt) - Keywords from this library that will be highlighted in the Arduino IDE.
+* [**library.properties**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/library.properties) - General library properties for the Arduino package manager.
+* [**keys**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/keys) - The u-blox Configuration Interface Key IDs extracted from multiple Interface Descriptions
+* [**Utils**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/Utils) - Python utilities we wrote to help analyze UBX/NMEA/RTC data and UBX format log files
 
 ## Documentation
 
