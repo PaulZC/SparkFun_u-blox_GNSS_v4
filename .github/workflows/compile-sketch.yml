@@ -14,12 +14,13 @@ jobs:
 
       matrix:
         board:
-          # Uno
+          # Mega
           # https://github.com/arduino/ArduinoCore-avr/blob/master/boards.txt
-          - fqbn: arduino:avr:mega
-            platforms: |
-              - name: arduino:avr
-                source-url: https://downloads.arduino.cc/packages/package_index.json
+          # Sadly, the standard UNO / MEGA boards do not include the <vector> library
+          #- fqbn: arduino:avr:mega
+          #  platforms: |
+          #    - name: arduino:avr
+          #      source-url: https://downloads.arduino.cc/packages/package_index.json
 
           # ESP32
           # https://github.com/espressif/arduino-esp32/blob/master/boards.txt
