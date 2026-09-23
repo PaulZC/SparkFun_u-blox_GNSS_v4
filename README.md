@@ -19,6 +19,13 @@
 
 u-blox make some incredible GNSS receivers covering everything from low-cost, highly configurable modules such as the MAX-M10S all the way up to the surveyor grade ZED-X20P with precision of the diameter of a dime. This library supports configuration and control of u-blox devices over I<sup>2</sup>C (called DDC by u-blox), Serial and SPI. This version uses the u-blox Configuration Interface to: detect the module; configure message intervals; etc.. We wrote it for the most recent u-blox modules which no longer support messages like UBX-CFG-PRT or UBX-CFG-MSG.
 
+![GitHub License](https://img.shields.io/github/license/sparkfun/SparkFun_u-blox_GNSS_v4)
+![Release](https://img.shields.io/github/v/release/sparkfun/SparkFun_u-blox_GNSS_v4)
+![Release Date](https://img.shields.io/github/release-date/sparkfun/SparkFun_u-blox_GNSS_v4)
+![Documentation - build](https://img.shields.io/github/actions/workflow/status/sparkfun/SparkFun_u-blox_GNSS_v4/build-deploy-ghpages.yml?label=doc%20build)
+[![Compile Test](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/actions/workflows/compile-sketch.yml/badge.svg)](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/actions/workflows/compile-sketch.yml)
+![GitHub issues](https://img.shields.io/github/issues/sparkfun/SparkFun_u-blox_GNSS_v4)
+
 ## v4 vs. v3
 
 This library is the new and improved version of the very popular SparkFun u-blox GNSS Arduino Library. v4 contains some big changes and improvements:
@@ -26,7 +33,7 @@ This library is the new and improved version of the very popular SparkFun u-blox
 * Written by AI, directed by SparkFun
   * We used Claude to rewrite this library, giving it careful direction using v3 as the starting point
   * It was quite the journey, taking around eight working days from start to highly polished finish
-  * If you want to see how we did it, the files are in the [AGENTS](./AGENTS) folder
+  * If you want to see how we did it, the files are in the [AGENTS](AGENTS) folder
 * v4 is a fresh start
   * It avoids the repetitive coding style of v3
   * Each UBX message type is supported by its own code Class
@@ -36,7 +43,7 @@ This library is the new and improved version of the very popular SparkFun u-blox
   * Both Polling and Periodic messages are supported - with Callbacks for Periodic messages
 * v4 is **not** backward-compatible with v3
   * But we have included many helper methods to make migrating to v4 as easy as possible
-  * Please see [PollingExample1_PositionVelocityTime]() for details
+  * Please see [PollingExample1_PositionVelocityTime](examples/PollingExample1_PositionVelocityTime/PollingExample1_PositionVelocityTime.ino) for details
 
 ## Compatibility
 
@@ -44,17 +51,21 @@ v4 of the library provides support for generation X20, F9 and M10 u-blox GNSS mo
 
 ## Repository Contents
 
-* [**/examples**](./examples) - Example sketches for the library (.ino). Run these from the Arduino IDE.
-* [**/src**](./src) - Source files for the library (.cpp, .h).
-* [**keywords.txt**](./keywords.txt) - Keywords from this library that will be highlighted in the Arduino IDE.
-* [**library.properties**](./library.properties) - General library properties for the Arduino package manager.
-* [**/keys**](./keys) - The u-blox Configuration Interface Key IDs extracted from multiple Interface Descriptions
-* [**/Utils**](./Utils) - Python utilities we wrote to help analyze UBX/NMEA/RTC data and UBX format log files
+* [**examples**](examples) - Example sketches for the library (.ino). Run these from the Arduino IDE.
+* [**src**](src) - Source files for the library (.cpp, .h).
+* [**keywords.txt**](keywords.txt) - Keywords from this library that will be highlighted in the Arduino IDE.
+* [**library.properties**](library.properties) - General library properties for the Arduino package manager.
+* [**keys**](keys) - The u-blox Configuration Interface Key IDs extracted from multiple Interface Descriptions
+* [**Utils**](Utils) - Python utilities we wrote to help analyze UBX/NMEA/RTC data and UBX format log files
+
+## Documentation
+
+API documentation is generated with Doxygen and published to GitHub Pages from the `main` branch.
 
 ## License Information
 
 This library is _**open source**_!
 
-Please see [LICENSE.md](./LICENSE.md) for full details.
+Please see [LICENSE.md](LICENSE.md) for full details.
 
 - Your friends at SparkFun.
