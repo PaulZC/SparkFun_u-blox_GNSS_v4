@@ -1,4 +1,4 @@
-/*
+/**
  * @date 2026
  * @copyright Copyright (c) 2026, SparkFun Electronics Inc. This project is released under the MIT License.
  *
@@ -22,6 +22,8 @@
  * v4.0 rework by Claude, directed by Paul Clark @ SparkFun Electronics, September 2026
  *
  * https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4
+ * 
+ * @file SparkFun_u-blox_GNSS_v4.h
  */
 
 #pragma once

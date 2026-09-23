@@ -1,4 +1,4 @@
-/*
+/**
  * @date 2026
  * @copyright Copyright (c) 2026, SparkFun Electronics Inc. This project is released under the MIT License.
  *
