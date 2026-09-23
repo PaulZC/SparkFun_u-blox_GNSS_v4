@@ -1,2 +1,4 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Auto-detect text vs binary files; store text as LF internally but always
+# check out text files as CRLF, regardless of the cloning machine's own
+# git config, so line endings stay consistent for every contributor.
+* text=auto eol=crlf
