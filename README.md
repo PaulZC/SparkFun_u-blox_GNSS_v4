@@ -38,7 +38,7 @@ This library is the new and improved version of the very popular SparkFun u-blox
   * It avoids the repetitive coding style of v3
   * Each UBX message type is supported by its own code Class
   * Each NMEA message type is also supported by its own code Class
-  * **Unneeded UBX and NMEA message classes can be commented if needed - to save both RAM and program memory**
+  * **Unneeded [UBX](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/src/ubxMessageVector.h#L55-L56) and [NMEA](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/src/nmeaMessageVector.h#L39-L40)  message classes can be commented - to save both RAM and program memory**
   * Message fields (both UBX and NMEA) can be found and extracted **by name**
   * Both Polling and Periodic messages are supported - with Callbacks for Periodic messages
 * v4 is **not** backward-compatible with v3
