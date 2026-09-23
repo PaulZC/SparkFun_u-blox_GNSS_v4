@@ -1,31 +1,34 @@
 /*
-  Reading NMEA GSV using a Callback
-  By: Paul Clark
-  SparkFun Electronics
-  Date: September 2026
-  License: MIT. Please see LICENSE.md for more information.
-
-  When NMEA GSV messages are enabled, u-blox GNSS modules output multiple messages as
-  defined by the NMEA 0183 specification:
-  GPGSV indicates the message contains information for GPS SVs. "GP" is the Talker ID.
-  GLGSV indicates the message contains information for GLONASS SVs. "GL" is the Talker ID.
-  Messages are output in groups, of up to 9 messages per constellation.
-  In theory, the module could output up to 54 messages (up to 9 messages for each of 6
-  constellations).
-  This example demonstrates how to read multiple GSV messages using a callback.
-  
-  Feel like supporting open source hardware?
-  Buy a board from SparkFun!
-  https://www.sparkfun.com/sparkfun-allband-gnss-rtk-breakout-zed-x20p-qwiic.html
-  https://www.sparkfun.com/sparkfun-gps-rtk2-board-zed-f9p-qwiic-gps-15136.html
-  https://www.sparkfun.com/sparkfun-gps-rtk-sma-breakout-zed-f9p-qwiic.html
-  https://www.sparkfun.com/sparkfun-gnss-receiver-breakout-max-m10s-qwiic.html
-  https://www.sparkfun.com/sparkfun-gps-rtk-dead-reckoning-breakout-zed-f9r-qwiic-gps-22693.html
-
-  Hardware Connections:
-  Plug a Qwiic cable into the GNSS and your microcontroller board
-  Open the serial monitor at 115200 baud to see the output
-*/
+ * @date 2026
+ * @copyright Copyright (c) 2026, SparkFun Electronics Inc. This project is released under the MIT License.
+ *
+ * SPDX-License-Identifier: MIT
+ * 
+ * Reading NMEA GSV using a Callback
+ * By: Paul Clark
+ * SparkFun Electronics
+ *
+ * When NMEA GSV messages are enabled, u-blox GNSS modules output multiple messages as
+ * defined by the NMEA 0183 specification:
+ * GPGSV indicates the message contains information for GPS SVs. "GP" is the Talker ID.
+ * GLGSV indicates the message contains information for GLONASS SVs. "GL" is the Talker ID.
+ * Messages are output in groups, of up to 9 messages per constellation.
+ * In theory, the module could output up to 54 messages (up to 9 messages for each of 6
+ * constellations).
+ * This example demonstrates how to read multiple GSV messages using a callback.
+ *  
+ * Feel like supporting open source hardware?
+ * Buy a board from SparkFun!
+ * https://www.sparkfun.com/sparkfun-allband-gnss-rtk-breakout-zed-x20p-qwiic.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk2-board-zed-f9p-qwiic-gps-15136.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk-sma-breakout-zed-f9p-qwiic.html
+ * https://www.sparkfun.com/sparkfun-gnss-receiver-breakout-max-m10s-qwiic.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk-dead-reckoning-breakout-zed-f9r-qwiic-gps-22693.html
+ *
+ * Hardware Connections:
+ * Plug a Qwiic cable into the GNSS and your microcontroller board
+ * Open the serial monitor at 115200 baud to see the output
+ */
 
 #include <Wire.h> //Needed for I2C to GNSS
 

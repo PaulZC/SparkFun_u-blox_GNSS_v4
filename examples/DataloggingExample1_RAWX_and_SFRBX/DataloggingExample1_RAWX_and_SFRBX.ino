@@ -1,49 +1,51 @@
 /*
-  Configuring the GNSS to automatically send RXM SFRBX and RAWX reports over I2C and log them to file on SD card
-  By: Paul Clark
-  SparkFun Electronics
-  Date: September 2026
-  License: MIT. Please see LICENSE.md for more information.
-
-  This example shows how to configure the u-blox GNSS to send RXM SFRBX and RAWX reports automatically
-  and log the data to SD card in UBX format.
-
-  ** Please note: this example will only work on u-blox ADR or High Precision GNSS or Time Sync products **
-
-  ** Please note: this example will only work on processors like the ESP32 which have plenty of RAM available **
-
-  Data is logged in u-blox UBX format. Please see the u-blox protocol specification for more details.
-  You can replay and analyze the data using u-center:
-  https://www.u-blox.com/en/product/u-center
-  Or you can use (e.g.) RTKLIB to analyze the data and extract your precise location or produce
-  Post-Processed Kinematic data:
-  https://rtklibexplorer.wordpress.com/
-  http://rtkexplorer.com/downloads/rtklib-code/
-
-  This code is intended to be run on the ESP32 Thing Plus USB-C
-  but can be adapted by changing the chip select pin and SPI definitions:
-  https://www.sparkfun.com/sparkfun-thing-plus-esp32-wroom-usb-c.html
-  
-  Hardware Connections:
-  Please see: https://learn.sparkfun.com/tutorials/esp32-thing-plus-usb-c-hookup-guide
-  Connect your GNSS breakout to the Thing Plus C using a Qwiic cable.
-  Insert a formatted micro-SD card into the socket on the Thing Plus.
-  Connect the Thing Plus to your computer using a USB-C cable.
-  This code has been tested using version 3.0.7 of the Espressif Systems ESP32 board package on Arduino IDE 1.8.19.
-  Select "SparkFun ESP32 Thing Plus C" as the board type.
-  Press upload to upload the code onto the ESP32.
-  Open the Serial Monitor at 115200 baud to see the output.
-
-  To minimise I2C bus errors, it is a good idea to open the I2C pull-up split pad links on
-  the u-blox module breakout.
-  
-  Feel like supporting open source hardware?
-  Buy a board from SparkFun!
-  https://www.sparkfun.com/sparkfun-allband-gnss-rtk-breakout-zed-x20p-qwiic.html
-  https://www.sparkfun.com/sparkfun-gps-rtk2-board-zed-f9p-qwiic-gps-15136.html
-  https://www.sparkfun.com/sparkfun-gps-rtk-sma-breakout-zed-f9p-qwiic.html
-
-*/
+ * @date 2026
+ * @copyright Copyright (c) 2026, SparkFun Electronics Inc. This project is released under the MIT License.
+ *
+ * SPDX-License-Identifier: MIT
+ * 
+ * Configuring the GNSS to automatically send RXM SFRBX and RAWX reports over I2C and log them to file on SD card
+ * By: Paul Clark
+ * SparkFun Electronics
+ *
+ * This example shows how to configure the u-blox GNSS to send RXM SFRBX and RAWX reports automatically
+ * and log the data to SD card in UBX format.
+ *
+ * ** Please note: this example will only work on u-blox ADR or High Precision GNSS or Time Sync products **
+ *
+ * ** Please note: this example will only work on processors like the ESP32 which have plenty of RAM available **
+ *
+ * Data is logged in u-blox UBX format. Please see the u-blox protocol specification for more details.
+ * You can replay and analyze the data using u-center:
+ * https://www.u-blox.com/en/product/u-center
+ * Or you can use (e.g.) RTKLIB to analyze the data and extract your precise location or produce
+ * Post-Processed Kinematic data:
+ * https://rtklibexplorer.wordpress.com/
+ * http://rtkexplorer.com/downloads/rtklib-code/
+ *
+ * This code is intended to be run on the ESP32 Thing Plus USB-C
+ * but can be adapted by changing the chip select pin and SPI definitions:
+ * https://www.sparkfun.com/sparkfun-thing-plus-esp32-wroom-usb-c.html
+ * 
+ * Hardware Connections:
+ * Please see: https://learn.sparkfun.com/tutorials/esp32-thing-plus-usb-c-hookup-guide
+ * Connect your GNSS breakout to the Thing Plus C using a Qwiic cable.
+ * Insert a formatted micro-SD card into the socket on the Thing Plus.
+ * Connect the Thing Plus to your computer using a USB-C cable.
+ * This code has been tested using version 3.0.7 of the Espressif Systems ESP32 board package on Arduino IDE 1.8.19.
+ * Select "SparkFun ESP32 Thing Plus C" as the board type.
+ * Press upload to upload the code onto the ESP32.
+ * Open the Serial Monitor at 115200 baud to see the output.
+ *
+ * To minimise I2C bus errors, it is a good idea to open the I2C pull-up split pad links on
+ * the u-blox module breakout.
+ * 
+ * Feel like supporting open source hardware?
+ * Buy a board from SparkFun!
+ * https://www.sparkfun.com/sparkfun-allband-gnss-rtk-breakout-zed-x20p-qwiic.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk2-board-zed-f9p-qwiic-gps-15136.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk-sma-breakout-zed-f9p-qwiic.html
+ */
 
 #include "FS.h"
 #include <SPI.h>

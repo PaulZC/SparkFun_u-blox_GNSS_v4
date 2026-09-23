@@ -1,25 +1,28 @@
 /*
-  Reading Position, Velocity and Time (PVT) via UBX binary commands
-  By: Paul Clark
-  SparkFun Electronics
-  Date: September 2026
-  License: MIT. Please see LICENSE.md for more information.
-
-  This example shows how to poll the u-blox module position, velocity and time (PVT) data using SPI.
-
-  Feel like supporting open source hardware?
-  Buy a board from SparkFun!
-  https://www.sparkfun.com/sparkfun-allband-gnss-rtk-breakout-zed-x20p-qwiic.html
-  https://www.sparkfun.com/sparkfun-gps-rtk2-board-zed-f9p-qwiic-gps-15136.html
-  https://www.sparkfun.com/sparkfun-gps-rtk-sma-breakout-zed-f9p-qwiic.html
-  https://www.sparkfun.com/sparkfun-gnss-receiver-breakout-max-m10s-qwiic.html
-  https://www.sparkfun.com/sparkfun-gps-rtk-dead-reckoning-breakout-zed-f9r-qwiic-gps-22693.html
-
-  Hardware Connections:
-  Hook up the PICO, POCI, SCK, CS and GND pins, plus 3V3 or 5V depending on your needs
-  Connect: GNSS PICO to microcontroller PICO; GNSS POCI to microcontroller POCI
-  Open the serial monitor at 115200 baud to see the output
-*/
+ * @date 2026
+ * @copyright Copyright (c) 2026, SparkFun Electronics Inc. This project is released under the MIT License.
+ *
+ * SPDX-License-Identifier: MIT
+ * 
+ * Reading Position, Velocity and Time (PVT) via UBX binary commands
+ * By: Paul Clark
+ * SparkFun Electronics
+ *
+ * This example shows how to poll the u-blox module position, velocity and time (PVT) data using SPI.
+ *  
+ * Feel like supporting open source hardware?
+ * Buy a board from SparkFun!
+ * https://www.sparkfun.com/sparkfun-allband-gnss-rtk-breakout-zed-x20p-qwiic.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk2-board-zed-f9p-qwiic-gps-15136.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk-sma-breakout-zed-f9p-qwiic.html
+ * https://www.sparkfun.com/sparkfun-gnss-receiver-breakout-max-m10s-qwiic.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk-dead-reckoning-breakout-zed-f9r-qwiic-gps-22693.html
+ *
+ * Hardware Connections:
+ * Hook up the PICO, POCI, SCK, CS and GND pins, plus 3V3 or 5V depending on your needs
+ * Connect: GNSS PICO to microcontroller PICO; GNSS POCI to microcontroller POCI
+ * Open the serial monitor at 115200 baud to see the output
+ */
 
 #include <SPI.h> //Needed for SPI to GNSS
 

@@ -1,23 +1,24 @@
 /*
-  Configuring the GNSS to automatically send ESF RAW reports over I2C and display them using a callback
-  By: Paul Clark
-  SparkFun Electronics
-  Date: September 2026
-  License: MIT. Please see LICENSE.md for more information.
-
-  This example configures the External Sensor Fusion RAW sensor messages on the ZED-F9R and
-  shows how to access the ESF data using callbacks.
-  
-  Feel like supporting open source hardware?
-  Buy a board from SparkFun!
-  https://www.sparkfun.com/sparkfun-gps-rtk-dead-reckoning-breakout-zed-f9r-qwiic-gps-22693.html
-
-  Hardware Connections:
-  Plug a Qwiic cable into the GNSS and your microcontroller board
-
-  Open the serial monitor at >>> 460800 <<< baud to see the output
-
-*/
+ * @date 2026
+ * @copyright Copyright (c) 2026, SparkFun Electronics Inc. This project is released under the MIT License.
+ *
+ * SPDX-License-Identifier: MIT
+ * 
+ * Configuring the GNSS to automatically send ESF RAW reports over I2C and display them using a callback
+ * By: Paul Clark
+ * SparkFun Electronics
+ *
+ * This example configures the External Sensor Fusion RAW sensor messages on the ZED-F9R and
+ * shows how to access the ESF data using callbacks.
+ *  
+ * Feel like supporting open source hardware?
+ * Buy a board from SparkFun!
+ * https://www.sparkfun.com/sparkfun-gps-rtk-dead-reckoning-breakout-zed-f9r-qwiic-gps-22693.html
+ *
+ * Hardware Connections:
+ * Plug a Qwiic cable into the GNSS and your microcontroller board
+ * Open the serial monitor at 115200 baud to see the output
+ */
 
 #include <Wire.h> //Needed for I2C to GPS
 

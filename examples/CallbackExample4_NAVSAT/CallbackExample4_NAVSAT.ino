@@ -1,25 +1,28 @@
 /*
-  Reading NAV-SAT using a Callback
-  By: Paul Clark
-  SparkFun Electronics
-  Date: September 2026
-  License: MIT. Please see LICENSE.md for more information.
-
-  This example shows how to use a callback to print the NAV-SAT SV signal strengths
-  (cno = Carrier to NOise ratio in dBHz).
-  
-  Feel like supporting open source hardware?
-  Buy a board from SparkFun!
-  https://www.sparkfun.com/sparkfun-allband-gnss-rtk-breakout-zed-x20p-qwiic.html
-  https://www.sparkfun.com/sparkfun-gps-rtk2-board-zed-f9p-qwiic-gps-15136.html
-  https://www.sparkfun.com/sparkfun-gps-rtk-sma-breakout-zed-f9p-qwiic.html
-  https://www.sparkfun.com/sparkfun-gnss-receiver-breakout-max-m10s-qwiic.html
-  https://www.sparkfun.com/sparkfun-gps-rtk-dead-reckoning-breakout-zed-f9r-qwiic-gps-22693.html
-
-  Hardware Connections:
-  Plug a Qwiic cable into the GNSS and your microcontroller board
-  Open the serial monitor at 115200 baud to see the output
-*/
+ * @date 2026
+ * @copyright Copyright (c) 2026, SparkFun Electronics Inc. This project is released under the MIT License.
+ *
+ * SPDX-License-Identifier: MIT
+ * 
+ * Reading NAV-SAT using a Callback
+ * By: Paul Clark
+ * SparkFun Electronics
+ *
+ * This example shows how to use a callback to print the NAV-SAT SV signal strengths
+ * (cno = Carrier to NOise ratio in dBHz).
+ *  
+ * Feel like supporting open source hardware?
+ * Buy a board from SparkFun!
+ * https://www.sparkfun.com/sparkfun-allband-gnss-rtk-breakout-zed-x20p-qwiic.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk2-board-zed-f9p-qwiic-gps-15136.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk-sma-breakout-zed-f9p-qwiic.html
+ * https://www.sparkfun.com/sparkfun-gnss-receiver-breakout-max-m10s-qwiic.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk-dead-reckoning-breakout-zed-f9r-qwiic-gps-22693.html
+ *
+ * Hardware Connections:
+ * Plug a Qwiic cable into the GNSS and your microcontroller board
+ * Open the serial monitor at 115200 baud to see the output
+ */
 
 #include <Wire.h> //Needed for I2C to GNSS
 
