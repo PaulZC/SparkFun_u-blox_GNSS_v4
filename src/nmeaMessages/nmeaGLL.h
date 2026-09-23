@@ -1,13 +1,38 @@
 /*
-  nmeaGLL.h
-
-  Definitions for the National Marine Electronics Association standard NMEA 0183
-  GLL message: Latitude and longitude, with time of position fix and status
-
-  The nmeaField.fieldName is taken from the u-blox Interface Description, e.g.:
-  https://www.u-blox.com/sites/default/files/documents/u-blox-X20-HPG-2.11_InterfaceDescription_UBXDOC-304424225-21617.pdf
-
-*/
+ * @date 2026
+ * @copyright Copyright (c) 2026, SparkFun Electronics Inc. This project is released under the MIT License.
+ *
+ * SPDX-License-Identifier: MIT
+ * 
+ * Please see LICENSE.md for more details
+ * 
+ * An Arduino Library which allows you to communicate seamlessly with u-blox GNSS modules using the Configuration Interface
+ * 
+ * SparkFun sells these at its website: www.sparkfun.com
+ * Do you like this library? Help support SparkFun. Buy a board!
+ * https://www.sparkfun.com/sparkfun-allband-gnss-rtk-breakout-zed-x20p-qwiic.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk2-board-zed-f9p-qwiic-gps-15136.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk-sma-breakout-zed-f9p-qwiic.html
+ * https://www.sparkfun.com/sparkfun-gnss-receiver-breakout-max-m10s-qwiic.html
+ * https://www.sparkfun.com/sparkfun-gps-rtk-dead-reckoning-breakout-zed-f9r-qwiic-gps-22693.html
+ *
+ * Original version by Nathan Seidle @ SparkFun Electronics, September 6th, 2018
+ * v2.0 rework by Paul Clark @ SparkFun Electronics, December 31st, 2020
+ * v3.0 rework by Paul Clark @ SparkFun Electronics, December 8th, 2022
+ * v4.0 rework by Claude, directed by Paul Clark @ SparkFun Electronics, September 2026
+ *
+ * https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4
+ *
+ * 
+ * @file nmeaGLL.h
+ *
+ * Definitions for the National Marine Electronics Association standard NMEA 0183
+ * GLL message: Latitude and longitude, with time of position fix and status
+ *
+ * The nmeaField.fieldName is taken from the u-blox Interface Description, e.g.:
+ * https://www.u-blox.com/sites/default/files/documents/u-blox-X20-HPG-2.11_InterfaceDescription_UBXDOC-304424225-21617.pdf
+ *
+ */
 
 #pragma once
 
