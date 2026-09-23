@@ -48,6 +48,8 @@ v4 of the library provides support for generation X20, F9 and M10 u-blox GNSS mo
 * [**/src**](./src) - Source files for the library (.cpp, .h).
 * [**keywords.txt**](./keywords.txt) - Keywords from this library that will be highlighted in the Arduino IDE.
 * [**library.properties**](./library.properties) - General library properties for the Arduino package manager.
+* [**/keys**](./keys) - The u-blox Configuration Interface Key IDs extracted from multiple Interface Descriptions
+* [**/Utils**](./Utils) - Python utilities we wrote to help analyze UBX/NMEA/RTC data and UBX format log files
 
 ## License Information
 
