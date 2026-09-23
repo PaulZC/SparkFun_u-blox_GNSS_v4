@@ -75,6 +75,8 @@ public:
     const uint8_t supportedVersions = 1;
 
     const uint16_t messageLength = UBX_RXM_RAWX_MAX_LEN; // Maximum payload length - see above
+    // The ZED-F9P needs at least 3 callback copies when running at 20Hz on SPI
+    // Even then, some messages are skipped. For best results, if you have RAM to spare, set this to 4
     const uint8_t numCallbackCopies = 1;
 
     // Header field table - the 16 bytes that precede the repeated blocks. Read with the ordinary

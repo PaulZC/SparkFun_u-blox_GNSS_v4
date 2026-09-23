@@ -148,7 +148,9 @@ const uint16_t UBX_NAV_EOE_LEN = 4;
 // Note: on protocol version 17: numWords is (0..16)
 //       on protocol version 18+: numWords is (0..10)
 // Note: the X20P has been observed exceeding both of the above - see UBX_RXM_SFRBX_MAX_WORDS.
-const uint8_t UBX_RXM_SFRBX_CALLBACK_BUFFERS = 50; // X20P needs more than 40 buffers!
+// X20P needs more than 40 buffers!
+// ZED-F9P @ 20Hz on SPI needs more than 50 buffers! If you have RAM to spare, set to 60 for best results.
+const uint8_t UBX_RXM_SFRBX_CALLBACK_BUFFERS = 50;
 const uint8_t UBX_RXM_SFRBX_MAX_WORDS = 20; // X20P occasionally outputs 19 words! (Payload length 84)
 const uint16_t UBX_RXM_SFRBX_MAX_LEN = 8 + (4 * UBX_RXM_SFRBX_MAX_WORDS);
 
