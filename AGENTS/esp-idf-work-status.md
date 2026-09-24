@@ -33,8 +33,9 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 - Hardware: ESP-IDF PeriodicExample2_GPGGA runs correctly: NMEA field getters return std::string; DDMM→degrees via sfe_string_from_double gives 8 dp (54.86654750); UTC time advances 1 s per GGA. NAV-HPPOSLLH still arriving because PeriodicExample1 enabled it in RAM+BBR
 - Hardware: ESP-IDF CallbackExample1_NAVHPPOSLLH runs correctly: setCfgValset ACKed; static callback fires once per HPPOSLLH (1 Hz) via checkUblox()/checkCallbacks(); printed fields match payload bytes
 - Hardware: ESP-IDF CallbackExample2_GPRMC runs correctly: NMEA callback fires once per RMC; std::string fields (time, date 240926, NS, EW) and DDMM→degrees OK. All 7 converted ESP-IDF examples now run on hardware
-- Converted (24 Sep 2026, not yet built): DataloggingExample1_RAWX_and_SFRBX. SD card via ESP-IDF FATFS VFS (esp_vfs_fat_sdspi_mount) in main/sd_card.c (C, because of the sdmmc/sdspi C initializer macros); fopen/fwrite/fclose; key press via non-blocking stdin (fcntl O_NONBLOCK + fgetc); freeze() uses vTaskDelay; file opened with "a" (append, as the Arduino comment says; Arduino-ESP32 FILE_WRITE is actually "w")
-- Not yet: RAWX stress test results; remaining 15 examples
+- Converted (24 Sep 2026; builds OK on ESP-IDF v6.1, 334 KB): DataloggingExample1_RAWX_and_SFRBX. SD card via ESP-IDF FATFS VFS (esp_vfs_fat_sdspi_mount) in main/sd_card.c (C, because of the sdmmc/sdspi C initializer macros); fopen/fwrite/fclose; key press via non-blocking stdin (fcntl O_NONBLOCK + fgetc); freeze() uses vTaskDelay; file opened with "a" (append, as the Arduino comment says; Arduino-ESP32 FILE_WRITE is actually "w")
+- Hardware: ESP-IDF DataloggingExample1_RAWX_and_SFRBX STRESS TEST PASSED (24 Sep 2026, ZED-X20P, I2C, transaction size 32, Tera Term): ~193 s logging, 539,720 bytes to a 32 GB SDHC card. UBX_Integrity_Checker: 96 RAWX + 3596 SFRBX, no checksum failures, longest message 3672 bytes; counts match the callback counters exactly. No 80%-full buffer warning; enableDebugging(sfeStdout, true) printed no important errors. Key press via non-blocking stdin works. Benign IDF warning at unmount: "W gpio: conflict found for GPIO[5]" (SD CS)
+- Not yet: remaining 15 examples
 
 ## Conventions for the ESP-IDF examples
 - I2C: `busConfig.flags.enable_internal_pullup = false; // u-blox modules have their own internal active pull-ups` (Paul, 24 Sep 2026: extra pull-ups have caused I2C problems with u-blox modules). Tested OK on PollingExample1
@@ -42,7 +43,6 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 
 ## Next
 - Paul: commit (comment out enableDebugging() in any examples first)
-- Paul: build and run DataloggingExample1_RAWX_and_SFRBX (stress test)
 - Claude: convert the remaining 15 examples
-- Then: stress test (RAWX), tune i2cTransactionSize (still 32), CI, registry
+- Then: optional i2cTransactionSize tuning (32 is sufficient for RAWX+SFRBX), CI, registry
 - Deferred: new(std::nothrow); FreeRTOS lock option; Arduino-as-component path in CMakeLists (untested)
