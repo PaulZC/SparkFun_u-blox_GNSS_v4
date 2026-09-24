@@ -18,4 +18,5 @@ docker cp arduino_example:/%EXAMPLE%.ino.bin Arduino_%EXAMPLE%.ino.bin
 docker cp arduino_example:/%EXAMPLE%.ino.elf Arduino_%EXAMPLE%.ino.elf
 docker cp arduino_example:/%EXAMPLE%.ino.bootloader.bin Arduino_%EXAMPLE%.ino.bootloader.bin
 docker cp arduino_example:/%EXAMPLE%.ino.partitions.bin Arduino_%EXAMPLE%.ino.partitions.bin
+docker cp arduino_example:/boot_app0.bin Arduino_%EXAMPLE%.ino.boot_app0.bin
 docker container rm arduino_example
