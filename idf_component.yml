@@ -39,3 +39,4 @@ examples:
   - path: idf_examples/CallbackExample1_NAVHPPOSLLH
   - path: idf_examples/CallbackExample2_GPRMC
   - path: idf_examples/DataloggingExample1_RAWX_and_SFRBX
+  - path: idf_examples/DataloggingExample2_DataLogger_IoT_SDIO

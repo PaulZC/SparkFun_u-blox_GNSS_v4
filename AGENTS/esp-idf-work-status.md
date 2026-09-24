@@ -35,6 +35,7 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 - Hardware: ESP-IDF CallbackExample2_GPRMC runs correctly: NMEA callback fires once per RMC; std::string fields (time, date 240926, NS, EW) and DDMM→degrees OK. All 7 converted ESP-IDF examples now run on hardware
 - Converted (24 Sep 2026; builds OK on ESP-IDF v6.1, 334 KB): DataloggingExample1_RAWX_and_SFRBX. SD card via ESP-IDF FATFS VFS (esp_vfs_fat_sdspi_mount) in main/sd_card.c (C, because of the sdmmc/sdspi C initializer macros); fopen/fwrite/fclose; key press via non-blocking stdin (fcntl O_NONBLOCK + fgetc); freeze() uses vTaskDelay; file opened with "a" (append, as the Arduino comment says; Arduino-ESP32 FILE_WRITE is actually "w")
 - Hardware: ESP-IDF DataloggingExample1_RAWX_and_SFRBX STRESS TEST PASSED (24 Sep 2026, ZED-X20P, I2C, transaction size 32, Tera Term): ~193 s logging, 539,720 bytes to a 32 GB SDHC card. UBX_Integrity_Checker: 96 RAWX + 3596 SFRBX, no checksum failures, longest message 3672 bytes; counts match the callback counters exactly. No 80%-full buffer warning; enableDebugging(sfeStdout, true) printed no important errors. Key press via non-blocking stdin works. Benign IDF warning at unmount: "W gpio: conflict found for GPIO[5]" (SD CS)
+- Converted (24 Sep 2026, not yet built): DataloggingExample2_DataLogger_IoT_SDIO (new Arduino example from Paul): GNSS on SPI2_HOST (CS 33) at 4 MHz, 20 Hz nav, RAWX+SFRBX every epoch, NMEA at 1 Hz; SD via SDMMC 4-bit slot 1 (esp_vfs_fat_sdmmc_mount, main/sdmmc_card.c); timestamped long file name needs CONFIG_FATFS_LFN_HEAP (in sdkconfig.defaults); STAT LED 25 (the .ino loop uses LED_BUILTIN); EN_3V3_SW 32; IMU_CS 5 and MAG_CS 27 held high. Risk: the library reads SPI one byte at a time (checkUbloxSpi → writeReadByte); each byte is one spi_device_polling_transmit on ESP-IDF - possibly too slow at 20 Hz RAWX
 - Not yet: remaining 15 examples
 
 ## Conventions for the ESP-IDF examples
@@ -43,6 +44,7 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 
 ## Next
 - Paul: commit (comment out enableDebugging() in any examples first)
+- Paul: build and run DataloggingExample2_DataLogger_IoT_SDIO
 - Claude: convert the remaining 15 examples
 - Then: optional i2cTransactionSize tuning (32 is sufficient for RAWX+SFRBX), CI, registry
 - Deferred: new(std::nothrow); FreeRTOS lock option; Arduino-as-component path in CMakeLists (untested)
