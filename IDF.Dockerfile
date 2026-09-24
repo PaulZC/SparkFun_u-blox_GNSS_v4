@@ -7,6 +7,9 @@ FROM ubuntu:24.04 AS upstream
 # The example to be compiled
 ARG EXAMPLE=PollingExample1_PositionVelocityTime
 
+#  The component name
+ARG COMPONENT=sparkfun_u-blox_gnss_v4
+
 # switch to root
 USER root
 SHELL ["/bin/bash", "-c"]
@@ -127,20 +130,23 @@ ENV IDF_CCACHE_ENABLE=1
 FROM upstream AS deployment
 
 # Add the source files
+# Copy the library into a directory named after the component.
+# (Copying it into / made the component directory name empty, which breaks the ESP-IDF build.)
+WORKDIR /${COMPONENT}
 ADD . .
 
 # Build firmware
 RUN cd ./idf_examples/${EXAMPLE} \
     && set -e \
     && . $IDF_PATH/export.sh \
-    && idf.py set-target esp32
+    && idf.py set-target esp32 \
     && idf.py build
 
 # ===========================================================================================
 
 # Copy the build output. List the files
 FROM deployment AS output
-COPY --from=deployment ./idf_examples/${EXAMPLE}/build/${EXAMPLE}.* /
-COPY --from=deployment ./idf_examples/${EXAMPLE}/build/bootloader/bootloader.bin /
-COPY --from=deployment ./idf_examples/${EXAMPLE}/build/partition_table/partition-table.bin /
+COPY --from=deployment /${COMPONENT}/idf_examples/${EXAMPLE}/build/${EXAMPLE}.* /
+COPY --from=deployment /${COMPONENT}/idf_examples/${EXAMPLE}/build/bootloader/bootloader.bin /
+COPY --from=deployment /${COMPONENT}/idf_examples/${EXAMPLE}/build/partition_table/partition-table.bin /
 CMD echo $(ls /*.*)

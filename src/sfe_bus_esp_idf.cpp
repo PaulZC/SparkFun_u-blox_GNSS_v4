@@ -352,7 +352,7 @@ namespace SparkFun_UBLOX_GNSS
   //////////////////////////////////////////////////////////////////////////////////////////////////
   // Serial (UART)
 
-  SfeSerial::SfeSerial(void) : _port{0}, _initialized{false}
+  SfeSerial::SfeSerial(void) : _port{UART_NUM_0}, _initialized{false} // uart_port_t is an enum in ESP-IDF v6 (it was an int in v5)
   {
   }
 

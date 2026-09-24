@@ -15,6 +15,12 @@ Registry name: `sparkfun/sparkfun_u-blox_gnss_v4`. Approach: option 2b (native E
 - README: ESP-IDF section
 - Checked only by a host g++ syntax check against stub IDF and Arduino headers (both clean). No real toolchain build yet.
 
+## Build results (24 Sep 2026)
+- Arduino (arduino-cli, esp32:esp32 3.3.11, Arduino.Dockerfile): PollingExample1 compiles. Fixed: String(double, int) overload ambiguity in sfe_platform.h
+- ESP-IDF v6.1 (GCC 15.2, -Werror, IDF.Dockerfile): PollingExample1 compiles and links. Fixed: Docker WORKDIR /${COMPONENT} (component dir name was empty); uart_port_t is an enum in IDF v6 (_port{UART_NUM_0})
+- IDF_compile_example.bat args: COMPONENT EXAMPLE
+- Not yet: PollingExample2/3 builds; any hardware test
+
 ## Next
 - Paul: build idf_examples on ESP-IDF, and the Arduino examples (regression), then run on hardware
 - Then: stress test (RAWX), tune i2cTransactionSize (still 32), convert the remaining 20 examples, CI, registry
