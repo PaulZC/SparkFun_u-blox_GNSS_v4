@@ -49,9 +49,26 @@ This library is the new and improved version of the very popular SparkFun u-blox
 
 v4 of the library provides support for generation X20, F9 and M10 u-blox GNSS modules, which support the Configuration Interface
 
+## ESP-IDF Component
+
+This library can also be used as a native component for the Espressif ESP-IDF - without the Arduino core.
+
+* Add it to your project with: `idf.py add-dependency "sparkfun/sparkfun_u-blox_gnss_v4"`
+* ESP-IDF v5.3 or later is required. The library uses the ESP-IDF `i2c_master`, `spi_master` and `uart` drivers
+* The API is C++. Your `main` file needs to be `main.cpp`, with `extern "C" void app_main(void)`
+* You create the bus, then pass it to `begin()`:
+  * I2C: `i2c_new_master_bus()` then `myGNSS.begin(i2cBus)`
+  * SPI: `spi_bus_initialize()` then `myGNSS.begin(SPI2_HOST, csGpio)`
+  * UART: `uart_driver_install()`, `uart_param_config()` and `uart_set_pin()` then `myGNSS.begin(UART_NUM_1)`
+* `enableDebugging()` prints to the console (stdout) by default
+* NMEA field getters return `std::string` (`sfe_string_t`) instead of the Arduino `String`
+* A 1000Hz FreeRTOS tick (`CONFIG_FREERTOS_HZ=1000`) is recommended
+* ESP-IDF examples are in [**idf_examples**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/idf_examples). Build, flash and monitor with `idf.py -p PORT flash monitor`
+
 ## Repository Contents
 
 * [**examples**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/examples) - Example sketches for the library (.ino). Run these from the Arduino IDE.
+* [**idf_examples**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/idf_examples) - Example projects for the ESP-IDF (main.cpp, CMakeLists.txt, idf_component.yml).
 * [**src**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/src) - Source files for the library (.cpp, .h).
 * [**keywords.txt**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/keywords.txt) - Keywords from this library that will be highlighted in the Arduino IDE.
 * [**library.properties**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/library.properties) - General library properties for the Arduino package manager.

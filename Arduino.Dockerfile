@@ -5,7 +5,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG CORE_VERSION=3.3.11
 
 # The example to be compiled
-ARG EXAMPLE=Example1_PositionVelocityTime
+ARG EXAMPLE=PollingExample1_PositionVelocityTime
 
 # arduino-cli warnings: none default more all
 ARG WARNINGS=default
