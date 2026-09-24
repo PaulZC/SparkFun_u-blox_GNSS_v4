@@ -28,7 +28,11 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 - Hardware: ESP-IDF PollingExample3 (SPI2_HOST, CS GPIO 4, 4 MHz) runs correctly with debug enabled. getVal uses the SPI key (0x10790001); spiBuffer 308 bytes; NAV-PVT polls 794–1005 ms
 - ALL THREE BUSES (I2C, UART, SPI) CONFIRMED ON HARDWARE WITH ESP-IDF v6.1 (24 Sep 2026)
 - Modules: I2C and UART tests used a ZED-X20P; the SPI test used an older ZED-F9P with D_SEL set for SPI (explains 18 vs 31 SVs and no diffSoln)
-- Converted (24 Sep 2026, not yet built): PeriodicExample1_NAVHPPOSLLH, PeriodicExample2_GPGGA, CallbackExample1_NAVHPPOSLLH, CallbackExample2_GPRMC (all I2C; added to idf_component.yml examples list)
+- Converted (24 Sep 2026): PeriodicExample1_NAVHPPOSLLH, PeriodicExample2_GPGGA, CallbackExample1_NAVHPPOSLLH, CallbackExample2_GPRMC (all I2C; added to idf_component.yml examples list)
+- Hardware: ESP-IDF PeriodicExample1_NAVHPPOSLLH runs correctly (debug enabled): setAutoUBX CFG-VALSET ACKed; HPPOSLLH arrives at 1 Hz; printed fields match payload bytes; progress dots appear live (fflush OK)
+- Hardware: ESP-IDF PeriodicExample2_GPGGA runs correctly: NMEA field getters return std::string; DDMM→degrees via sfe_string_from_double gives 8 dp (54.86654750); UTC time advances 1 s per GGA. NAV-HPPOSLLH still arriving because PeriodicExample1 enabled it in RAM+BBR
+- Hardware: ESP-IDF CallbackExample1_NAVHPPOSLLH runs correctly: setCfgValset ACKed; static callback fires once per HPPOSLLH (1 Hz) via checkUblox()/checkCallbacks(); printed fields match payload bytes
+- Hardware: ESP-IDF CallbackExample2_GPRMC runs correctly: NMEA callback fires once per RMC; std::string fields (time, date 240926, NS, EW) and DDMM→degrees OK. All 7 converted ESP-IDF examples now run on hardware
 - Not yet: RAWX stress test; remaining 16 examples
 
 ## Conventions for the ESP-IDF examples
@@ -36,7 +40,7 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 - Example conversion: Serial.print → printf (%s with .c_str() for NMEA string fields); the loop's "." progress dots use fflush(stdout) because stdout is line-buffered
 
 ## Next
-- Paul: build and run the four new examples
+- Paul: commit (comment out enableDebugging() in any examples first)
 - Claude: convert the remaining 16 examples (CallbackExample6_RAWX first, for the stress test)
 - Then: stress test (RAWX), tune i2cTransactionSize (still 32), CI, registry
 - Deferred: new(std::nothrow); FreeRTOS lock option; Arduino-as-component path in CMakeLists (untested)
