@@ -45,7 +45,14 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 - Callback-buffer test edits reverted by Paul (UBX_RXM_SFRBX_CALLBACK_BUFFERS back to 50, RAWX numCallbackCopies back to 1)
 - Hardware (24 Sep 2026): ESP-IDF PollingExample3 (SPI) regression with the new checkUbloxSpi() PASSED (debug enabled): getVal ACK after 28 ms (was 61 ms), NAV-PVT polls 215–1015 ms, clean. The Arduino SPI path with the new code was exercised by Arduino DataloggingExample2
 - Hardware (24 Sep 2026): Arduino PollingExample3 (SPI) regression with the new checkUbloxSpi() PASSED (debug enabled): getVal ACK after 47 ms, correctly skipped an unrequested periodic NAV-PVT that arrived first, 16 clean NAV-PVT polls. The new checkUbloxSpi() is now verified on both platforms
-- Not yet: remaining 15 examples
+- Selected (24 Sep 2026): of the remaining 15 Arduino examples, convert only those that exercise untested ESP-IDF code paths. Skipped: CallbackExample3/5/6/9/15 (patterns already proven), ESF 10-12 (need ZED-F9R), D9S/D9C 13-14 (no service / hardware to test)
+- Converted (24 Sep 2026, stub syntax check only, not yet built): CallbackExample7_NMEA_GSV (std::string NMEA block fields), PollingExample5_GPZDA (polled NMEA via getNMEA), PollingExample4_SECUNIQID (getUniqueChipIdStr -> std::string), CallbackExample4_NAVSAT (variable-length UBX block fields), CallbackExample8_MONCOMMS (block fields; port diagnostics). All I2C, SDA 21 / SCL 22. Added to the examples list in idf_component.yml
+- Hardware (24 Sep 2026): ESP-IDF CallbackExample7_NMEA_GSV PASSED (ZED-X20P, I2C): full GSV table every 2 epochs for GPS L1/L2/L5, GLONASS L1/L2, Galileo E1/E5a/E6, BeiDou B1C/B2a/B3; SBAS 33-64 -> 121/123/136 and GLONASS 65-96 -> 1-32 remaps correct. std::string NMEA field and block-field getters confirmed
+- Hardware (24 Sep 2026): ESP-IDF PollingExample5_GPZDA PASSED (ZED-X20P, I2C): polled ZDA once per second, consecutive UTC times, date 24/09/2026, no gaps or duplicates, no watchdog despite the loop having no explicit delay (the library's polling wait yields). Polled NMEA (getNMEA / pollNMEA) + getNmeaMessageField -> std::string confirmed
+- Hardware (24 Sep 2026): ESP-IDF PollingExample4_SECUNIQID PASSED (ZED-X20P, I2C): "Unique chip ID: 0xB8D3F70F5C54" (6 bytes, uppercase hex), ~90 ms after app_main starts; app_main then returns cleanly. getSECUNIQID + getUniqueChipIdStr -> std::string confirmed
+- Hardware (24 Sep 2026): ESP-IDF CallbackExample4_NAVSAT PASSED (ZED-X20P, I2C): NAV-SAT every 2 epochs, 53 SVs per message (644-byte payload), all 53 blocks decoded: gnssId, svId (SBAS 121/123/136), qualityInd 0/1/7, svUsed flag bit, cno. Variable-length UBX block accessors (getUbxMessageFieldCallback / getUbxMessageBlockFieldCallback incl. bit fields) confirmed
+- Hardware (24 Sep 2026): ESP-IDF CallbackExample8_MONCOMMS PASSED (ZED-X20P, I2C): MON-COMMS every 2 epochs, 3 ports (I2C, UART1, USB), txBytes/rxBytes/msgs[]/skipped all decoded; I2C txBytes ~2 KB/s, skipped 0. I2C rx NMEA count 181 = the ZDA polls sent by PollingExample5 (counters persist since module power-up). ALL 5 SELECTED EXAMPLES NOW PASS ON HARDWARE
+- Observation (MONCOMMS run): at start-up, two I2C probe timeouts ("i2c.master: I2C hardware timeout detected" / "probe device timeout") plus "GPIO 21/22 is not usable, maybe conflict with others" (logged by the IDF driver's FSM reset / bus recovery re-applying the pins). begin() succeeded on its third isConnected attempt, no retry message. Likely cause: the ESP32 was reset (flash) while the previous app (NAVSAT, 644-byte reads) was mid-I2C-read, leaving the module holding SDA; the IDF driver's recovery clears it. Possible library mitigation (not done, needs Paul's OK): call i2c_master_bus_reset() in SfeI2C::init() before the first probe. Check: does it happen after a power cycle, or only after reset-while-streaming?
 
 ## Conventions for the ESP-IDF examples
 - I2C: `busConfig.flags.enable_internal_pullup = false; // u-blox modules have their own internal active pull-ups` (Paul, 24 Sep 2026: extra pull-ups have caused I2C problems with u-blox modules). Tested OK on PollingExample1
@@ -53,7 +60,5 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 
 ## Next
 - Paul: commit (comment out enableDebugging() in any examples first)
-- Paul: commit (comment out enableDebugging() first)
-- Claude: convert the remaining 15 examples
 - Then: optional i2cTransactionSize tuning (32 is sufficient for RAWX+SFRBX), CI, registry
 - Deferred: new(std::nothrow); FreeRTOS lock option; Arduino-as-component path in CMakeLists (untested)

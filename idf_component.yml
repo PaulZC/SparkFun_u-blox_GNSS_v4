@@ -34,9 +34,14 @@ examples:
   - path: idf_examples/PollingExample1_PositionVelocityTime
   - path: idf_examples/PollingExample2_PositionVelocityTime_Serial
   - path: idf_examples/PollingExample3_PositionVelocityTime_SPI
+  - path: idf_examples/PollingExample4_SECUNIQID
+  - path: idf_examples/PollingExample5_GPZDA
   - path: idf_examples/PeriodicExample1_NAVHPPOSLLH
   - path: idf_examples/PeriodicExample2_GPGGA
   - path: idf_examples/CallbackExample1_NAVHPPOSLLH
   - path: idf_examples/CallbackExample2_GPRMC
+  - path: idf_examples/CallbackExample4_NAVSAT
+  - path: idf_examples/CallbackExample7_NMEA_GSV
+  - path: idf_examples/CallbackExample8_MONCOMMS
   - path: idf_examples/DataloggingExample1_RAWX_and_SFRBX
   - path: idf_examples/DataloggingExample2_DataLogger_IoT_SDIO
