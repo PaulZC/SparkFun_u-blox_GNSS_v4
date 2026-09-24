@@ -25,12 +25,18 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 - Hardware: Arduino debug output matches: ~2732 bytes available per poll, NAV-PVT polls 915–1020 ms. ESP-IDF timing is equivalent to Arduino (polled replies wait for the next 1 Hz epoch; the module also outputs periodic data on I2C)
 - Hardware: ESP-IDF PollingExample2 (UART1, 38400 baud) runs correctly with debug enabled. getVal uses the UART1 key (0x10730001); NAV-PVT polls 307–979 ms
 - Example 3 SPI CS default changed to GPIO 4 (matches the Arduino example)
-- Not yet: PollingExample3 (SPI) build and hardware; RAWX stress test
+- Hardware: ESP-IDF PollingExample3 (SPI2_HOST, CS GPIO 4, 4 MHz) runs correctly with debug enabled. getVal uses the SPI key (0x10790001); spiBuffer 308 bytes; NAV-PVT polls 794–1005 ms
+- ALL THREE BUSES (I2C, UART, SPI) CONFIRMED ON HARDWARE WITH ESP-IDF v6.1 (24 Sep 2026)
+- Modules: I2C and UART tests used a ZED-X20P; the SPI test used an older ZED-F9P with D_SEL set for SPI (explains 18 vs 31 SVs and no diffSoln)
+- Converted (24 Sep 2026, not yet built): PeriodicExample1_NAVHPPOSLLH, PeriodicExample2_GPGGA, CallbackExample1_NAVHPPOSLLH, CallbackExample2_GPRMC (all I2C; added to idf_component.yml examples list)
+- Not yet: RAWX stress test; remaining 16 examples
 
 ## Conventions for the ESP-IDF examples
 - I2C: `busConfig.flags.enable_internal_pullup = false; // u-blox modules have their own internal active pull-ups` (Paul, 24 Sep 2026: extra pull-ups have caused I2C problems with u-blox modules). Tested OK on PollingExample1
+- Example conversion: Serial.print → printf (%s with .c_str() for NMEA string fields); the loop's "." progress dots use fflush(stdout) because stdout is line-buffered
 
 ## Next
-- Paul: build and run PollingExample3 (SPI)
-- Then: stress test (RAWX), tune i2cTransactionSize (still 32), convert the remaining 20 examples, CI, registry
+- Paul: build and run the four new examples
+- Claude: convert the remaining 16 examples (CallbackExample6_RAWX first, for the stress test)
+- Then: stress test (RAWX), tune i2cTransactionSize (still 32), CI, registry
 - Deferred: new(std::nothrow); FreeRTOS lock option; Arduino-as-component path in CMakeLists (untested)

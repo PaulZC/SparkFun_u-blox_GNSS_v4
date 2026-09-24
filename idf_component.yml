@@ -34,3 +34,7 @@ examples:
   - path: idf_examples/PollingExample1_PositionVelocityTime
   - path: idf_examples/PollingExample2_PositionVelocityTime_Serial
   - path: idf_examples/PollingExample3_PositionVelocityTime_SPI
+  - path: idf_examples/PeriodicExample1_NAVHPPOSLLH
+  - path: idf_examples/PeriodicExample2_GPGGA
+  - path: idf_examples/CallbackExample1_NAVHPPOSLLH
+  - path: idf_examples/CallbackExample2_GPRMC
