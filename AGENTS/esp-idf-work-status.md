@@ -21,7 +21,9 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 - IDF_compile_example.bat args: COMPONENT EXAMPLE
 - Hardware: Arduino PollingExample1 runs correctly on ESP32 + u-blox over I2C (Arduino regression OK)
 - Hardware: ESP-IDF v6.1 PollingExample1 runs correctly on ESP32 (rev v3.0) + u-blox over I2C. PHASE 4 SUCCESS INDICATOR MET (24 Sep 2026)
-- Not yet: PollingExample2/3 builds and hardware; enableDebugging() output on ESP-IDF; RAWX stress test
+- Hardware: ESP-IDF enableDebugging() output works (stdout sink, HEX formatting). NAV-PVT polls take 525–1025 ms with "checkUbloxI2C: 2856 bytes available" each poll
+- Hardware: Arduino debug output matches: ~2732 bytes available per poll, NAV-PVT polls 915–1020 ms. ESP-IDF timing is equivalent to Arduino (polled replies wait for the next 1 Hz epoch; the module also outputs periodic data on I2C)
+- Not yet: PollingExample2/3 builds and hardware; RAWX stress test
 
 ## Next
 - Paul: build and run PollingExample2 (UART) and PollingExample3 (SPI)

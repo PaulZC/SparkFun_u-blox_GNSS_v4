@@ -30,7 +30,7 @@ python -m esptool --chip esp32 -p %COMPORT% -b 460800^
  --after hard-reset^
  write-flash -z^
  --flash-mode dio^
- --flash-size 4MB^
+ --flash-size detect^
  --flash-freq 80m^
  0x1000 %PLATFORM%_%EXAMPLE%%SUFFIX%.bootloader.bin^
  0x8000 %PLATFORM%_%EXAMPLE%%SUFFIX%.partitions.bin^
