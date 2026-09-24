@@ -738,34 +738,66 @@ bool DevUBLOXGNSS::processSpiBuffer(ubxPacket *incomingUBX, uint8_t requestedCla
 }
 
 // Checks SPI for data, passing any new bytes to process()
+//
+// SPI has no available(). When the module has no data for us, it clocks out 0xFF.
+// We read the module in blocks of up to spiTransactionSize bytes (writeReadBytes) - not one byte at a time -
+// as the per-transaction overhead can be significant (e.g. ESP-IDF spi_device_polling_transmit). This matters
+// at high data rates, e.g. RAWX at 20Hz. Reading past the end of the module's data is harmless: the extra bytes
+// are 0xFF "no data" filler, which process() ignores when currentSentence is NONE. A 0xFF within a message
+// (e.g. in RAWX data) is still processed correctly because currentSentence is not NONE.
+// We stop when a block ends with 0xFF and no sentence is in progress (the module has no more data), or after
+// kMaxSpiBytesPerCheck bytes so that checkUblox() always returns - letting the caller write to SD, process
+// callbacks and let other RTOS tasks run - even if the module's data never pauses. process() keeps its state
+// between calls, so stopping part-way through a message is safe.
 bool DevUBLOXGNSS::checkUbloxSpi(ubxPacket *incomingUBX, uint8_t requestedClass, uint8_t requestedID)
 {
   bool retVal = processSpiBuffer(incomingUBX, requestedClass, requestedID);
 
-  // SPI has no available(). We need to keep reading bytes one at a time and stop when we hit 0xFF
-  startWriteReadByte();
+  const size_t kMaxSpiBlockSize = 128;       // Maximum bytes per SPI transaction (limits the stack used here)
+  const size_t kMaxSpiBytesPerCheck = 16384; // Maximum bytes to read per call of checkUbloxSpi
 
-  uint8_t byteReturned = 0xFF;
-  writeReadByte(0xFF, &byteReturned);
+  size_t blockSize = spiTransactionSize;
+  if (blockSize > kMaxSpiBlockSize)
+    blockSize = kMaxSpiBlockSize;
+  if (blockSize == 0)
+    blockSize = 1;
 
-  // Note to future self: I think the 0xFF check might cause problems when attempting to process (e.g.) RAWX data
-  // which could legitimately contain 0xFF within the data stream. But the currentSentence check will certainly help!
+  uint8_t txBytes[kMaxSpiBlockSize];
+  uint8_t rxBytes[kMaxSpiBlockSize];
+  memset(txBytes, 0xFF, blockSize); // Write 0xFF while reading - the module ignores 0xFF
 
-  // If we are not receiving a sentence (currentSentence == NONE) and the byteReturned is 0xFF,
-  // i.e. the module has no data for us, then delay and return
-  if ((byteReturned == 0xFF) && (currentSentence == SFE_UBLOX_SENTENCE_TYPE_NONE))
+  size_t bytesRead = 0;
+  bool dataReceived = false;
+
+  while (bytesRead < kMaxSpiBytesPerCheck)
   {
-    endWriteReadByte();
+    if (writeReadBytes(txBytes, rxBytes, (uint8_t)blockSize) != blockSize)
+      break; // Bus error
+
+    bytesRead += blockSize;
+
+    for (size_t i = 0; i < blockSize; i++)
+    {
+      // Skip 0xFF filler between messages. Everything else - including 0xFF within a message - is processed
+      if ((rxBytes[i] != 0xFF) || (currentSentence != SFE_UBLOX_SENTENCE_TYPE_NONE))
+      {
+        process(rxBytes[i], incomingUBX, requestedClass, requestedID);
+        dataReceived = true;
+      }
+    }
+
+    // If the block ended with 0xFF and we are not part-way through a sentence, the module has no more data for us
+    if ((rxBytes[blockSize - 1] == 0xFF) && (currentSentence == SFE_UBLOX_SENTENCE_TYPE_NONE))
+      break;
+  }
+
+  if (!dataReceived)
+  {
+    // The module has no data for us. Delay and return
     sfe_delay(spiPollingWait);
     return (retVal);
   }
 
-  while ((byteReturned != 0xFF) || (currentSentence != SFE_UBLOX_SENTENCE_TYPE_NONE))
-  {
-    process(byteReturned, incomingUBX, requestedClass, requestedID);
-    writeReadByte(0xFF, &byteReturned);
-  }
-  endWriteReadByte();
   return (true);
 
 } // end checkUbloxSpi()
