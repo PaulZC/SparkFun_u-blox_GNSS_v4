@@ -72,6 +72,13 @@ unsigned long lastPrint; // Record when the last Serial print took place
 int numSFRBX = 0; // Keep count of how many SFRBX messages have been received (see note above)
 int numRAWX = 0;  // Keep count of how many RAWX messages have been received (see note above)
 
+// Set the status LED
+void statLED(bool on)
+{
+  if (STAT_LED >= 0)
+    digitalWrite(STAT_LED, on ? HIGH : LOW);
+}
+
 // Callback: newRXM will be called when new RXM RAWX or SFRBX data arrives
 void newRXM(ubxCallbackDataCommon_t *theData)
 {
@@ -89,7 +96,7 @@ void setup()
   Serial.begin(115200);
 
   pinMode(STAT_LED, OUTPUT); // Flash the STAT LED each time we write to the SD card
-  digitalWrite(STAT_LED, LOW);
+  statLED(false);
 
   pinMode(GNSS_CS, OUTPUT);
   digitalWrite(GNSS_CS, HIGH);
@@ -277,7 +284,7 @@ void loop()
 
   while (myGNSS.fileBufferAvailable() >= sdWriteSize) // Check to see if we have at least sdWriteSize waiting in the buffer
   {
-    digitalWrite(LED_BUILTIN, HIGH); // Flash LED_BUILTIN each time we write to the SD card
+    statLED(true); // Flash STAT_LED each time we write to the SD card
 
     myGNSS.extractFileBufferData(myBuffer, sdWriteSize); // Extract exactly sdWriteSize bytes from the UBX file buffer and put them into myBuffer
 
@@ -287,7 +294,7 @@ void loop()
     myGNSS.checkUblox(); // Check for the arrival of new data and process it.
     myGNSS.checkCallbacks(); // Check if any callbacks are waiting to be processed.
 
-    digitalWrite(LED_BUILTIN, LOW); // Turn LED_BUILTIN off again
+    statLED(false); // Turn STAT_LED off again
   }
 
   // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -320,7 +327,7 @@ void loop()
 
     while (remainingBytes > 0) // While there is still data in the file buffer
     {
-      digitalWrite(LED_BUILTIN, HIGH); // Flash LED_BUILTIN while we write to the SD card
+      statLED(true); // Flash STAT_LED each time we write to the SD card
 
       uint16_t bytesToWrite = remainingBytes; // Write the remaining bytes to SD card sdWriteSize bytes at a time
       if (bytesToWrite > sdWriteSize)
@@ -335,7 +342,7 @@ void loop()
       remainingBytes -= bytesToWrite; // Decrement remainingBytes
     }
 
-    digitalWrite(LED_BUILTIN, LOW); // Turn LED_BUILTIN off
+    statLED(false); // Turn STAT_LED off again
 
     myFile.close(); // Close the data file
 
