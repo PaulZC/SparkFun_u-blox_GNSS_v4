@@ -61,6 +61,7 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 - Example conversion: Serial.print → printf (%s with .c_str() for NMEA string fields); the loop's "." progress dots use fflush(stdout) because stdout is line-buffered
 
 ## Next
+- Tomorrow (Paul + Claude): merge esp-idf-component into the main SparkFun repo (PR); then register the library in the ESP-IDF Component Registry
 - Paul: commit (comment out enableDebugging() in any examples first)
 - Then: optional i2cTransactionSize tuning (32 is sufficient for RAWX+SFRBX), CI, registry
 - Deferred: new(std::nothrow); FreeRTOS lock option; Arduino-as-component path in CMakeLists (untested)
