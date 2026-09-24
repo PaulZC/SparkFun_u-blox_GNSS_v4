@@ -4,12 +4,6 @@
 
 FROM ubuntu:24.04 AS upstream
 
-# The example to be compiled
-ARG EXAMPLE=PollingExample1_PositionVelocityTime
-
-#  The component name
-ARG COMPONENT=sparkfun_u-blox_gnss_v4
-
 # switch to root
 USER root
 SHELL ["/bin/bash", "-c"]
@@ -128,6 +122,14 @@ ENV IDF_CCACHE_ENABLE=1
 
 # Copy source and build deployment image
 FROM upstream AS deployment
+
+# Put the ARGs here - so that changing them doesn't require upstream to be rebuilt
+
+# The example to be compiled
+ARG EXAMPLE=PollingExample1_PositionVelocityTime
+
+#  The component name
+ARG COMPONENT=sparkfun_u-blox_gnss_v4
 
 # Add the source files
 # Copy the library into a directory named after the component.

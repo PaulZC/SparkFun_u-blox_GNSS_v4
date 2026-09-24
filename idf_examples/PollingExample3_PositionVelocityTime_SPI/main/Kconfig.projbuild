@@ -18,6 +18,8 @@ menu "Example Configuration"
     config EXAMPLE_SPI_CS_GPIO
         int "SPI chip select GPIO"
         range 0 63
-        default 5
+        default 4
+        help
+            GPIO connected to the GNSS module's chip select pin. Default 4 matches the Arduino example.
 
 endmenu

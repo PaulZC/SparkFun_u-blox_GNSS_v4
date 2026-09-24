@@ -47,7 +47,7 @@ extern "C" void app_main(void)
     busConfig.scl_io_num = (gpio_num_t)CONFIG_EXAMPLE_I2C_SCL_GPIO;
     busConfig.clk_source = I2C_CLK_SRC_DEFAULT;
     busConfig.glitch_ignore_cnt = 7;
-    busConfig.flags.enable_internal_pullup = true; // Qwiic boards usually have their own pull-ups too
+    busConfig.flags.enable_internal_pullup = false; // u-blox modules have their own internal active pull-ups
     i2c_master_bus_handle_t i2cBus;
     ESP_ERROR_CHECK(i2c_new_master_bus(&busConfig, &i2cBus));
 

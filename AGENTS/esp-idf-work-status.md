@@ -23,9 +23,14 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 - Hardware: ESP-IDF v6.1 PollingExample1 runs correctly on ESP32 (rev v3.0) + u-blox over I2C. PHASE 4 SUCCESS INDICATOR MET (24 Sep 2026)
 - Hardware: ESP-IDF enableDebugging() output works (stdout sink, HEX formatting). NAV-PVT polls take 525–1025 ms with "checkUbloxI2C: 2856 bytes available" each poll
 - Hardware: Arduino debug output matches: ~2732 bytes available per poll, NAV-PVT polls 915–1020 ms. ESP-IDF timing is equivalent to Arduino (polled replies wait for the next 1 Hz epoch; the module also outputs periodic data on I2C)
-- Not yet: PollingExample2/3 builds and hardware; RAWX stress test
+- Hardware: ESP-IDF PollingExample2 (UART1, 38400 baud) runs correctly with debug enabled. getVal uses the UART1 key (0x10730001); NAV-PVT polls 307–979 ms
+- Example 3 SPI CS default changed to GPIO 4 (matches the Arduino example)
+- Not yet: PollingExample3 (SPI) build and hardware; RAWX stress test
+
+## Conventions for the ESP-IDF examples
+- I2C: `busConfig.flags.enable_internal_pullup = false; // u-blox modules have their own internal active pull-ups` (Paul, 24 Sep 2026: extra pull-ups have caused I2C problems with u-blox modules). Tested OK on PollingExample1
 
 ## Next
-- Paul: build and run PollingExample2 (UART) and PollingExample3 (SPI)
+- Paul: build and run PollingExample3 (SPI)
 - Then: stress test (RAWX), tune i2cTransactionSize (still 32), convert the remaining 20 examples, CI, registry
 - Deferred: new(std::nothrow); FreeRTOS lock option; Arduino-as-component path in CMakeLists (untested)
