@@ -25,6 +25,7 @@ if %PLATFORM%==Arduino set SUFFIX=.ino
 set BOOTAPP=
 if %PLATFORM%==Arduino set BOOTAPP=0xe000 %PLATFORM%_%EXAMPLE%%SUFFIX%.boot_app0.bin
 
+:: Replace "python -m esptool" with "esptool.exe" if needed
 python -m esptool --chip esp32 -p %COMPORT% -b 460800^
  --before default-reset^
  --after hard-reset^
