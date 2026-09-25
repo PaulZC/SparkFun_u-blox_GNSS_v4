@@ -1648,7 +1648,7 @@ void DevUBLOXGNSS::processNMEA(char incoming)
 // Check if the NMEA message (in nmeaAddressField) is "auto" (i.e. its isAutomatic flag is set)
 bool DevUBLOXGNSS::isThisNMEAauto(const char *msgId)
 {
-  bool automatic;
+  bool automatic = false;
   if (nmeaMessages.isAutomatic(msgId, &automatic) != SFE_UBLOX_STATUS_SUCCESS)
     return false;
   return automatic;
@@ -5691,7 +5691,7 @@ bool DevUBLOXGNSS::isGNSSenabled(sfe_ublox_gnss_ids_e id, bool *enabled, uint8_t
 bool DevUBLOXGNSS::isGNSSenabled(sfe_ublox_gnss_ids_e id, uint8_t layer, uint16_t maxWait) // Unsafe
 {
   uint32_t key = getEnableGNSSConfigKey(id);
-  uint8_t enabled;
+  uint8_t enabled = 0; // Initialized: isGNSSenabled returns false if getVal8 fails
   getVal8(key, &enabled, layer, maxWait);
   return ((bool)enabled);
 }
@@ -5731,7 +5731,7 @@ bool DevUBLOXGNSS::setESFAutoAlignment(bool enable, uint8_t layer, uint16_t maxW
 // UBX-CFG-NAVX5 - get/set the ackAiding byte. If ackAiding is 1, UBX-MGA-ACK messages will be sent by the module to acknowledge the MGA data
 uint8_t DevUBLOXGNSS::getAckAiding(uint8_t layer, uint16_t maxWait) // Get the ackAiding byte - returns 255 if the sendCommand fails
 {
-  uint8_t enabled;
+  uint8_t enabled = 0;
   bool success = getVal8(UBLOX_CFG_NAVSPG_ACKAIDING, &enabled, layer, maxWait);
   if (success)
     return enabled;
@@ -5746,7 +5746,7 @@ bool DevUBLOXGNSS::setAckAiding(uint8_t ackAiding, uint8_t layer, uint16_t maxWa
 // UBX-CFG-NAVX5 - get the AssistNow Autonomous configuration (aopCfg) - returns 255 if the sendCommand fails
 uint8_t DevUBLOXGNSS::getAopCfg(uint8_t layer, uint16_t maxWait)
 {
-  uint8_t enabled;
+  uint8_t enabled = 0;
   bool success = getVal8(UBLOX_CFG_ANA_USE_ANA, &enabled, layer, maxWait);
   if (success)
     return enabled;
@@ -6994,11 +6994,11 @@ bool DevUBLOXGNSS::getUBX(uint8_t Class, uint8_t ID, uint16_t maxWait)
   if (ubxMessages.initStorage(Class, ID) != SFE_UBLOX_STATUS_SUCCESS)
     return false;
 
-  bool automatic;
+  bool automatic = false;
   if (ubxMessages.isAutomatic(Class, ID, &automatic) != SFE_UBLOX_STATUS_SUCCESS)
     return false;
 
-  bool implicitUpdate;
+  bool implicitUpdate = false;
   if (ubxMessages.implicitUpdate(Class, ID, &implicitUpdate) != SFE_UBLOX_STATUS_SUCCESS)
     return false;
 
@@ -7006,7 +7006,7 @@ bool DevUBLOXGNSS::getUBX(uint8_t Class, uint8_t ID, uint16_t maxWait)
   {
     // The module is automatically reporting this message; just check whether we got unread data
     checkUbloxInternal(&packetCfg, 0, 0); // Parse any incoming data. Don't overwrite the requested Class and ID
-    bool queried;
+    bool queried = false;
     if (ubxMessages.moduleQueried(Class, ID, &queried) != SFE_UBLOX_STATUS_SUCCESS)
       return false;
     if (queried) // Fresh data arrived - report it, then mark it read ("one-shot")
@@ -7126,11 +7126,11 @@ bool DevUBLOXGNSS::assumeAutoUBX(uint8_t Class, uint8_t ID, bool enabled, bool i
   if (ubxMessages.initStorage(Class, ID) != SFE_UBLOX_STATUS_SUCCESS) // Only attempt this if RAM allocation was successful
     return false;
 
-  bool automatic;
+  bool automatic = false;
   if (ubxMessages.isAutomatic(Class, ID, &automatic) != SFE_UBLOX_STATUS_SUCCESS)
     return false;
 
-  bool implicit;
+  bool implicit = false;
   if (ubxMessages.implicitUpdate(Class, ID, &implicit) != SFE_UBLOX_STATUS_SUCCESS)
     return false;
 
@@ -7171,11 +7171,11 @@ bool DevUBLOXGNSS::getNMEA(const char *msgId, uint16_t maxWait)
   if (nmeaMessages.initStorage(msgId) != SFE_UBLOX_STATUS_SUCCESS)
     return false;
 
-  bool automatic; // We could / should probably use isThisNMEAauto() here...?
+  bool automatic = false; // We could / should probably use isThisNMEAauto() here...?
   if (nmeaMessages.isAutomatic(msgId, &automatic) != SFE_UBLOX_STATUS_SUCCESS)
     return false;
 
-  bool implicitUpdate;
+  bool implicitUpdate = false;
   if (nmeaMessages.implicitUpdate(msgId, &implicitUpdate) != SFE_UBLOX_STATUS_SUCCESS)
     return false;
 
@@ -7183,7 +7183,7 @@ bool DevUBLOXGNSS::getNMEA(const char *msgId, uint16_t maxWait)
   {
     // The module is automatically reporting this message; just check whether we got unread data
     checkUbloxInternal(&packetCfg, 0, 0); // Parse any incoming data. Don't overwrite the requested Class and ID
-    bool queried;
+    bool queried = false;
     if (nmeaMessages.moduleQueried(msgId, &queried) != SFE_UBLOX_STATUS_SUCCESS)
       return false;
     if (queried) // Fresh data arrived - report it, then mark it read ("one-shot")
@@ -7275,11 +7275,11 @@ bool DevUBLOXGNSS::assumeAutoNMEA(const char *msgId, bool enabled, bool implicit
   if (nmeaMessages.initStorage(msgId) != SFE_UBLOX_STATUS_SUCCESS) // Only attempt this if RAM allocation was successful
     return false;
 
-  bool automatic;
+  bool automatic = false;
   if (nmeaMessages.isAutomatic(msgId, &automatic) != SFE_UBLOX_STATUS_SUCCESS)
     return false;
 
-  bool implicit;
+  bool implicit = false;
   if (nmeaMessages.implicitUpdate(msgId, &implicit) != SFE_UBLOX_STATUS_SUCCESS)
     return false;
 
