@@ -91,7 +91,7 @@ This library can also be used as a native component for the Espressif ESP-IDF - 
 * [**keywords.txt**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/keywords.txt) - Keywords from this library that will be highlighted in the Arduino IDE.
 * [**library.properties**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/library.properties) - General library properties for the Arduino package manager.
 * [**keys**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/keys) - The u-blox Configuration Interface Key IDs extracted from multiple Interface Descriptions
-* [**Utils**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/Utils) - Python utilities we wrote to help analyze UBX/NMEA/RTC data and UBX format log files
+* [**Utils**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/Utils) - Python utilities we wrote to help analyze UBX/NMEA/RTCM data and UBX format log files
 
 ## Documentation
 

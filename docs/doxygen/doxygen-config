@@ -953,6 +953,7 @@ INPUT                  = src \
                          README.md \
                          examples/README.md \
                          idf_examples/README.md \
+                         Utils/README.md \
                          docs
 
 # This tag can be used to specify the character encoding of the source files
