@@ -68,8 +68,15 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 - Version 4.1.0 in library.properties, README and idf_component.yml
 - Final pre-PR check: 19 commits ahead of upstream 08943c2, pushed to origin; no build artifacts tracked; no enableDebugging() active; line endings consistent (LF in repo, CRLF checkout); library and IDF examples stub-compile cleanly; example changes since the last hardware test are comments only
 
+## PR (25 Sep 2026)
+- PR #2 opened: PaulZC:esp-idf-component -> sparkfun:main (https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/pull/2)
+- New workflow .github/workflows/compile-idf-example.yml (IDF Compile Test): builds idf_examples/DataloggingExample2_DataLogger_IoT_SDIO for esp32 in espressif/idf:release-v5.3 and release-v6.1 containers; triggers: pull_request + workflow_dispatch only. README badge added
+- First run: IDF v5.3 failed - GCC 13 at -Og: -Werror=maybe-uninitialized false positives in u-blox_GNSS.cpp (getUBX, getNMEA, assumeAutoUBX, assumeAutoNMEA). Fix: 14 locals initialized (bool = false / uint8_t = 0); isGNSSenabled now returns false if getVal8 fails. Verified with GCC 13 at -O0/-Og/-O1/-O2/-Os/-O3
+- STM32 Arduino job failed once with 'API rate limit exceeded' (infrastructure) - passed on re-run
+- ALL 11 CHECKS PASSED (Arduino: 9 platforms; IDF: v5.3 and v6.1). No conflicts with base branch
+
 ## Next
-- Paul: commit and push (idf_component.yml version 4.1.0 + this note), then open the PR: PaulZC:esp-idf-component -> sparkfun:main. Watch the Compile Sketch workflow (PollingExample1 on 9 Arduino platforms - the first real test of sfe_platform.h on the non-ESP32 cores)
+- SparkFun: review and merge PR #2
 - After the merge: tag the v4.1.0 release; register / publish sparkfun/sparkfun_u-blox_gnss_v4 in the ESP-IDF Component Registry
-- Then: ESP-IDF CI (GitHub Actions build of the idf_examples); optional i2cTransactionSize tuning (32 is sufficient for RAWX+SFRBX)
+- Optional: add more idf_examples to the IDF Compile Test matrix; i2cTransactionSize tuning
 - Deferred: new(std::nothrow); FreeRTOS lock option; Arduino-as-component path in CMakeLists (untested); benign "W gpio: conflict found for GPIO[5]" at SD-over-SPI unmount; FAT file timestamps (set the system time from GNSS)
