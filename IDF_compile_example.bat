@@ -11,7 +11,7 @@ docker build -f IDF.Dockerfile -t idf_example_container --progress=plain --no-ca
  --build-arg COMPONENT=%COMPONENT% --build-arg EXAMPLE=%EXAMPLE% .
 docker create --name=idf_example idf_example_container:latest
 docker cp idf_example:/%EXAMPLE%.bin IDF_%EXAMPLE%.bin
-docker cp idf_example:/%EXAMPLE%.bin IDF_%EXAMPLE%.elf
+docker cp idf_example:/%EXAMPLE%.elf IDF_%EXAMPLE%.elf
 docker cp idf_example:/bootloader.bin IDF_%EXAMPLE%.bootloader.bin
 docker cp idf_example:/partition-table.bin IDF_%EXAMPLE%.partitions.bin
 docker container rm idf_example
