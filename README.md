@@ -24,6 +24,7 @@ u-blox make some incredible GNSS receivers covering everything from low-cost, hi
 ![Release Date](https://img.shields.io/github/release-date/sparkfun/SparkFun_u-blox_GNSS_v4)
 ![Documentation - build](https://img.shields.io/github/actions/workflow/status/sparkfun/SparkFun_u-blox_GNSS_v4/build-deploy-ghpages.yml?label=doc%20build)
 [![Compile Test](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/actions/workflows/compile-sketch.yml/badge.svg)](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/actions/workflows/compile-sketch.yml)
+[![IDF Compile Test](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/actions/workflows/compile-idf-example.yml/badge.svg)](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/actions/workflows/compile-idf-example.yml)
 ![GitHub issues](https://img.shields.io/github/issues/sparkfun/SparkFun_u-blox_GNSS_v4)
 
 ## Arduino and ESP-IDF
@@ -82,6 +83,48 @@ This library can also be used as a native component for the Espressif ESP-IDF - 
 * NMEA field getters return `std::string` (`sfe_string_t`) instead of the Arduino `String`
 * A 1000Hz FreeRTOS tick (`CONFIG_FREERTOS_HZ=1000`) is recommended
 * ESP-IDF examples are in [**idf_examples**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/idf_examples). Build, flash and monitor with `idf.py -p PORT flash monitor`
+
+## Dockerfiles
+
+We have included two Dockerfiles (`Arduino.Dockerfile` and `IDF.Dockerfile`) which you may find useful. We wrote them to allow us to test the Arduino and IDF examples quickly, without needing to open the Arduino IDE or the ESP IDF. The Dockerfiles use command line tools to compile the selected example in an Ubuntu container.
+
+You don't _need_ to use the batch files or Dockerfiles. We just included them in case you find them useful.
+
+The `.bat` batch files (`Arduino_compile_example.bat` and `IDF_compile_example.bat`) were written for Windows. Sorry about that. Hopefully you can convert them into (e.g.) `bash` scripts as needed.
+
+The `Flasher.bat` batch file will upload the selected example binary onto an ESP32. It searches for a CH340 COM port - as used on the [SparkFun Thing Plus - ESP32 WROOM (USB-C)](https://www.sparkfun.com/sparkfun-thing-plus-esp32-wroom-usb-c.html) - and uses that for the upload. Or you can add the COM port as an `arg`.
+
+`Flasher.bat` assumes you have the `python` version of `esptool` installed and available. If you want to use `esptool.exe`: replace `python -m esptool` with `esptool.exe`.
+
+The Dockerfiles of course need Docker installed and running. Please ensure you have the Docker Desktop running when you use the batch files and Dockerfiles.
+
+To compile, flash and test an Arduino example, `cd` into the `SparkFun_u-blox_GNSS_v4` folder and run:
+
+```
+Arduino_compile_example.bat PollingExample1_PositionVelocityTime
+Flasher.bat Arduino PollingExample1_PositionVelocityTime
+```
+
+To compile, flash and test an IDF example, `cd` into the `SparkFun_u-blox_GNSS_v4` folder and run:
+
+```
+IDF_compile_example.bat sparkfun_u-blox_gnss_v4 PollingExample1_PositionVelocityTime
+Flasher.bat IDF PollingExample1_PositionVelocityTime
+```
+
+To upload using your own COM port:
+
+```
+Flasher.bat Arduino PollingExample1_PositionVelocityTime COM1
+```
+
+or
+
+```
+Flasher.bat IDF PollingExample1_PositionVelocityTime COM1
+```
+
+The first time you run each Dockerfile, it will take a long time to create the Ubuntu container and install the relevant command line tools. Subsequent runs will be much quicker.
 
 ## Repository Contents
 
