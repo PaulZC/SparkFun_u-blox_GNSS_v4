@@ -60,8 +60,16 @@ A copy of this file is kept in the project as claude/esp-idf-work-status.md.
 - I2C: `busConfig.flags.enable_internal_pullup = false; // u-blox modules have their own internal active pull-ups` (Paul, 24 Sep 2026: extra pull-ups have caused I2C problems with u-blox modules). Tested OK on PollingExample1
 - Example conversion: Serial.print → printf (%s with .c_str() for NMEA string fields); the loop's "." progress dots use fflush(stdout) because stdout is line-buffered
 
+## Done (25 Sep 2026): documentation and PR preparation
+- READMEs added: examples/README.md, idf_examples/README.md, Utils/README.md (all three included in the Doxygen docs; USE_MDFILE_AS_MAINPAGE = ./README.md so the sub-folder READMEs are not treated as the main page)
+- Main README: section links and LICENSE.md link fixed so they work on GitHub and in the Doxygen HTML; Arduino examples link fixed
+- Examples: one comment per example above the first setCfgValset() / newCfgValset() explaining how to choose the VAL_LAYER (default VAL_LAYER_RAM_BBR)
+- Utils/UBX_RAWX_Aligner.py: decimalPlaces argument fixed (int(sys.argv[2]))
+- Version 4.1.0 in library.properties, README and idf_component.yml
+- Final pre-PR check: 19 commits ahead of upstream 08943c2, pushed to origin; no build artifacts tracked; no enableDebugging() active; line endings consistent (LF in repo, CRLF checkout); library and IDF examples stub-compile cleanly; example changes since the last hardware test are comments only
+
 ## Next
-- Tomorrow (Paul + Claude): merge esp-idf-component into the main SparkFun repo (PR); then register the library in the ESP-IDF Component Registry
-- Paul: commit (comment out enableDebugging() in any examples first)
-- Then: optional i2cTransactionSize tuning (32 is sufficient for RAWX+SFRBX), CI, registry
-- Deferred: new(std::nothrow); FreeRTOS lock option; Arduino-as-component path in CMakeLists (untested)
+- Paul: commit and push (idf_component.yml version 4.1.0 + this note), then open the PR: PaulZC:esp-idf-component -> sparkfun:main. Watch the Compile Sketch workflow (PollingExample1 on 9 Arduino platforms - the first real test of sfe_platform.h on the non-ESP32 cores)
+- After the merge: tag the v4.1.0 release; register / publish sparkfun/sparkfun_u-blox_gnss_v4 in the ESP-IDF Component Registry
+- Then: ESP-IDF CI (GitHub Actions build of the idf_examples); optional i2cTransactionSize tuning (32 is sufficient for RAWX+SFRBX)
+- Deferred: new(std::nothrow); FreeRTOS lock option; Arduino-as-component path in CMakeLists (untested); benign "W gpio: conflict found for GPIO[5]" at SD-over-SPI unmount; FAT file timestamps (set the system time from GNSS)
