@@ -235,6 +235,11 @@ void setup()
   // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   // Enable RAWX and SFRBX
 
+  // setCfgValset() writes to the RAM and Battery-backed-RAM layers by default (VAL_LAYER_RAM_BBR).
+  // To use a different layer, add it as the third parameter. E.g. for RAM only:
+  //   setCfgValset(UBLOX_CFG_MSGOUT_..., n, VAL_LAYER_RAM)
+  // VAL_LAYER_ALL also saves the setting in Flash (if the module has Flash).
+
   // Enable the RXM RAWX Message on SPI, every navigation cycle
   myGNSS.setCfgValset(UBLOX_CFG_MSGOUT_UBX_RXM_RAWX_SPI, 1);
 
@@ -256,6 +261,10 @@ void setup()
   myBuffer = new uint8_t[sdWriteSize]; // Create our own buffer to hold the data while we write it to SD card  
 
 #ifndef ubxOnly
+  // newCfgValset() writes to the RAM and Battery-backed-RAM layers by default (VAL_LAYER_RAM_BBR).
+  // To use a different layer, pass it as the parameter. E.g. for RAM only:
+  //   newCfgValset(VAL_LAYER_RAM)
+  // VAL_LAYER_ALL also saves the settings in Flash (if the module has Flash).
   myGNSS.newCfgValset(VAL_LAYER_RAM);
   myGNSS.addCfgValset(UBLOX_CFG_MSGOUT_NMEA_ID_GGA_SPI, navRate); // Ensure the GxGGA (Global positioning system fix data) message is enabled. Send every second.
   myGNSS.addCfgValset(UBLOX_CFG_MSGOUT_NMEA_ID_GSA_SPI, navRate); // Ensure the GxGSA (GNSS DOP and Active satellites) message is enabled. Send every second.

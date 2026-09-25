@@ -1,4 +1,4 @@
-# SparkFun u-blox GNSS Arduino Library - v4
+# SparkFun u-blox GNSS Library - v4
 
 <table class="table table-hover table-striped table-bordered">
   <tr align="center">
@@ -26,6 +26,15 @@ u-blox make some incredible GNSS receivers covering everything from low-cost, hi
 [![Compile Test](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/actions/workflows/compile-sketch.yml/badge.svg)](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/actions/workflows/compile-sketch.yml)
 ![GitHub issues](https://img.shields.io/github/issues/sparkfun/SparkFun_u-blox_GNSS_v4)
 
+## Arduino and ESP-IDF
+
+With release v4.1.0, this library is compatible with both the Arduino IDE and the Espressif ESP-IDF.
+
+It includes examples for both platforms: [**examples**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/examples) contains the Arduino examples; [**idf_examples**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/idf_examples) contains the IDF examples.
+All examples have been tested on ESP32 hardware.
+
+Please see <a href="#arduino-library-manager">Arduino Library Manager</a> and <a href="#esp-idf-component"><b>ESP-IDF Component</b></a> below for more details.
+
 ## v4 vs. v3
 
 This library is the new and improved version of the very popular SparkFun u-blox GNSS Arduino Library. v4 contains some big changes and improvements:
@@ -33,7 +42,7 @@ This library is the new and improved version of the very popular SparkFun u-blox
 * Written by AI, directed by SparkFun
   * We used Claude to rewrite this library, giving it careful direction using v3 as the starting point
   * It was quite the journey, taking around eight working days from start to highly polished finish
-  * If you want to see how we did it, the files are in the [AGENTS](AGENTS) folder
+  * If you want to see how we did it, the files are in the [AGENTS](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/AGENTS) folder
 * v4 is a fresh start
   * It avoids the repetitive coding style of v3
   * Each UBX message type is supported by its own code Class
@@ -49,6 +58,15 @@ This library is the new and improved version of the very popular SparkFun u-blox
 
 v4 of the library provides support for generation X20, F9 and M10 u-blox GNSS modules, which support the Configuration Interface
 
+<a name="arduino-library-manager"></a>
+## Arduino Library Manager
+
+This library can be installed through the Arduino Library Manager.
+
+* Add it by searching for `SparkFun u-blox GNSS v4` in the Library Manager
+* Arduino examples are in [**examples**](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/examples)
+
+<a name="esp-idf-component"></a>
 ## ESP-IDF Component
 
 This library can also be used as a native component for the Espressif ESP-IDF - without the Arduino core.
@@ -83,6 +101,6 @@ API documentation is generated with Doxygen and published to GitHub Pages from t
 
 This library is _**open source**_!
 
-Please see [LICENSE.md](LICENSE.md) for full details.
+Please see [LICENSE.md](https://github.com/sparkfun/SparkFun_u-blox_GNSS_v4/blob/main/LICENSE.md) for full details.
 
 - Your friends at SparkFun.
